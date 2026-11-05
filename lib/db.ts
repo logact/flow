@@ -25,6 +25,20 @@ export interface WordRow {
   step4_sentences: string; // JSON string[]
   fluency: number; // F_P：产出（写作）方向流利度 0-100
   fluency_r: number; // F_R：接受（阅读）方向流利度 0-100；headline F = min(F_R, F_P)
+  prior_mastery_q: number | null; // 导入先验，只用于首次路由，不是成绩
+  introduced: number; // 是否已经实际接触或尝试
+  has_observation_p: number; // P 轴是否有可归属的真实作答
+  has_observation_r: number; // R 轴是否有可归属的真实作答
+  verified_p: number; // P 轴当前最高已通过关卡是否有效
+  verified_r: number; // R 轴当前最高已通过关卡是否有效
+  speed_verified_p: number; // P 轴当前成绩是否有有效连续写作测速
+  speed_verified_r: number; // R 轴当前成绩是否有有效连续阅读测速
+  integrated_p: number; // P 轴综合运用验证
+  integrated_r: number; // R 轴综合运用验证
+  pending_relearn_p: number; // P 轴是否待重学
+  pending_relearn_r: number; // R 轴是否待重学
+  legacy_score_p: number | null; // 仅供兼容展示/诊断的旧 P 分数
+  legacy_score_r: number | null; // 仅供兼容展示/诊断的旧 R 分数
   target_in: number; // 阅读方向个人终点（入库时由目标画像推导并物化）
   target_out: number; // 产出方向个人终点
   stability_tick: number; // H_tick：tick 钟半衰期（任务数），双向共享——短时缓存是形式级的
@@ -38,6 +52,7 @@ export interface WordRow {
   profile: number; // Nation 方面清单位掩码（占位，逐方面核验用）
   goal_id: number | null;
   freq: number | null; // 来源语料中的词频（书源=书中出现次数），NULL 表示无词频信息
+  freq_source: string | null; // 词频来源标识，区分通用词频与书内词频
   updated_at: number;
 }
 
@@ -127,6 +142,20 @@ function init(db: Database.Database) {
       step4_sentences TEXT NOT NULL,
       fluency REAL NOT NULL DEFAULT 0,
       fluency_r REAL NOT NULL DEFAULT 0,
+      prior_mastery_q REAL,
+      introduced INTEGER NOT NULL DEFAULT 0,
+      has_observation_p INTEGER NOT NULL DEFAULT 0,
+      has_observation_r INTEGER NOT NULL DEFAULT 0,
+      verified_p INTEGER NOT NULL DEFAULT 0,
+      verified_r INTEGER NOT NULL DEFAULT 0,
+      speed_verified_p INTEGER NOT NULL DEFAULT 0,
+      speed_verified_r INTEGER NOT NULL DEFAULT 0,
+      integrated_p INTEGER NOT NULL DEFAULT 0,
+      integrated_r INTEGER NOT NULL DEFAULT 0,
+      pending_relearn_p INTEGER NOT NULL DEFAULT 0,
+      pending_relearn_r INTEGER NOT NULL DEFAULT 0,
+      legacy_score_p REAL,
+      legacy_score_r REAL,
       target_in REAL NOT NULL DEFAULT 80,
       target_out REAL NOT NULL DEFAULT 80,
       stability_tick REAL NOT NULL DEFAULT 4,
@@ -140,6 +169,7 @@ function init(db: Database.Database) {
       profile INTEGER NOT NULL DEFAULT 0,
       goal_id INTEGER,
       freq INTEGER,
+      freq_source TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -235,6 +265,20 @@ function migrate(db: Database.Database) {
   const legacy = wordCols.has('state');
   addColumn('fluency', 'fluency REAL NOT NULL DEFAULT 0');
   addColumn('fluency_r', 'fluency_r REAL NOT NULL DEFAULT 0');
+  addColumn('prior_mastery_q', 'prior_mastery_q REAL');
+  addColumn('introduced', 'introduced INTEGER NOT NULL DEFAULT 0');
+  addColumn('has_observation_p', 'has_observation_p INTEGER NOT NULL DEFAULT 0');
+  addColumn('has_observation_r', 'has_observation_r INTEGER NOT NULL DEFAULT 0');
+  addColumn('verified_p', 'verified_p INTEGER NOT NULL DEFAULT 0');
+  addColumn('verified_r', 'verified_r INTEGER NOT NULL DEFAULT 0');
+  addColumn('speed_verified_p', 'speed_verified_p INTEGER NOT NULL DEFAULT 0');
+  addColumn('speed_verified_r', 'speed_verified_r INTEGER NOT NULL DEFAULT 0');
+  addColumn('integrated_p', 'integrated_p INTEGER NOT NULL DEFAULT 0');
+  addColumn('integrated_r', 'integrated_r INTEGER NOT NULL DEFAULT 0');
+  addColumn('pending_relearn_p', 'pending_relearn_p INTEGER NOT NULL DEFAULT 0');
+  addColumn('pending_relearn_r', 'pending_relearn_r INTEGER NOT NULL DEFAULT 0');
+  addColumn('legacy_score_p', 'legacy_score_p REAL');
+  addColumn('legacy_score_r', 'legacy_score_r REAL');
   addColumn('stability_tick', 'stability_tick REAL NOT NULL DEFAULT 4');
   addColumn('stability_time', 'stability_time REAL NOT NULL DEFAULT 3600000');
   addColumn('stability_time_r', 'stability_time_r REAL NOT NULL DEFAULT 3600000');
@@ -246,6 +290,7 @@ function migrate(db: Database.Database) {
   addColumn('profile', 'profile INTEGER NOT NULL DEFAULT 0');
   addColumn('goal_id', 'goal_id INTEGER');
   addColumn('freq', 'freq INTEGER');
+  addColumn('freq_source', 'freq_source TEXT');
   addColumn('target_in', 'target_in REAL NOT NULL DEFAULT 80');
   addColumn('target_out', 'target_out REAL NOT NULL DEFAULT 80');
 
