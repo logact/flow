@@ -1,19 +1,28 @@
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import { CONFIG } from './config';
 import { bandOf, cacheResidue, retrievabilityParts, toWord, type Word, type WordRow } from './db';
 import { levelOf } from './assessment';
 import { getProfile } from './targets';
 import {
   candidatesOf,
+  eligibleTaskDefinitions,
   materialWords,
+  ordinaryCandidates,
   readable,
   taskRank,
   type Candidate,
+  type EmptyReason,
+  type EmptyTaskInstance,
+  type TaskDefinition,
   type TaskEvidence,
   type TaskInstance,
+  type TaskPurpose,
+  type ScheduledTaskInstance,
   TASK_LIBRARY,
 } from './tasks';
-import { sliceMfi } from './mfi';
+import { assessContinuousMaterial } from './material';
+import { sliceMfi, sliceMfiDetailed } from './mfi';
 import { presumedKnown } from './gloss';
 
 export type Task =
@@ -98,9 +107,12 @@ export function priority(w: Word, dir: Direction, lA: number): number {
   const F = dir === 'r' ? w.fluency_r : w.fluency;
   const target = dir === 'r' ? w.target_in : w.target_out;
   const h = dir === 'r' ? w.stability_time_r : w.stability_time;
+  const verified = dir === 'r' ? w.verified_r : w.verified_p;
+  const speedVerified = dir === 'r' ? w.speed_verified_r : w.speed_verified_p;
+  const axisDone = F >= target && verified === 1 && speedVerified === 1 && h >= CONFIG.H_TIME_GRAD_MS;
   let gap = Math.max(0, target - F) / target;
   if (gap <= 0) {
-    if (h >= CONFIG.H_TIME_GRAD_MS) return 0;
+    if (axisDone) return 0;
     gap = CONFIG.MAINT_GAP;
   }
   const urgency = Math.max(0, (CONFIG.RIPE_R - lA) / CONFIG.RIPE_R) ** 2;
@@ -161,6 +173,366 @@ function knownTokenSet(db: Database.Database, words: Word[]): Set<string> {
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+interface InstanceCandidate {
+  word: Word;
+  axis: Direction;
+  definition: TaskDefinition;
+  purpose: TaskPurpose;
+  checkpoint: number | null;
+  priority: number;
+  payload: Record<string, unknown>;
+}
+
+const axisScore = (word: Word, axis: Direction) => axis === 'r' ? word.fluency_r : word.fluency;
+const axisTarget = (word: Word, axis: Direction) => axis === 'r' ? word.target_in : word.target_out;
+const axisVerified = (word: Word, axis: Direction) => axis === 'r' ? word.verified_r : word.verified_p;
+const axisSpeedVerified = (word: Word, axis: Direction) => axis === 'r' ? word.speed_verified_r : word.speed_verified_p;
+const axisIntegrated = (word: Word, axis: Direction) => axis === 'r' ? word.integrated_r : word.integrated_p;
+const axisObservation = (word: Word, axis: Direction) => axis === 'r' ? word.has_observation_r : word.has_observation_p;
+const axisTimeAnchor = (word: Word, axis: Direction) => axis === 'r' ? word.last_ts_r : word.last_ts;
+const axisStability = (word: Word, axis: Direction) => axis === 'r' ? word.stability_time_r : word.stability_time;
+const axisRelearnPending = (word: Word, axis: Direction) => axis === 'r' ? word.pending_relearn_r : word.pending_relearn_p;
+
+function axisComplete(word: Word, axis: Direction): boolean {
+  return axisScore(word, axis) >= axisTarget(word, axis) &&
+    axisVerified(word, axis) === 1 && axisSpeedVerified(word, axis) === 1 &&
+    axisStability(word, axis) >= CONFIG.H_TIME_GRAD_MS;
+}
+
+/** Shared P/R cooling: either seven other tasks or twenty minutes is enough. */
+function coolingReady(word: Word, tick: number, now: number): boolean {
+  const lastAny = Math.max(word.last_ts, word.last_ts_r);
+  if (lastAny === 0) return true;
+  const tickElapsed = Math.max(0, tick - word.last_tick);
+  const timeElapsed = Math.max(0, now - lastAny);
+  return tickElapsed >= CONFIG.CACHE_COOLDOWN_TICKS || timeElapsed >= CONFIG.H_CACHE_MS;
+}
+
+function nextEligibleAt(word: Word, axis: Direction, tick: number, now: number): number {
+  const anchor = axisTimeAnchor(word, axis);
+  const matureAt = anchor === 0 || axisObservation(word, axis) !== 1
+    ? now
+    : anchor + axisStability(word, axis) * Math.log(1 / CONFIG.RIPE_R) / Math.LN2;
+  const lastAny = Math.max(word.last_ts, word.last_ts_r);
+  const tickElapsed = Math.max(0, tick - word.last_tick);
+  const coolingAt = lastAny === 0 || tickElapsed >= CONFIG.CACHE_COOLDOWN_TICKS
+    ? now
+    : lastAny + CONFIG.H_CACHE_MS;
+  return Math.max(now, matureAt, coolingAt);
+}
+
+function nextCheckpoint(word: Word, axis: Direction, type: TaskDefinition['type'], purpose: TaskPurpose): number | null {
+  if (type === 'ENCODE') return null;
+  const score = axisScore(word, axis);
+  if (type === 'INTEGRATE') return Math.max(CONFIG.INTEGRATE_FLOOR, score);
+  if (type === 'RETRIEVE') {
+    if (score === 0) {
+      if (purpose === 'verify' && (word.prior_mastery_q ?? 0) >= 0.7) return 50;
+      if (purpose === 'diagnose' && (word.prior_mastery_q ?? 0) >= 0.3) return 35;
+      return 20;
+    }
+    // Retrieval can certify only through 50; it cannot restore a higher checkpoint.
+    return Math.min(50, axisVerified(word, axis) === 1 ? ([20, 35, 50].find((n) => n > score) ?? 50) : score);
+  }
+  if (axisVerified(word, axis) !== 1 || score >= axisTarget(word, axis) || (score >= 60 && axisSpeedVerified(word, axis) !== 1)) {
+    return score;
+  }
+  const next = [20, 35, 50, 60, 75, 90, 100].find((n) => n > score) ?? 100;
+  return Math.min(next, axisTarget(word, axis));
+}
+
+function axisCandidateDefinitions(
+  word: Word,
+  axis: Direction,
+  type: 'RETRIEVE' | 'FLUENCY',
+  purpose: TaskPurpose,
+  materials: ReadonlySet<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>,
+  accuracyChecks: ReadonlySet<'target_word' | 'passage_comprehension' | 'expression'>,
+  wordCount: number
+): TaskDefinition[] {
+  const context = {
+    axis,
+    score: axisScore(word, axis),
+    purpose,
+    materials,
+    accuracyChecks,
+    wordCount,
+    independentResponseAvailable: true,
+  } as const;
+  const { purpose: _purpose, ...ordinaryContext } = context;
+  const candidates = purpose === 'review' || purpose === 'maintain'
+    ? ordinaryCandidates(ordinaryContext)
+    : eligibleTaskDefinitions(context);
+  return candidates.filter((definition) => definition.type === type);
+}
+
+function createInstance(
+  definition: TaskDefinition,
+  axis: Direction,
+  purpose: TaskPurpose,
+  wordIds: readonly number[],
+  checkpoint: number | null,
+  payload: Record<string, unknown>,
+  now: number
+): TaskInstance {
+  return {
+    instance_id: randomUUID(),
+    definition_id: definition.id,
+    type: definition.type,
+    checkpoint,
+    axis,
+    purpose,
+    word_ids: wordIds,
+    payload,
+    renderer: definition.renderer,
+    issued_at: now,
+  };
+}
+
+/**
+ * Abstract scheduler entry point used by the task API. Every chosen definition,
+ * axis, purpose, target word and checkpoint is fixed before the response arrives.
+ */
+export function getNextTaskInstance(db: Database.Database, now = Date.now()): ScheduledTaskInstance {
+  const tick = getTick(db);
+  const words = (db.prepare('SELECT * FROM words').all() as WordRow[]).map(toWord);
+  const goalId = getActiveGoalId(db);
+  const strictScope = goalId != null && getGoalScopeStrict(db);
+  const inScope = (word: Word) => !strictScope || word.goal_id === goalId;
+  const scopedWords = words.filter(inScope);
+  const axes: Direction[] = ['r', 'p'];
+
+  const taskMaterial = (word: Word, axis: Direction) => {
+    const text = word.step4_sentences.join(' ').trim();
+    const minWords = axis === 'r' ? CONFIG.READ_MIN_WORDS : 30;
+    const assessment = assessContinuousMaterial(text, {
+      minWords,
+      maxWords: 2_000,
+      targetWords: [{ wordId: word.id, text: word.chunk }],
+    });
+    const materials = new Set<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>(['word', 'example_sentence']);
+    let continuousText = assessment.eligible ? text : null;
+    let mfi: ReturnType<typeof sliceMfiDetailed> | null = null;
+    if (axis === 'r') {
+      const sourceText = bookTextFor(db, word);
+      if (sourceText) {
+        const allWords = words;
+        const known = knownTokenSet(db, allWords);
+        mfi = sliceMfiDetailed(sourceText, word.chunk, (token) => known.has(token), {
+          rotation: tick,
+          targetWords: [{ wordId: word.id, chunk: word.chunk, meaning: word.meaning }],
+        });
+        if (mfi.available) {
+          materials.add('book_text');
+          materials.add('continuous_text');
+          continuousText = mfi.material.passage;
+        }
+      }
+    }
+    const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word']);
+    if (axis === 'r') checks.add('passage_comprehension');
+    else checks.add('expression');
+    return { text: continuousText, materials, checks, wordCount: continuousText?.match(/[\p{L}][\p{L}'’-]*/gu)?.length ?? 0, mfi };
+  };
+
+  const makePayload = (word: Word, axis: Direction, definition: TaskDefinition, checkpoint: number | null, material: ReturnType<typeof taskMaterial>) => {
+    const cursor = axis === 'r'
+      ? getCursor(db, 'reading', CONFIG.V_FLOOR_READING)
+      : getCursor(db, 'writing', CONFIG.V_FLOOR_WRITING);
+    const budget = Math.max(0, Math.round((material.wordCount || materialWords(word)) / cursor * 60_000));
+    const speedAtCheckpoint = checkpoint != null && checkpoint >= 60
+      ? axis === 'r' ? 150 + ((checkpoint - 60) * 150) / 40 : 25 + ((checkpoint - 60) * 35) / 40
+      : null;
+    return {
+      word_id: word.id,
+      chunk: word.chunk,
+      meaning: word.meaning,
+      scene: word.scene,
+      example_sentence: word.step3_sentence,
+      continuous_text: material.text,
+      target_checks: material.mfi?.available ? material.mfi.material.targetChecks : [],
+      options: material.mfi?.available ? material.mfi.material.options : [],
+      answer_index: material.mfi?.available ? material.mfi.material.answerIndex : null,
+      passage_words: material.wordCount,
+      time_budget_ms: budget,
+      speed_target_wpm: speedAtCheckpoint,
+      evidence: definition.evidence,
+    };
+  };
+
+  // 1. Explicitly pending same-axis relearning always resumes first.
+  for (const word of scopedWords) {
+    if (word.graduated) continue;
+    const axis = axes.find((a) => axisRelearnPending(word, a) === 1);
+    if (!axis) continue;
+    const material = taskMaterial(word, axis);
+    const definition = TASK_LIBRARY.find((item) => item.id === `encode-${axis}`);
+    if (definition) return createInstance(definition, axis, 'relearn', [word.id], null, makePayload(word, axis, definition, null, material), now);
+  }
+
+  // 2. Same-axis integration has priority over emergency and ordinary review.
+  for (const axis of axes) {
+    const pool = scopedWords.filter((word) =>
+      !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
+      axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1
+    ).sort((a, b) => (b.freq ?? 0) - (a.freq ?? 0) || a.id - b.id);
+    if (pool.length < CONFIG.BATCH_SIZE) continue;
+    const batch = pool.slice(0, CONFIG.BATCH_SIZE);
+    const materialText = batch.map((word) => word.step4_sentences.join(' ')).join(' ');
+    const minWords = axis === 'r' ? CONFIG.MFI_MIN_WORDS : 30;
+    const materialCheck = assessContinuousMaterial(materialText, {
+      minWords,
+      maxWords: axis === 'r' ? CONFIG.MFI_MAX_WORDS : 2_000,
+      targetWords: batch.map((word) => ({ wordId: word.id, text: word.chunk })),
+    });
+    if (!materialCheck.eligible) continue;
+    const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word', axis === 'r' ? 'passage_comprehension' : 'expression']);
+    const materials = new Set<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>(['word', 'example_sentence', 'continuous_text']);
+    const definition = eligibleTaskDefinitions({
+      axis,
+      score: CONFIG.INTEGRATE_FLOOR,
+      purpose: 'review',
+      materials,
+      accuracyChecks: checks,
+      wordCount: materialCheck.wordCount,
+      independentResponseAvailable: true,
+    }).find((item) => item.type === 'INTEGRATE');
+    if (!definition) continue;
+    return createInstance(definition, axis, 'review', batch.map((word) => word.id), CONFIG.INTEGRATE_FLOOR, {
+      word_ids: batch.map((word) => word.id),
+      target_words: batch.map((word) => ({ word_id: word.id, chunk: word.chunk, meaning: word.meaning })),
+      continuous_text: materialText,
+      passage_words: materialCheck.wordCount,
+      evidence: definition.evidence,
+    }, now);
+  }
+
+  // 3. Emergency verification: low long-term retention only expires that axis.
+  const emergencies: { word: Word; axis: Direction; retention: number }[] = [];
+  for (const word of scopedWords) {
+    if (word.graduated) continue;
+    for (const axis of axes) {
+      const anchor = axisTimeAnchor(word, axis);
+      if (axisObservation(word, axis) !== 1 || anchor === 0 || axisComplete(word, axis)) continue;
+      const retention = retrievabilityParts(word, tick, now, axis).l;
+      if (retention < CONFIG.RELEARN_R) emergencies.push({ word, axis, retention });
+    }
+  }
+  emergencies.sort((a, b) => a.retention - b.retention || a.word.id - b.word.id || axes.indexOf(a.axis) - axes.indexOf(b.axis));
+  const emergency = emergencies[0];
+  if (emergency) {
+    const { word, axis } = emergency;
+    const verifiedColumn = axis === 'r' ? 'verified_r' : 'verified_p';
+    const speedColumn = axis === 'r' ? 'speed_verified_r' : 'speed_verified_p';
+    db.prepare(`UPDATE words SET ${verifiedColumn} = 0, ${speedColumn} = 0 WHERE id = ?`).run(word.id);
+    const material = taskMaterial(word, axis);
+    const defs = axisCandidateDefinitions(word, axis, 'RETRIEVE', 'recover', material.materials, material.checks, material.wordCount);
+    const definition = defs[0];
+    if (definition) {
+      const checkpoint = Math.min(axisScore(word, axis) || 20, 50);
+      return createInstance(definition, axis, 'recover', [word.id], checkpoint, makePayload(word, axis, definition, checkpoint, material), now);
+    }
+  }
+
+  // 4. Generate ordinary candidates with independent L_a and shared C gates.
+  const ready: InstanceCandidate[] = [];
+  const pendingMaterialAxes: { word_id: number; axis: Direction; reasons: string[] }[] = [];
+  const waitingAt: number[] = [];
+  for (const word of scopedWords) {
+    if (!word.introduced || word.graduated) continue;
+    for (const axis of axes) {
+      if (axisComplete(word, axis) || axisRelearnPending(word, axis)) continue;
+      const score = axisScore(word, axis);
+      const hasObservation = axisObservation(word, axis) === 1;
+      const purpose: TaskPurpose = !hasObservation ? 'verify' : score >= axisTarget(word, axis) ? 'maintain' : 'review';
+      const material = taskMaterial(word, axis);
+      const preferredType = score >= CONFIG.ACCURACY_FLOOR ? 'FLUENCY' : 'RETRIEVE';
+      let definitions = axisCandidateDefinitions(
+        word,
+        axis,
+        preferredType,
+        purpose,
+        material.materials,
+        material.checks,
+        material.wordCount
+      );
+      let usedFallback = false;
+      if (definitions.length === 0 && preferredType === 'FLUENCY') {
+        // Same-axis accuracy retrieval is the only fallback when continuous material is missing.
+        definitions = axisCandidateDefinitions(word, axis, 'RETRIEVE', purpose, material.materials, material.checks, material.wordCount);
+        usedFallback = definitions.length > 0;
+      }
+      if (definitions.length === 0) {
+        pendingMaterialAxes.push({ word_id: word.id, axis, reasons: material.text ? ['ineligible_continuous_material'] : ['continuous_text_unavailable'] });
+        continue;
+      }
+      const anchor = axisTimeAnchor(word, axis);
+      const l = anchor === 0 ? 1 : retrievabilityParts(word, tick, now, axis).l;
+      const retentionGate = !hasObservation || anchor === 0 || l <= CONFIG.RIPE_R;
+      const cooldownGate = coolingReady(word, tick, now);
+      if (!retentionGate || !cooldownGate) {
+        waitingAt.push(nextEligibleAt(word, axis, tick, now));
+        continue;
+      }
+      const definition = definitions[0];
+      const checkpoint = nextCheckpoint(word, axis, definition.type, purpose);
+      const target = axisTarget(word, axis);
+      const taskPriority = priority(word, axis, l);
+      if (taskPriority <= 0) continue;
+      const payload = {
+        ...makePayload(word, axis, definition, checkpoint, material),
+        material_fallback: usedFallback,
+      };
+      ready.push({ word, axis, definition, purpose, checkpoint, priority: taskPriority, payload });
+    }
+  }
+
+  ready.sort((a, b) => b.priority - a.priority || a.word.id - b.word.id || axes.indexOf(a.axis) - axes.indexOf(b.axis) || a.definition.id.localeCompare(b.definition.id));
+  if (ready.length > 0 && ready[0].priority >= CONFIG.NEW_WORD_BYPASS) {
+    const candidate = ready[0];
+    return createInstance(candidate.definition, candidate.axis, candidate.purpose, [candidate.word.id], candidate.checkpoint, candidate.payload, now);
+  }
+
+  // 5. New words use q only to choose their first route; axis scores remain untouched.
+  const newWord = scopedWords.filter((word) => word.introduced === 0)
+    .sort((a, b) => (b.freq ?? -1) - (a.freq ?? -1) || a.id - b.id)[0];
+  if (newWord) {
+    const axis: Direction = (newWord.target_in - newWord.fluency_r) >= (newWord.target_out - newWord.fluency) ? 'r' : 'p';
+    const q = newWord.prior_mastery_q ?? 0;
+    const purpose: TaskPurpose = q < 0.3 ? 'introduce' : q < 0.7 ? 'diagnose' : 'verify';
+    const type = q < 0.3 ? 'ENCODE' : 'RETRIEVE';
+    const material = taskMaterial(newWord, axis);
+    const definition = type === 'ENCODE'
+      ? TASK_LIBRARY.find((item) => item.id === `encode-${axis}`)
+      : axisCandidateDefinitions(newWord, axis, 'RETRIEVE', purpose, material.materials, material.checks, material.wordCount)[0];
+    if (definition) {
+      const checkpoint = type === 'ENCODE' ? null : nextCheckpoint(newWord, axis, type, purpose);
+      return createInstance(definition, axis, purpose, [newWord.id], checkpoint, makePayload(newWord, axis, definition, checkpoint, material), now);
+    }
+  }
+
+  // 6. Return low-demand review work before EMPTY.
+  if (ready.length > 0) {
+    const candidate = ready[0];
+    return createInstance(candidate.definition, candidate.axis, candidate.purpose, [candidate.word.id], candidate.checkpoint, candidate.payload, now);
+  }
+
+  const unfinished = scopedWords.flatMap((word) => axes.filter((axis) => !axisComplete(word, axis) && !axisRelearnPending(word, axis)).map((axis) => ({ word, axis })));
+  const reason: EmptyReason = waitingAt.length > 0
+    ? 'waiting_cooldown'
+    : pendingMaterialAxes.length > 0
+      ? 'materials_unavailable'
+      : unfinished.length === 0 ? 'all_complete' : 'materials_unavailable';
+  const nextAvailableAt = reason === 'waiting_cooldown' && waitingAt.length > 0 ? Math.min(...waitingAt) : null;
+  const empty: EmptyTaskInstance = {
+    type: 'EMPTY',
+    reason,
+    next_available_at: nextAvailableAt,
+    ...(pendingMaterialAxes.length ? { unavailable_materials: [...new Set(pendingMaterialAxes.flatMap((item) => item.reasons))] } : {}),
+  };
+  return empty;
+}
 
 export function getNextTask(db: Database.Database, now = Date.now()): Task {
   const tick = getTick(db);

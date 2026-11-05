@@ -7,8 +7,9 @@ export const CONFIG = {
   // 可提取度 R 的"成熟"阈值：R 低于它才值得重测（目标服务点 ≈ 0.8，留一点提前量）
   RIPE_R: num(process.env.RIPE_R, 0.9),
   // 缓存冷却闸门（双通道并联：≈H_tick 个干扰任务，或 ≈H_CACHE_MS 自然流逝）：
-  // 短时缓存残留 C 须降到此值以下才放行复习（0.5 ≈ 一个半衰期 ≈ 4–5 个任务 / 20 分钟）
+  // 7 个其他任务或 20 分钟任一条件满足后即可复习。
   CACHE_COLD: num(process.env.CACHE_COLD, 0.5),
+  CACHE_COOLDOWN_TICKS: num(process.env.CACHE_COOLDOWN_TICKS, 7),
   // 缓存的时间通道半衰期：工作记忆痕迹自然消散 ≈ 20 分钟
   H_CACHE_MS: num(process.env.H_CACHE_MS, 20 * 60_000),
   // 严重逾期路由线：R 跌穿此值 → 提取大概率失败，绕过竞争直接回重编码（Step 1+2 式）
