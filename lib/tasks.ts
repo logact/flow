@@ -127,10 +127,104 @@ export const materialWords = (w: Word) =>
 // 的 F_R 改为镜像 F_P——它们的流利度按定义就是单一构念（见 RPD「P⊃R 迁移」）
 export const readable = (w: Word) => materialWords(w) >= CONFIG.READ_MIN_WORDS;
 
-// 同轴平局时的任务偏好：同一根轴上各候选的 gap/urgency 相同，P 必然相等，
-// 由任务秩决定派哪个——信息更丰富的构念优先（P 轴 STEP4 > STEP3；R 轴 MFI > STEP4R）
-const TASK_RANK: Record<ScoredKind, number> = { MFI: 0, STEP4: 1, STEP4R: 2, STEP3: 3 };
-export const taskRank = (k: ScoredKind): number => TASK_RANK[k];
+// Legacy kinds remain available to old renderers while the scheduler migrates to definitions.
+// They have no scoring or tie-break semantics.
+export const taskRank = (_k: ScoredKind): number => 0;
+
+const scoreRange = (min: number, max: number): ScoreRange => ({ min, max });
+
+/** Abstract learning tasks. Renderer names are presentation adapters, not dispatch rules. */
+export const TASK_LIBRARY: readonly TaskDefinition[] = [
+  {
+    id: 'encode-r', type: 'ENCODE', supported_axes: ['r'],
+    score_range_by_axis: { p: null, r: scoreRange(0, 100) }, action: 'view',
+    checkpoint_range: null, supported_purposes: ['introduce', 'relearn'], scope: 'single',
+    prerequisites: { materials: ['word', 'example_sentence'] },
+    evidence: { accuracy_check: [], speed_mode: 'none', attribution: 'per_word' }, renderer: 'encode-r',
+  },
+  {
+    id: 'encode-p', type: 'ENCODE', supported_axes: ['p'],
+    score_range_by_axis: { p: scoreRange(0, 100), r: null }, action: 'view',
+    checkpoint_range: null, supported_purposes: ['introduce', 'relearn'], scope: 'single',
+    prerequisites: { materials: ['word', 'example_sentence'] },
+    evidence: { accuracy_check: [], speed_mode: 'none', attribution: 'per_word' }, renderer: 'encode-p',
+  },
+  {
+    id: 'retrieve-r', type: 'RETRIEVE', supported_axes: ['r'],
+    score_range_by_axis: { p: null, r: scoreRange(0, 100) }, action: 'recognize',
+    checkpoint_range: scoreRange(0, 50),
+    supported_purposes: ['diagnose', 'verify', 'review', 'recover', 'relearn', 'maintain'], scope: 'single',
+    prerequisites: { materials: ['word', 'example_sentence'], accuracyChecks: ['target_word'], requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word'], speed_mode: 'latency_proxy', attribution: 'per_word' }, renderer: 'retrieve-r',
+  },
+  {
+    id: 'retrieve-p', type: 'RETRIEVE', supported_axes: ['p'],
+    score_range_by_axis: { p: scoreRange(0, 100), r: null }, action: 'recall',
+    checkpoint_range: scoreRange(0, 50),
+    supported_purposes: ['diagnose', 'verify', 'review', 'recover', 'relearn', 'maintain'], scope: 'single',
+    prerequisites: { materials: ['word', 'example_sentence'], accuracyChecks: ['target_word'], requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word'], speed_mode: 'latency_proxy', attribution: 'per_word' }, renderer: 'retrieve-p',
+  },
+  {
+    id: 'fluency-r', type: 'FLUENCY', supported_axes: ['r'],
+    score_range_by_axis: { p: null, r: scoreRange(50, 100) }, action: 'continuous_read',
+    checkpoint_range: scoreRange(50, 100), supported_purposes: ['verify', 'review', 'recover', 'maintain'], scope: 'single',
+    prerequisites: { materials: ['continuous_text'], accuracyChecks: ['target_word', 'passage_comprehension'], minimumWords: CONFIG.READ_MIN_WORDS, requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word', 'passage_comprehension'], speed_mode: 'reading_wpm', attribution: 'per_word' }, renderer: 'fluency-r',
+  },
+  {
+    id: 'fluency-p', type: 'FLUENCY', supported_axes: ['p'],
+    score_range_by_axis: { p: scoreRange(50, 100), r: null }, action: 'continuous_write',
+    checkpoint_range: scoreRange(50, 100), supported_purposes: ['verify', 'review', 'recover', 'maintain'], scope: 'single',
+    prerequisites: { materials: ['continuous_text'], accuracyChecks: ['target_word', 'expression'], minimumWords: 30, requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word', 'expression'], speed_mode: 'writing_wpm', attribution: 'per_word' }, renderer: 'fluency-p',
+  },
+  {
+    id: 'integrate-r', type: 'INTEGRATE', supported_axes: ['r'],
+    score_range_by_axis: { p: null, r: scoreRange(75, 100) }, action: 'continuous_read',
+    checkpoint_range: scoreRange(75, 100), supported_purposes: ['verify', 'review', 'maintain'], scope: 'multiple',
+    prerequisites: { materials: ['continuous_text'], accuracyChecks: ['target_word', 'passage_comprehension'], requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word', 'passage_comprehension'], speed_mode: 'reading_wpm', attribution: 'per_word' }, renderer: 'integrate-r',
+  },
+  {
+    id: 'integrate-p', type: 'INTEGRATE', supported_axes: ['p'],
+    score_range_by_axis: { p: scoreRange(75, 100), r: null }, action: 'continuous_write',
+    checkpoint_range: scoreRange(75, 100), supported_purposes: ['verify', 'review', 'maintain'], scope: 'multiple',
+    prerequisites: { materials: ['continuous_text'], accuracyChecks: ['target_word', 'expression'], requiresIndependentResponse: true },
+    evidence: { accuracy_check: ['target_word', 'expression'], speed_mode: 'writing_wpm', attribution: 'per_word' }, renderer: 'integrate-p',
+  },
+];
+
+export interface TaskEligibilityContext {
+  axis: Axis;
+  score: number;
+  purpose: TaskPurpose;
+  materials: ReadonlySet<NonNullable<TaskPrerequisites['materials']>[number]>;
+  accuracyChecks: ReadonlySet<NonNullable<TaskPrerequisites['accuracyChecks']>[number]>;
+  wordCount?: number;
+  independentResponseAvailable?: boolean;
+}
+
+/** Filter definitions by the declared score band, purpose, material, and evidence capability. */
+export function eligibleTaskDefinitions(context: TaskEligibilityContext): TaskDefinition[] {
+  return TASK_LIBRARY.filter((definition) => {
+    if (!definition.supported_axes.includes(context.axis)) return false;
+    const range = definition.score_range_by_axis[context.axis];
+    if (!range || context.score < range.min || context.score > range.max) return false;
+    if (!definition.supported_purposes.includes(context.purpose)) return false;
+    if (definition.prerequisites.materials?.some((item) => !context.materials.has(item))) return false;
+    if (definition.evidence.accuracy_check.some((item) => !context.accuracyChecks.has(item))) return false;
+    if (definition.prerequisites.minimumWords != null && (context.wordCount ?? 0) < definition.prerequisites.minimumWords) return false;
+    if (definition.prerequisites.requiresIndependentResponse && context.independentResponseAvailable === false) return false;
+    return true;
+  });
+}
+
+/** Ordinary score-driven candidates. Even below 50, both axes retain a RETRIEVE route. */
+export function ordinaryCandidates(context: Omit<TaskEligibilityContext, 'purpose'>): TaskDefinition[] {
+  const purpose: TaskPurpose = context.score < 50 ? 'review' : 'maintain';
+  return eligibleTaskDefinitions({ ...context, purpose });
+}
 
 // 资格谓词保证「先准确后速度」无需档位：F 低于 ACCURACY_FLOOR 时速度任务不可派，
 // 候选自然落回提取类任务。新词（last_ts = 0）走引入通道，不参与复习竞争。
