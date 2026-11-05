@@ -328,10 +328,10 @@ function migrate(db: Database.Database) {
     ).run();
   }
 
-  // 个人终点回填（一次性）：按目标画像 + 词频推导 target_in / target_out（RPD「每词的个人终点」）。
+  // 个人终点回填（一次性）：按目标画像推导 target_in / target_out，词频不改变目标。
   // 老目标 JSON 里的 fluency_threshold 从此作废——毕业判定改为每词双轴达标
   const targetsMigrated = db
-    .prepare(`SELECT value FROM meta WHERE key = 'migrated_targets'`)
+    .prepare(`SELECT value FROM meta WHERE key = 'migrated_targets_60_100'`)
     .get() as { value: string } | undefined;
   if (!targetsMigrated) {
     const goalRows = db.prepare(`SELECT id, target FROM goals`).all() as {
@@ -339,21 +339,17 @@ function migrate(db: Database.Database) {
       target: string | null;
     }[];
     const profileByGoal = new Map(goalRows.map((g) => [g.id, parseProfile(g.target)]));
-    const wordRows = db.prepare(`SELECT id, goal_id, freq FROM words`).all() as {
+    const wordRows = db.prepare(`SELECT id, goal_id FROM words`).all() as {
       id: number;
       goal_id: number | null;
-      freq: number | null;
     }[];
     const stmt = db.prepare(`UPDATE words SET target_in = ?, target_out = ? WHERE id = ?`);
     for (const w of wordRows) {
-      const t = targetsFor(
-        (w.goal_id != null && profileByGoal.get(w.goal_id)) || {},
-        w.freq
-      );
+      const t = targetsFor((w.goal_id != null && profileByGoal.get(w.goal_id)) || {});
       stmt.run(t.targetIn, t.targetOut, w.id);
     }
     db.prepare(
-      `INSERT INTO meta (key, value) VALUES ('migrated_targets', '1') ON CONFLICT(key) DO NOTHING`
+      `INSERT INTO meta (key, value) VALUES ('migrated_targets_60_100', '1') ON CONFLICT(key) DO NOTHING`
     ).run();
   }
 

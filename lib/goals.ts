@@ -1,10 +1,9 @@
 import type Database from 'better-sqlite3';
-import { CONFIG } from './config';
 import { bandOf, type WordRow } from './db';
-import { lookupGlosses } from './gloss';
+import { lookupGlosses, rankedWords } from './gloss';
 import { analyzeBook } from './book';
 import { materialFromStat, materialsFromIelts, materialsFromWordlist, type Material } from './material';
-import { targetsFor, parseProfile, type TargetProfile } from './targets';
+import { targetsFor, parseProfile, priorMasteryProbability, type TargetProfile } from './targets';
 
 // IELTS 目标分 → 大致所需词汇量（业界通行的粗略对应，原型够用）
 export const IELTS_TARGET_VOCAB: Record<string, number> = {
@@ -42,6 +41,10 @@ export async function createGoal(
       r.chunk.toLowerCase()
     )
   );
+  const vocabRow = db.prepare(`SELECT value FROM meta WHERE key = 'vocab_estimate'`).get() as
+    | { value: string }
+    | undefined;
+  const vocabEstimate = vocabRow ? Number(vocabRow.value) : null;
 
   let materials: Material[];
   let info = '';
@@ -99,26 +102,23 @@ export async function createGoal(
     materials = materialsFromIelts();
     const vocabTarget = IELTS_TARGET_VOCAB[input.score ?? '7.0'] ?? 7200;
     target = { vocab_size: vocabTarget, reading_wpm: 200, writing_wpm: 30 };
-    const row = db.prepare(`SELECT value FROM meta WHERE key = 'vocab_estimate'`).get() as
-      | { value: string }
-      | undefined;
-    const current = row ? Number(row.value) : null;
     info =
-      current != null
-        ? `当前词汇量估计 ${current} → 目标 ${vocabTarget}，差距约 ${Math.max(0, vocabTarget - current)} 词。已将 IELTS 核心词入队（原型为全量入队，正式版应按差距从词频表动态选材）。`
+      vocabEstimate != null
+        ? `当前词汇量估计 ${vocabEstimate} → 目标 ${vocabTarget}，差距约 ${Math.max(0, vocabTarget - vocabEstimate)} 词。已将 IELTS 核心词入队（原型为全量入队，正式版应按差距从词频表动态选材）。`
         : `目标 ${vocabTarget} 词汇量。建议先做词汇量测量，系统才能按差距选材。已将 IELTS 核心词入队。`;
   }
 
   const fresh = materials.filter((m) => !existing.has(m.chunk.toLowerCase()));
   const skipped = materials.length - fresh.length;
 
-  // 测量中已确认认识的词：高位播种快速验证（F_R=60 知识确认线、F_P=15），
-  // 走一遍提取任务验证后即快速爬升——不让用户重学简单词，也不盲信自报
-  const knownWords = new Set(
-    (db.prepare(`SELECT word FROM known_words`).all() as { word: string }[]).map((r) => r.word)
-  );
-  const isKnown = (chunk: string) => knownWords.has(chunk.trim().toLowerCase());
-  const knownCount = fresh.filter((m) => isKnown(m.chunk)).length;
+  // q is a routing prior only. The unassessed R/P scores remain 0 until evidence is submitted.
+  const rankByWord = new Map(rankedWords().map((word, index) => [word.toLowerCase(), index + 1]));
+  const priorFor = (chunk: string) => {
+    const ranks = chunk.toLowerCase().split(/\s+/).map((word) => rankByWord.get(word)).filter(
+      (rank): rank is number => rank != null
+    );
+    return priorMasteryProbability(vocabEstimate, ranks.length ? Math.max(...ranks) : null);
+  };
 
   // 无释义的语块补 gloss：本地 ECDICT 子集优先，缺失再走在线源（结果缓存）
   const glossless = fresh.filter((m) => !m.meaning).map((m) => m.chunk);
@@ -138,15 +138,11 @@ export async function createGoal(
   const insertGoal = db.prepare(
     `INSERT INTO goals (type, title, target, created_at) VALUES (?, ?, ?, ?)`
   );
-  const tickRow = db.prepare(`SELECT value FROM meta WHERE key = 'global_tick'`).get() as
-    | { value: string }
-    | undefined;
-  const tick = tickRow ? Number(tickRow.value) : 0;
   const insertWord = db.prepare(`
     INSERT INTO words (chunk, meaning, scene, slots, substitute, step3_sentence, step4_sentences,
                        fluency, fluency_r, target_in, target_out, last_tick, last_ts, last_ts_r,
-                       goal_id, freq, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       goal_id, freq, prior_mastery_q, introduced, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const run = db.transaction(() => {
@@ -155,8 +151,7 @@ export async function createGoal(
     );
     for (const m of fresh) {
       // 每词的个人终点在入库时物化（RPD「每词的个人终点」）；目标速度修改时批量重算
-      const t = targetsFor(target, m.freq);
-      const known = isKnown(m.chunk);
+      const t = targetsFor(target);
       insertWord.run(
         m.chunk,
         m.meaning,
@@ -165,15 +160,17 @@ export async function createGoal(
         m.substitute,
         m.step3_sentence,
         JSON.stringify(m.step4_sentences),
-        known ? CONFIG.SEED_F_P : 0, // 已知词高位播种：F_P=15
-        known ? 60 : 0, // F_R=60 = 知识确认线（与 P⊃R 迁移同语义）
+        0,
+        0,
         t.targetIn,
         t.targetOut,
-        known ? tick : 0,
-        known ? now : 0,
-        known ? now : 0,
+        0,
+        0,
+        0,
         goalId,
         m.freq,
+        priorFor(m.chunk),
+        0,
         now,
         now
       );
@@ -185,8 +182,6 @@ export async function createGoal(
   if (!info) {
     info = `已生成 ${fresh.length} 个语块加入学习队列${skipped > 0 ? `（跳过 ${skipped} 个重复词）` : ''}。`;
   }
-  if (knownCount > 0)
-    info += `其中 ${knownCount} 个在词汇量测量中已认识——高位播种（F_R=60），走一遍提取验证即快速爬升。`;
   if (glossed > 0) info += `（自动补充 ${glossed} 个释义）`;
   return { goalId, added: fresh.length, skipped, info };
 }

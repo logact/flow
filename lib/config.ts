@@ -51,12 +51,6 @@ export const CONFIG = {
   // 阅读模态 150 → 300 wpm（能获得大部分意思的最低速度 → 母语者上限 250–300 取顶）
   V_FLOOR_READING: num(process.env.V_FLOOR_READING, 150),
   V_CEIL_READING: num(process.env.V_CEIL_READING, 300),
-  // 每词个人终点：base = TARGET_BASE + TARGET_SPAN × 目标速度在标尺上的位置（80–95）
-  TARGET_BASE: num(process.env.TARGET_BASE, 80),
-  TARGET_SPAN: num(process.env.TARGET_SPAN, 15),
-  // 词频向上调制幅度与参考点：freqFactor ∈ [1, 1+FREQ_FACTOR_MAX]，只向上不稀释流利下限
-  FREQ_FACTOR_MAX: num(process.env.FREQ_FACTOR_MAX, 0.1),
-  FREQ_REF: num(process.env.FREQ_REF, 100),
   // 阅读材料词数下限：低于它速读无意义（如词表导入只有语块本身），F_R 镜像 F_P
   READ_MIN_WORDS: num(process.env.READ_MIN_WORDS, 8),
   // MFI 篇章词数窗口与已知词覆盖率下限
