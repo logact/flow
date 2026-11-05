@@ -331,8 +331,11 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       }
     }
     const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word']);
-    if (axis === 'r') checks.add('passage_comprehension');
-    else checks.add('expression');
+    // R fluency evidence requires a server-keyed comprehension question. Plain
+    // example sentences can support retrieval, but cannot certify continuous
+    // reading comprehension. Only MFI material currently carries that answer key.
+    if (axis === 'r' && mfi?.available) checks.add('passage_comprehension');
+    else if (axis === 'p') checks.add('expression');
     return { text: continuousText, materials, checks, wordCount: continuousText?.match(/[\p{L}][\p{L}'’-]*/gu)?.length ?? 0, mfi };
   };
 
