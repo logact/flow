@@ -898,9 +898,11 @@ export function applyTaskResult(
 
       } else if (attemptedIndependently) {
         const oldStability = axis === 'r' ? word.stability_time_r : word.stability_time;
+        const pendingColumn = axis === 'r' ? 'pending_relearn_r' : 'pending_relearn_p';
+        const targetWordFailed = evidence.accuracy.target_word !== true;
         db.prepare(
-          `UPDATE words SET ${verifiedColumn} = 0, ${speedColumn} = 0, ${stabilityColumn} = ?, introduced = 1, has_observation_${axis} = 1, ${timestampColumn} = ?, last_tick = ?, updated_at = ? WHERE id = ?`
-        ).run(Math.max(oldStability / 2, CONFIG.H_TIME_MIN_MS), now, nextTick, now, id);
+          `UPDATE words SET ${verifiedColumn} = 0, ${speedColumn} = 0, ${stabilityColumn} = ?, ${pendingColumn} = CASE WHEN ? = 1 THEN 1 ELSE ${pendingColumn} END, introduced = 1, has_observation_${axis} = 1, ${timestampColumn} = ?, last_tick = ?, updated_at = ? WHERE id = ?`
+        ).run(Math.max(oldStability / 2, CONFIG.H_TIME_MIN_MS), targetWordFailed ? 1 : 0, now, nextTick, now, id);
       } else {
         // A guided attempt can refresh practice timing, but it cannot alter scores or certification.
         db.prepare(
