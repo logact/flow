@@ -7,6 +7,113 @@ import type { Word } from './db';
 export type Axis = 'p' | 'r';
 export type ScoredKind = 'STEP3' | 'STEP4' | 'STEP4R' | 'MFI';
 
+/** Learning purpose is independent of the renderer used to present the task. */
+export type TaskType = 'ENCODE' | 'RETRIEVE' | 'FLUENCY' | 'INTEGRATE';
+export type TaskPurpose =
+  | 'introduce'
+  | 'diagnose'
+  | 'verify'
+  | 'review'
+  | 'recover'
+  | 'relearn'
+  | 'maintain';
+export type TaskAction =
+  | 'view'
+  | 'recognize'
+  | 'recall'
+  | 'contextualize'
+  | 'continuous_read'
+  | 'continuous_write';
+export type SpeedMode = 'none' | 'latency_proxy' | 'reading_wpm' | 'writing_wpm';
+export type EvidenceAttribution = 'per_word' | 'overall';
+export type TaskScope = 'single' | 'multiple';
+
+export interface ScoreRange {
+  min: number;
+  max: number;
+}
+
+/** Requirements that must be satisfied before a definition can be instantiated. */
+export interface TaskPrerequisites {
+  materials?: readonly ('word' | 'example_sentence' | 'continuous_text' | 'book_text')[];
+  accuracyChecks?: readonly ('target_word' | 'passage_comprehension' | 'expression')[];
+  minimumWords?: number;
+  requiresIndependentResponse?: boolean;
+}
+
+export interface TaskEvidenceDefinition {
+  /** Checks are named so the server can verify each requirement independently. */
+  accuracy_check: readonly ('target_word' | 'passage_comprehension' | 'expression')[];
+  speed_mode: SpeedMode;
+  attribution: EvidenceAttribution;
+}
+
+/** A reusable task template. A definition declares its learning purpose and evidence. */
+export interface TaskDefinition {
+  id: string;
+  type: TaskType;
+  supported_axes: readonly Axis[];
+  score_range_by_axis: Readonly<Record<Axis, ScoreRange | null>>;
+  action: TaskAction;
+  /** Null means this definition teaches or provides unscored practice only. */
+  checkpoint_range: ScoreRange | null;
+  supported_purposes: readonly TaskPurpose[];
+  scope: TaskScope;
+  prerequisites: TaskPrerequisites;
+  evidence: TaskEvidenceDefinition;
+  renderer: string;
+}
+
+/** A server-created assignment; its checkpoint is fixed before the user responds. */
+export interface TaskInstance {
+  instance_id: string;
+  definition_id: string;
+  type: TaskType;
+  checkpoint: number | null;
+  axis: Axis;
+  purpose: TaskPurpose;
+  word_ids: readonly number[];
+  payload: Readonly<Record<string, unknown>>;
+  renderer: string;
+  issued_at: number;
+}
+
+export type EmptyReason = 'waiting_cooldown' | 'all_complete' | 'materials_unavailable';
+
+/** An explicit no-task response; retry timing is present only while waiting for cooldown. */
+export interface EmptyTaskInstance {
+  type: 'EMPTY';
+  reason: EmptyReason;
+  next_available_at: number | null;
+  unavailable_materials?: readonly string[];
+}
+
+export type ScheduledTaskInstance = TaskInstance | EmptyTaskInstance;
+
+/** Evidence sent with a result. It records whether the attempt can certify a checkpoint. */
+export interface TaskEvidence {
+  independent: boolean;
+  answer_revealed: boolean;
+  hint_used: boolean;
+  accuracy: Readonly<Record<string, boolean>>;
+  speed_mode: SpeedMode;
+  speed_value: number | null;
+  duration_ms: number | null;
+  word_results: readonly {
+    word_id: number;
+    correct: boolean;
+    response?: unknown;
+  }[];
+}
+
+/** Client response to one issued instance; scoring fields are confirmed by the server. */
+export interface TaskResult {
+  instance_id: string;
+  response: Readonly<Record<string, unknown>>;
+  evidence: TaskEvidence;
+  submitted_at: number;
+}
+
 export interface Candidate {
   dir: Axis;
   kind: ScoredKind;
