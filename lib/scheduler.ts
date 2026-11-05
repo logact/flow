@@ -375,6 +375,7 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
   }
 
   // 2. Same-axis integration has priority over emergency and ordinary review.
+  const pendingMaterialAxes: { word_id: number; axis: Direction; reasons: string[] }[] = [];
   for (const axis of axes) {
     const pool = scopedWords.filter((word) =>
       !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
@@ -382,15 +383,26 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     ).sort((a, b) => (b.freq ?? 0) - (a.freq ?? 0) || a.id - b.id);
     if (pool.length < CONFIG.BATCH_SIZE) continue;
     const batch = pool.slice(0, CONFIG.BATCH_SIZE);
+    if (axis === 'r') {
+      // The batch passage currently has no server-keyed comprehension answer
+      // covering all target words. Keep it out of the queue until such a check
+      // exists; ordinary same-axis retrieval may still be issued below.
+      pendingMaterialAxes.push({
+        word_id: batch[0].id,
+        axis,
+        reasons: ['comprehension_context_missing'],
+      });
+      continue;
+    }
     const materialText = batch.map((word) => word.step4_sentences.join(' ')).join(' ');
-    const minWords = axis === 'r' ? CONFIG.MFI_MIN_WORDS : 30;
+    const minWords = 30;
     const materialCheck = assessContinuousMaterial(materialText, {
       minWords,
-      maxWords: axis === 'r' ? CONFIG.MFI_MAX_WORDS : 2_000,
+      maxWords: 2_000,
       targetWords: batch.map((word) => ({ wordId: word.id, text: word.chunk })),
     });
     if (!materialCheck.eligible) continue;
-    const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word', axis === 'r' ? 'passage_comprehension' : 'expression']);
+    const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word', 'expression']);
     const materials = new Set<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>(['word', 'example_sentence', 'continuous_text']);
     const definition = eligibleTaskDefinitions({
       axis,
@@ -440,7 +452,6 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
 
   // 4. Generate ordinary candidates with independent L_a and shared C gates.
   const ready: InstanceCandidate[] = [];
-  const pendingMaterialAxes: { word_id: number; axis: Direction; reasons: string[] }[] = [];
   const waitingAt: number[] = [];
   for (const word of scopedWords) {
     if (!word.introduced || word.graduated) continue;
