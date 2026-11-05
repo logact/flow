@@ -353,6 +353,143 @@ function migrate(db: Database.Database) {
     ).run();
   }
 
+  // Legacy fluency values were smoothed estimates, not passed checkpoints. Preserve them
+  // for diagnostics, then replay only structured, independently-attempted events whose
+  // complete per-word and speed evidence proves a specific checkpoint. Old STEP events
+  // do not carry that evidence shape and therefore remain legacy-only.
+  const legacyEvidenceMigrated = db
+    .prepare(`SELECT value FROM meta WHERE key = 'migrated_legacy_evidence_v1'`)
+    .get() as { value: string } | undefined;
+  if (!legacyEvidenceMigrated) {
+    type LegacyEvent = {
+      tick: number;
+      ts: number;
+      kind: string;
+      word_id: number | null;
+      result: string | null;
+      detail: string | null;
+    };
+    type Replay = { p: number; r: number; speedP: boolean; speedR: boolean };
+    const replayByWord = new Map<number, Replay>();
+    const events = db
+      .prepare(`SELECT tick, ts, kind, word_id, result, detail FROM events ORDER BY ts, id`)
+      .all() as LegacyEvent[];
+    const validPurposes = new Set([
+      'introduce', 'diagnose', 'verify', 'review', 'recover', 'relearn', 'maintain',
+    ]);
+    const checkpointSpeed = (axis: 'p' | 'r', checkpoint: number) =>
+      axis === 'r' ? 150 + ((checkpoint - 60) * 150) / 40 : 25 + ((checkpoint - 60) * 35) / 40;
+
+    for (const event of events) {
+      if (event.result !== 'pass' || event.word_id == null || !event.detail) continue;
+      const [rawType, purpose, rawAxis] = event.kind.split(':');
+      const type = rawType?.toUpperCase();
+      const axis = rawAxis === 'p' || rawAxis === 'r' ? rawAxis : null;
+      if (
+        !axis || !validPurposes.has(purpose) ||
+        (type !== 'RETRIEVE' && type !== 'FLUENCY')
+      ) continue;
+      let detail: Record<string, unknown>;
+      try {
+        const parsed: unknown = JSON.parse(event.detail);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+        detail = parsed as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const checkpoint = detail.checkpoint;
+      const accuracy = detail.accuracy;
+      const wordResults = detail.word_results;
+      if (
+        detail.qualified !== true || detail.independent !== true ||
+        typeof detail.instance_id !== 'string' ||
+        detail.definition_id !== `${type.toLowerCase()}-${axis}` ||
+        typeof checkpoint !== 'number' || !Number.isFinite(checkpoint) || checkpoint < 0 || checkpoint > 100 ||
+        !accuracy || typeof accuracy !== 'object' || Array.isArray(accuracy) ||
+        !Array.isArray(wordResults) || wordResults.length === 0
+      ) continue;
+      const checks = accuracy as Record<string, unknown>;
+      if (checks.target_word !== true || Object.values(checks).some((value) => value !== true)) continue;
+      const validWordResults = wordResults.every((item) =>
+        item != null && typeof item === 'object' &&
+        Number.isInteger((item as { word_id?: unknown }).word_id) &&
+        (item as { correct?: unknown }).correct === true
+      );
+      if (!validWordResults) continue;
+      const ids = (wordResults as { word_id: number; correct: boolean }[]).map((item) => item.word_id);
+      if (!ids.includes(event.word_id)) continue;
+
+      const speedMode = axis === 'r' ? 'reading_wpm' : 'writing_wpm';
+      const needsSpeed = type === 'FLUENCY' || checkpoint >= 60;
+      const speedValue = detail.speed_value;
+      if (needsSpeed) {
+        if (
+          detail.speed_mode !== speedMode || typeof speedValue !== 'number' ||
+          !Number.isFinite(speedValue)
+        ) continue;
+        if (checkpoint >= 60 && speedValue < checkpointSpeed(axis, checkpoint)) continue;
+        const overallCheck = axis === 'r' ? checks.passage_comprehension : checks.expression;
+        if (checkpoint >= 60 && overallCheck !== true) continue;
+      }
+      // RETRIEVE certifies accuracy only through 50; FLUENCY starts at 50.
+      if ((type === 'RETRIEVE' && checkpoint > 50) || (type === 'FLUENCY' && checkpoint < 50)) continue;
+
+      for (const id of ids) {
+        const replay = replayByWord.get(id) ?? { p: 0, r: 0, speedP: false, speedR: false };
+        if (axis === 'p') {
+          replay.p = Math.max(replay.p, checkpoint);
+          replay.speedP ||= checkpoint >= 60 && needsSpeed;
+        } else {
+          replay.r = Math.max(replay.r, checkpoint);
+          replay.speedR ||= checkpoint >= 60 && needsSpeed;
+        }
+        replayByWord.set(id, replay);
+      }
+    }
+
+    const rows = db.prepare(`SELECT id, fluency, fluency_r, legacy_score_p, legacy_score_r, last_ts, last_ts_r FROM words`).all() as {
+      id: number;
+      fluency: number;
+      fluency_r: number;
+      legacy_score_p: number | null;
+      legacy_score_r: number | null;
+      last_ts: number;
+      last_ts_r: number;
+    }[];
+    const update = db.prepare(`
+      UPDATE words SET
+        legacy_score_p = COALESCE(legacy_score_p, NULLIF(?, 0)),
+        legacy_score_r = COALESCE(legacy_score_r, NULLIF(?, 0)),
+        fluency = ?, fluency_r = ?,
+        verified_p = ?, verified_r = ?,
+        speed_verified_p = ?, speed_verified_r = ?,
+        integrated = 0, integrated_p = 0, integrated_r = 0, graduated = 0,
+        introduced = CASE WHEN last_ts > 0 OR last_ts_r > 0 OR introduced = 1 THEN 1 ELSE 0 END,
+        has_observation_p = ?, has_observation_r = ?,
+        updated_at = updated_at
+      WHERE id = ?
+    `);
+    for (const row of rows) {
+      const replay = replayByWord.get(row.id) ?? { p: 0, r: 0, speedP: false, speedR: false };
+      update.run(
+        row.fluency,
+        row.fluency_r,
+        replay.p,
+        replay.r,
+        replay.p > 0 ? 1 : 0,
+        replay.r > 0 ? 1 : 0,
+        replay.speedP ? 1 : 0,
+        replay.speedR ? 1 : 0,
+        replay.p > 0 ? 1 : 0,
+        replay.r > 0 ? 1 : 0,
+        row.id
+      );
+    }
+    db.prepare(
+      `INSERT INTO meta (key, value) VALUES ('migrated_legacy_evidence_v1', '1') ON CONFLICT(key) DO NOTHING`
+    ).run();
+  }
+
   // 旧状态机列退役（老版本 sqlite 不支持 DROP COLUMN 时容忍保留，代码已不再读取）
   for (const col of ['state', 'ready_at_tick', 'ready_at_time', 'step4_fail_count', 'srs_level', 'due_at']) {
     if (wordCols.has(col)) {
