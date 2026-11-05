@@ -163,6 +163,7 @@ export default function DemoPage() {
       <header>
         <h1>练习 Demo · 全题型索引</h1>
         <a href="/">← 返回练习</a>
+        <a href="/task-preview">查看分数任务页面 →</a>
       </header>
       <p className="muted">
         本页复用流程中的真实练习组件（@/components/task-cards），喂 mock 数据、不碰真实队列。

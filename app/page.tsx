@@ -143,6 +143,7 @@ export default function Home() {
         <a href="/assess">测词汇量</a>
         <a href="/goals">目标管理</a>
         <a href="/demo">练习 Demo</a>
+        <a href="/task-preview">任务页面原型</a>
       </header>
       <div className="layout">
         <div>
