@@ -3,7 +3,16 @@ import { CONFIG } from './config';
 import { bandOf, cacheResidue, retrievabilityParts, toWord, type Word, type WordRow } from './db';
 import { levelOf } from './assessment';
 import { getProfile } from './targets';
-import { candidatesOf, materialWords, readable, taskRank, type Candidate } from './tasks';
+import {
+  candidatesOf,
+  materialWords,
+  readable,
+  taskRank,
+  type Candidate,
+  type TaskEvidence,
+  type TaskInstance,
+  TASK_LIBRARY,
+} from './tasks';
 import { sliceMfi } from './mfi';
 import { presumedKnown } from './gloss';
 
@@ -383,6 +392,197 @@ function readingSpeed(wordCount: number, latencyMs: number | undefined, pass: bo
     return { v, s };
   }
   return { v: null, s: pass ? 0.5 : 0 };
+}
+
+export interface CheckpointWriteback {
+  passed: boolean;
+  qualified: boolean;
+  checkpoint: number | null;
+  updatedWordIds: number[];
+}
+
+/**
+ * Persist a result against the server-issued task instance. The checkpoint is read
+ * only from that instance; client evidence can prove or fail it, but cannot choose it.
+ */
+export function applyTaskResult(
+  db: Database.Database,
+  instance: TaskInstance,
+  evidence: TaskEvidence,
+  now = Date.now()
+): CheckpointWriteback {
+  const run = db.transaction((): CheckpointWriteback => {
+    const tick = getTick(db);
+    const nextTick = tick + 1;
+    const axis = instance.axis;
+    const scoreColumn = axis === 'r' ? 'fluency_r' : 'fluency';
+    const verifiedColumn = axis === 'r' ? 'verified_r' : 'verified_p';
+    const speedColumn = axis === 'r' ? 'speed_verified_r' : 'speed_verified_p';
+    const stabilityColumn = axis === 'r' ? 'stability_time_r' : 'stability_time';
+    const timestampColumn = axis === 'r' ? 'last_ts_r' : 'last_ts';
+    const integrationColumn = axis === 'r' ? 'integrated_r' : 'integrated_p';
+    const checkpoint = instance.checkpoint;
+    const definition = TASK_LIBRARY.find((item) => item.id === instance.definition_id);
+    const checkpointRange = definition?.checkpoint_range;
+    const definitionValid = definition != null &&
+      definition.type === instance.type &&
+      definition.supported_axes.includes(axis) &&
+      definition.supported_purposes.includes(instance.purpose) &&
+      (checkpoint == null
+        ? definition.checkpoint_range == null
+        : checkpointRange != null && checkpoint >= checkpointRange.min && checkpoint <= checkpointRange.max);
+    const wordResults = new Map(evidence.word_results.map((result) => [result.word_id, result.correct]));
+    const allWordsAnswered = instance.word_ids.length > 0 && instance.word_ids.every((id) => wordResults.has(id));
+    const allWordsCorrect = allWordsAnswered && instance.word_ids.every((id) => wordResults.get(id) === true);
+    const checkEntries = Object.entries(evidence.accuracy);
+    const checksPresent = checkEntries.length > 0 &&
+      checkEntries.every(([, pass]) => pass === true) &&
+      (definition?.evidence.accuracy_check.every((key) => evidence.accuracy[key] === true) ?? false);
+    const targetWordPassed = evidence.accuracy.target_word === true;
+    const independent = evidence.independent && !evidence.answer_revealed && !evidence.hint_used;
+    const speedRequired = checkpoint != null && checkpoint >= 60;
+    const expectedSpeedMode = axis === 'r' ? 'reading_wpm' : 'writing_wpm';
+    const speedEvidenceRequired = speedRequired || definition?.type === 'FLUENCY';
+    const speedAtCheckpoint = speedRequired
+      ? axis === 'r'
+        ? 150 + ((checkpoint! - 60) * 150) / 40
+        : 25 + ((checkpoint! - 60) * 35) / 40
+      : null;
+    const speedPassed = !speedEvidenceRequired || (
+      evidence.speed_mode === expectedSpeedMode &&
+      evidence.speed_value != null &&
+      Number.isFinite(evidence.speed_value) &&
+      (!speedRequired || evidence.speed_value >= speedAtCheckpoint!)
+    );
+    const overallCheckPassed = !speedRequired || (
+      axis === 'r'
+        ? evidence.accuracy.passage_comprehension === true
+        : evidence.accuracy.expression === true
+    );
+    const attemptedIndependently = independent && instance.type !== 'ENCODE';
+    const qualified = definitionValid && checkpoint != null &&
+      instance.type !== 'ENCODE' &&
+      instance.type !== 'INTEGRATE' &&
+      independent &&
+      targetWordPassed &&
+      checksPresent &&
+      allWordsCorrect &&
+      speedPassed &&
+      overallCheckPassed;
+    const taskPassed = instance.type === 'INTEGRATE'
+      ? definitionValid && independent && checksPresent && allWordsCorrect
+      : qualified;
+    const updatedWordIds: number[] = [];
+
+    for (const id of instance.word_ids) {
+      const row = db.prepare('SELECT * FROM words WHERE id = ?').get(id) as WordRow | undefined;
+      if (!row) continue;
+      const word = toWord(row);
+      const isTeaching = instance.type === 'ENCODE' ||
+        instance.purpose === 'introduce' || instance.purpose === 'relearn';
+
+      if (isTeaching) {
+        const pendingColumn = axis === 'r' ? 'pending_relearn_r' : 'pending_relearn_p';
+        const relearnCertification = instance.purpose === 'relearn'
+          ? `, ${verifiedColumn} = 0, ${speedColumn} = 0`
+          : '';
+        db.prepare(
+          `UPDATE words SET introduced = 1, ${timestampColumn} = ?, last_tick = ?, ${pendingColumn} = 0${relearnCertification}, updated_at = ? WHERE id = ?`
+        ).run(now, nextTick, now, id);
+      } else if (instance.type === 'INTEGRATE') {
+        if (taskPassed) {
+          db.prepare(
+            `UPDATE words SET ${integrationColumn} = 1, last_tick = ?, ${timestampColumn} = ?, updated_at = ? WHERE id = ?`
+          ).run(nextTick, now, now, id);
+        } else if (attemptedIndependently) {
+          db.prepare(
+            `UPDATE words SET last_tick = ?, ${timestampColumn} = ?, updated_at = ? WHERE id = ?`
+          ).run(nextTick, now, now, id);
+        }
+      } else if (qualified) {
+        const oldScore = axis === 'r' ? word.fluency_r : word.fluency;
+        const oldVerified = axis === 'r' ? word.verified_r : word.verified_p;
+        const oldSpeedVerified = axis === 'r' ? word.speed_verified_r : word.speed_verified_p;
+        const oldStability = axis === 'r' ? word.stability_time_r : word.stability_time;
+        const raisesOrReconfirms = checkpoint! >= oldScore;
+        const score = Math.max(oldScore, checkpoint!);
+        const verified = raisesOrReconfirms ? 1 : oldVerified;
+        const speedVerified = raisesOrReconfirms && speedRequired ? 1 : oldSpeedVerified;
+        const stability = oldStability * 2;
+        const nextFp = axis === 'p' ? score : word.fluency;
+        const nextFr = axis === 'r' ? score : word.fluency_r;
+        const graduated =
+          nextFp >= word.target_out &&
+          nextFr >= word.target_in &&
+          (axis === 'p' ? verified : word.verified_p) === 1 &&
+          (axis === 'r' ? verified : word.verified_r) === 1 &&
+          (axis === 'p' ? speedVerified : word.speed_verified_p) === 1 &&
+          (axis === 'r' ? speedVerified : word.speed_verified_r) === 1 &&
+          (axis === 'p' ? stability : word.stability_time) >= CONFIG.H_TIME_GRAD_MS &&
+          (axis === 'r' ? stability : word.stability_time_r) >= CONFIG.H_TIME_GRAD_MS;
+        db.prepare(
+          `UPDATE words SET ${scoreColumn} = ?, ${verifiedColumn} = ?, ${speedColumn} = ?, ${stabilityColumn} = ?, introduced = 1, has_observation_${axis} = 1, ${timestampColumn} = ?, last_tick = ?, graduated = ?, updated_at = ? WHERE id = ?`
+        ).run(score, verified, speedVerified, stability, now, nextTick, graduated ? 1 : word.graduated, now, id);
+
+      } else if (attemptedIndependently) {
+        const oldStability = axis === 'r' ? word.stability_time_r : word.stability_time;
+        db.prepare(
+          `UPDATE words SET ${verifiedColumn} = 0, ${speedColumn} = 0, ${stabilityColumn} = ?, introduced = 1, has_observation_${axis} = 1, ${timestampColumn} = ?, last_tick = ?, updated_at = ? WHERE id = ?`
+        ).run(Math.max(oldStability / 2, CONFIG.H_TIME_MIN_MS), now, nextTick, now, id);
+      } else {
+        // A guided attempt can refresh practice timing, but it cannot alter scores or certification.
+        db.prepare(
+          `UPDATE words SET introduced = 1, ${timestampColumn} = ?, last_tick = ?, updated_at = ? WHERE id = ?`
+        ).run(now, nextTick, now, id);
+      }
+      updatedWordIds.push(id);
+    }
+
+    // A valid continuous measurement adjusts only its own axis cursor, once per task.
+    const measuredInExpectedMode = evidence.speed_mode === expectedSpeedMode &&
+      evidence.speed_value != null && Number.isFinite(evidence.speed_value);
+    if (attemptedIndependently && speedRequired && measuredInExpectedMode && instance.word_ids.length > 0) {
+      const first = db.prepare('SELECT goal_id FROM words WHERE id = ?').get(instance.word_ids[0]) as
+        | { goal_id: number | null }
+        | undefined;
+      const modality = axis === 'r' ? 'reading' : 'writing';
+      const floor = axis === 'r' ? CONFIG.V_FLOOR_READING : CONFIG.V_FLOOR_WRITING;
+      const cursor = getCursor(db, modality, floor);
+      const cap = goalSpeed(db, first?.goal_id ?? null, axis === 'r' ? 'reading_wpm' : 'writing_wpm', floor);
+      setCursor(
+        db,
+        modality,
+        taskPassed ? Math.min(cap, cursor * CONFIG.CURSOR_UP) : Math.max(floor, cursor * CONFIG.CURSOR_DOWN)
+      );
+    }
+
+    db.prepare(
+      `INSERT INTO meta (key, value) VALUES ('global_tick', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    ).run(String(nextTick));
+    db.prepare(
+      `INSERT INTO events (tick, ts, kind, word_id, result, detail) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+      nextTick,
+      now,
+      `${instance.type}:${instance.purpose}:${axis}`,
+      instance.word_ids[0] ?? null,
+      taskPassed ? 'pass' : attemptedIndependently ? 'fail' : 'practice',
+      JSON.stringify({
+        instance_id: instance.instance_id,
+        definition_id: instance.definition_id,
+        checkpoint,
+        qualified,
+        independent,
+        accuracy: evidence.accuracy,
+        speed_mode: evidence.speed_mode,
+        speed_value: evidence.speed_value,
+        duration_ms: evidence.duration_ms,
+        word_results: evidence.word_results,
+      })
+    );
+    return { passed: taskPassed, qualified, checkpoint, updatedWordIds };
+  });
+  return run();
 }
 
 export function applyResult(db: Database.Database, input: ResultInput, now = Date.now()): void {
