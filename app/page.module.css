@@ -167,6 +167,94 @@
 .taskContent textarea { resize: vertical; }
 .taskContent .longAnswer { min-height: 220px; }
 
+/* T11 renderers reuse semantic global class names from their isolated surface.
+   Scope overrides here so they inherit the light task-flow visual language. */
+.renderer { flex: 1; display: flex; min-width: 0; }
+.renderer :global(.card) {
+  flex: 1;
+  width: 100%;
+  padding: clamp(22px, 5vw, 44px);
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  background: #fff;
+}
+.renderer :global(.badge) {
+  margin-bottom: 16px;
+  border-color: #d9e9d7;
+  color: #3b704e;
+  background: #f1f7ef;
+  font-family: inherit;
+}
+.renderer :global(.scene) {
+  border-left-color: #8dbd8a;
+  color: #506357;
+  background: #f4f8f1;
+  line-height: 1.75;
+}
+.renderer :global(.chunk) { color: #26573f; }
+.renderer :global(.muted) { color: #718077; }
+.renderer :global(.sentence) {
+  padding: 15px 17px;
+  border: 1px solid #e8eee6;
+  border-radius: 12px;
+  color: #384d3d;
+  background: #f8faf6;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.renderer :global(.fail) {
+  margin: 12px 0;
+  padding: 11px 13px;
+  border-radius: 9px;
+  color: #9a4837;
+  background: #fff7f4;
+}
+.renderer :global(input[type='text']),
+.renderer :global(input:not([type])),
+.renderer :global(textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  margin: 8px 0;
+  padding: 12px 14px;
+  border: 1px solid #cfdccf;
+  border-radius: 10px;
+  color: #23362a;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.renderer :global(input[type='radio']) { width: auto; accent-color: var(--green); }
+.renderer :global(input:focus),
+.renderer :global(textarea:focus) { outline: 0; border-color: #64a77a; box-shadow: 0 0 0 3px rgb(70 145 91 / 13%); }
+.renderer :global(button) {
+  min-height: 44px;
+  margin: 5px 6px 5px 0;
+  padding: 9px 15px;
+  border: 1px solid #cbdaca;
+  border-radius: 9px;
+  color: #315743;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.renderer :global(button.primary) { border-color: var(--green); color: #fff; background: var(--green); }
+.renderer :global(button.ghost) { color: #315743; background: #f7faf5; }
+.renderer :global(button:disabled) { opacity: .5; cursor: wait; }
+.renderer :global(.timer) { color: #47735a; font-size: 22px; }
+.renderer :global(.writingPrompt) {
+  margin: 14px 0;
+  padding: 15px 17px;
+  border-radius: 11px;
+  color: #53645a;
+  background: #f4f8f1;
+}
+.renderer :global(.writingPrompt p) { margin: 0; }
+.renderer :global(.writingPrompt ul) { margin-bottom: 0; }
+
 .options { display: grid; gap: 8px; margin: 20px 0 0; padding: 14px; border: 1px solid #e1e9df; border-radius: 12px; }
 .options legend { padding: 0 6px; color: #53645a; font-size: 13px; font-weight: 700; }
 .option { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 9px; color: #45594a; cursor: pointer; }

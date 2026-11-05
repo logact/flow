@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react';
 import type { EmptyTaskInstance, ScheduledTaskInstance, TaskEvidence, TaskInstance } from '@/lib/tasks';
+import { TaskRenderer, type TaskSubmission } from '@/components/task-renderers';
 import styles from './page.module.css';
 
 type WordSnapshot = {
@@ -152,6 +153,7 @@ export default function Home() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '提交失败，请重试。');
       setStatus('error');
+      throw error;
     } finally {
       requestLock.current = false;
     }
@@ -197,10 +199,6 @@ export default function Home() {
   }
 
   const task: ScheduledTaskInstance | null = data?.task ?? null;
-  const activeWords = isTask(task)
-    ? task.word_ids.map((id) => data?.words.find((word) => word.id === id)).filter((word): word is WordSnapshot => word != null)
-    : [];
-
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -246,11 +244,10 @@ export default function Home() {
           <TaskCard
             key={task.instance_id}
             task={task}
-            words={activeWords}
             status={status}
             errorMessage={errorMessage}
             writeback={writeback}
-            onSubmit={(submission) => void submit(task, submission)}
+            onSubmit={(submission) => submit(task, submission)}
             onContinue={continueToNext}
           />
         ) : (
@@ -271,7 +268,6 @@ export default function Home() {
 
 function TaskCard({
   task,
-  words,
   status,
   errorMessage,
   writeback,
@@ -279,179 +275,49 @@ function TaskCard({
   onContinue,
 }: {
   task: TaskInstance;
-  words: WordSnapshot[];
   status: FlowStatus;
   errorMessage: string;
   writeback: { passed: boolean; qualified: boolean; checkpoint: number | null } | null;
-  onSubmit: (submission: Submission) => void;
+  onSubmit: (submission: Submission) => Promise<void>;
   onContinue: () => void;
 }) {
-  const [answer, setAnswer] = useState('');
-  const [passageAnswer, setPassageAnswer] = useState<number | null>(null);
-  const readingStarted = useRef<number | null>(null);
-  const writeStarted = useRef<number | null>(null);
-  const payload = task.payload;
-  const evidenceDefinition = payload.evidence as { accuracy_check?: string[]; speed_mode?: TaskEvidence['speed_mode'] } | undefined;
-  const accuracyChecks = evidenceDefinition?.accuracy_check ?? [];
-  const speedMode = evidenceDefinition?.speed_mode ?? 'none';
-  const isReading = task.axis === 'r' && (task.type === 'FLUENCY' || task.type === 'INTEGRATE');
-  const isWriting = task.axis === 'p' && (task.type === 'FLUENCY' || task.type === 'INTEGRATE');
-  const text = typeof payload.continuous_text === 'string' ? payload.continuous_text : '';
-  const options = Array.isArray(payload.options) ? payload.options.filter((option): option is string => typeof option === 'string') : [];
-  const submitting = status === 'submitting';
-  const editable = status === 'ready' || status === 'error';
-  const isEncode = task.type === 'ENCODE';
-  const mainWord = words[0];
-  const startReading = () => {
-    if (readingStarted.current == null) readingStarted.current = Date.now();
-  };
-
-  useEffect(() => {
-    if (isReading && readingStarted.current == null) readingStarted.current = Date.now();
-  }, [isReading, task.instance_id]);
-
-  const send = () => {
-    const duration = isReading
-      ? Math.max(1, Date.now() - (readingStarted.current ?? Date.now()))
-      : isWriting
-        ? Math.max(1, Date.now() - (writeStarted.current ?? Date.now()))
-        : null;
-    const response: Record<string, unknown> = isWriting
-      ? { text: answer }
-      : { answer };
-    if (passageAnswer != null) response.passage_answer_index = passageAnswer;
-    const accuracy: Record<string, boolean> = {};
-    for (const key of accuracyChecks) accuracy[key] = false;
-    const submission: Submission = {
-      response,
-      evidence: {
-        independent: !isEncode,
-        answer_revealed: false,
-        hint_used: false,
-        accuracy,
-        speed_mode: speedMode,
-        speed_value: null,
-        duration_ms: duration,
-        word_results: task.word_ids.map((word_id) => ({ word_id, correct: false })),
-      },
-    };
-    onSubmit(submission);
-  };
-
-  const label = taskNames[task.type];
-  const wordsForPrompt = words.map((word) => task.axis === 'r' ? word.chunk : word.meaning);
-
   return (
-    <article className={styles.taskCard} aria-busy={submitting}>
-      <div className={styles.taskTopline}>
-        <div className={styles.taskTags}>
-          <span className={styles.axisTag}>{axisNames[task.axis]}</span>
-          <span>{label}</span>
-          <span>{purposeNames[task.purpose]}</span>
-        </div>
-        <span className={styles.checkpoint}>{task.checkpoint == null ? '教学' : `${task.checkpoint} 分关卡`}</span>
-      </div>
-
+    <>
       {status === 'feedback' ? (
-        <div className={styles.feedback} role="status" aria-live="polite">
-          <div className={styles.feedbackIcon}>{writeback?.passed ? '✓' : '↗'}</div>
-          <div>
-            <h2>{task.type === 'ENCODE' ? '教学已记录' : writeback?.passed ? '任务完成' : '已记录本次结果'}</h2>
-            <p>{writeback?.qualified ? `已通过 ${writeback.checkpoint} 分关卡。` : '服务端已保存这次作答；成绩只按合格证据更新。'}</p>
-            <button className={styles.primaryButton} onClick={onContinue}>继续 <span aria-hidden="true">→</span></button>
-            <p className={styles.swipeHint}>也可以在卡片空白处上滑继续</p>
+        <article className={styles.taskCard} role="status" aria-live="polite">
+          <div className={styles.feedback}>
+            <div className={styles.feedbackIcon}>{writeback?.passed ? '✓' : '↗'}</div>
+            <div>
+              <h2>{task.type === 'ENCODE' ? '教学已记录' : writeback?.passed ? '任务完成' : '已记录本次结果'}</h2>
+              <p>{writeback?.qualified ? `已通过 ${writeback.checkpoint} 分关卡。` : '服务端已保存这次作答；成绩只按合格证据更新。'}</p>
+              <button className={styles.primaryButton} onClick={onContinue}>继续 <span aria-hidden="true">→</span></button>
+              <p className={styles.swipeHint}>也可以在卡片空白处上滑继续</p>
+            </div>
           </div>
-        </div>
+        </article>
       ) : (
-        <>
-          <div className={styles.taskContent}>
-            <p className={styles.instruction}>
-              {isEncode ? '先查看这个词的形式和用法。教学记录不会增加关卡分。' : task.axis === 'r' ? '独立理解目标表达，答案不会预先展示。' : '根据提示独立写出或使用目标表达。'}
-            </p>
-            {isEncode ? (
-              <>
-                <h1 className={styles.targetWord}>{String(payload.chunk ?? mainWord?.chunk ?? '学习词条')}</h1>
-                <p className={styles.meaning}>{String(payload.meaning ?? mainWord?.meaning ?? '')}</p>
-                <p className={styles.scene}>{String(payload.example_sentence ?? mainWord?.scene ?? '')}</p>
-              </>
-            ) : isReading ? (
-              <>
-                <div className={`${styles.material} taskMaterial`} onScroll={startReading}>
-                  {text ? <p>{text}</p> : <p className={styles.missing}>这项任务没有可用的连续材料。</p>}
-                </div>
-                {task.type === 'INTEGRATE' && <p className={styles.targetPrompt}>请在阅读中理解：{wordsForPrompt.join('、')}</p>}
-                <label className={styles.fieldLabel} htmlFor={`answer-${task.instance_id}`}>{task.type === 'INTEGRATE' ? '用自己的话解释目标词' : '目标表达在这里是什么意思？'}</label>
-                <textarea id={`answer-${task.instance_id}`} rows={3} value={answer} onFocus={startReading} onChange={(event) => { startReading(); setAnswer(event.target.value); }} disabled={!editable} placeholder="用自己的话回答" />
-                {options.length > 0 && (
-                  <fieldset className={styles.options}>
-                    <legend>整段理解</legend>
-                    {options.map((option, index) => (
-                      <label key={index} className={styles.option}>
-                        <input type="radio" name={`passage-${task.instance_id}`} checked={passageAnswer === index} onChange={() => setPassageAnswer(index)} disabled={!editable} />
-                        {option}
-                      </label>
-                    ))}
-                  </fieldset>
-                )}
-              </>
-            ) : isWriting ? (
-              <>
-                <div className={styles.writingPrompt}>
-                  <p>{task.type === 'INTEGRATE' ? '请把这些表达自然地写进一段连贯内容：' : '请根据这些意思写一段连贯表达：'}</p>
-                  <ul>{wordsForPrompt.map((word, index) => <li key={index}>{word}</li>)}</ul>
-                </div>
-                <label className={styles.fieldLabel} htmlFor={`answer-${task.instance_id}`}>你的表达</label>
-                <textarea
-                  id={`answer-${task.instance_id}`}
-                  className={styles.longAnswer}
-                  rows={8}
-                  value={answer}
-                  onFocus={() => { writeStarted.current ??= Date.now(); }}
-                  onChange={(event) => { writeStarted.current ??= Date.now(); setAnswer(event.target.value); }}
-                  disabled={!editable}
-                  placeholder="在这里写完整内容…"
-                />
-              </>
-            ) : (
-              <>
-                {task.axis === 'p' ? (
-                  <>
-                    <p className={styles.meaning}>{String(payload.meaning ?? mainWord?.meaning ?? '')}</p>
-                    {String(payload.example_sentence ?? '') && <p className={styles.scene}>{String(payload.example_sentence)}</p>}
-                  </>
-                ) : (
-                  <>
-                    <h1 className={styles.targetWord}>{String(payload.chunk ?? mainWord?.chunk ?? '')}</h1>
-                    {String(payload.example_sentence ?? '') && <p className={styles.scene}>{String(payload.example_sentence)}</p>}
-                  </>
-                )}
-                <label className={styles.fieldLabel} htmlFor={`answer-${task.instance_id}`}>
-                  {task.axis === 'r' ? '解释这个表达在语境中的意思' : '写出对应的英语表达'}
-                </label>
-                <input
-                  id={`answer-${task.instance_id}`}
-                  value={answer}
-                  onChange={(event) => setAnswer(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && answer.trim() && editable) send();
-                  }}
-                  disabled={!editable}
-                  autoComplete="off"
-                />
-              </>
-            )}
+        <div className={styles.taskCard} aria-busy={status === 'submitting'}>
+          <div className={styles.taskTopline}>
+            <div className={styles.taskTags}>
+              <span className={styles.axisTag}>{axisNames[task.axis]}</span>
+              <span>{taskNames[task.type]}</span>
+              <span>{purposeNames[task.purpose]}</span>
+            </div>
+            <span className={styles.checkpoint}>{task.checkpoint == null ? '教学' : `${task.checkpoint} 分关卡`}</span>
           </div>
-
-          {status === 'error' && <div className={styles.error} role="alert">{errorMessage || '提交失败，当前作答已保留。'} <button type="button" onClick={send}>重试</button></div>}
-          <footer className={styles.cardFooter}>
-            <span className={styles.statusNote}>{submitting ? '正在提交并保存学习证据…' : '提交后会显示反馈，再进入下一项任务。'}</span>
-            <button className={styles.primaryButton} type="button" onClick={send} disabled={!editable || (task.type !== 'ENCODE' && !answer.trim()) || (isReading && options.length > 0 && passageAnswer == null)}>
-              {submitting ? '提交中…' : isEncode ? '完成教学' : '提交作答'}
-            </button>
-          </footer>
-        </>
+          <div className={styles.renderer}>
+            <TaskRenderer
+              task={task}
+              onSubmit={(submission: TaskSubmission) => onSubmit({
+                response: submission.response as Record<string, unknown>,
+                evidence: submission.evidence,
+              })}
+            />
+          </div>
+          {status === 'error' && <p className={styles.error} role="alert">{errorMessage || '提交失败，当前作答已保留。请重试。'}</p>}
+        </div>
       )}
-    </article>
+    </>
   );
 }
 
