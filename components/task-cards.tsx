@@ -41,6 +41,7 @@ export type ResultBody = {
   wordsProduced?: number;
   wordsRead?: number; // MFI 篇章词数（实测阅读 wpm）
   hint?: boolean;
+  wordResults?: { wordId: number; response: string }[];
 };
 
 // NFKC 归一化把全角字符（中文输入法常见）折成半角，再统一大小写与空白
@@ -414,6 +415,7 @@ export function Mfi({
   options,
   answerIndex,
   timeBudgetMs,
+  targetChecks = [],
   onDone,
 }: {
   word: Word;
@@ -422,10 +424,24 @@ export function Mfi({
   options: string[];
   answerIndex: number;
   timeBudgetMs: number;
+  targetChecks?: readonly {
+    wordId: number;
+    targetWord: string;
+    expectedMeaning: string;
+    anchorSentence: string;
+  }[];
   onDone: (b: ResultBody) => void;
 }) {
   const [phase, setPhase] = useState<'read' | 'quiz'>('read');
   const [msLeft, setMsLeft] = useState(timeBudgetMs);
+  const checks = targetChecks.length > 0 ? targetChecks : [{
+    wordId: word.id,
+    targetWord: word.chunk,
+    expectedMeaning: word.meaning,
+    anchorSentence: passage,
+  }];
+  const [targetResponses, setTargetResponses] = useState<Record<number, string>>({});
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const latencyRef = useRef(0);
   const startRef = useRef(Date.now());
 
@@ -441,14 +457,20 @@ export function Mfi({
     setPhase('quiz');
   };
 
-  const answer = (idx: number) =>
+  const answer = () => {
+    if (selectedAnswer == null) return;
     onDone({
       kind: 'MFI',
       wordIds: [word.id],
-      pass: idx === answerIndex,
+      pass: selectedAnswer === answerIndex,
       latencyMs: latencyRef.current,
       wordsRead: passageWords,
+      wordResults: checks.map((check) => ({
+        wordId: check.wordId,
+        response: targetResponses[check.wordId]?.trim() ?? '',
+      })),
     });
+  };
 
   return (
     <div className="card">
@@ -478,15 +500,45 @@ export function Mfi({
           <p className="muted">
             {passageWords} 词 / {(latencyRef.current / 1000).toFixed(1)} 秒 ≈{' '}
             {Math.round(passageWords / (latencyRef.current / 60_000))} wpm。
-            哪一句最贴合这段的主旨？
+            先回答目标词，再选择最贴合这段主旨的句子。
           </p>
+          {checks.map((check) => (
+            <div key={check.wordId} className="sentence" style={{ display: 'block', marginBottom: 12 }}>
+              <label htmlFor={`mfi-target-${check.wordId}`}>目标词理解 · {check.targetWord}</label>
+              <div className="muted">{check.anchorSentence}</div>
+              <input
+                id={`mfi-target-${check.wordId}`}
+                type="text"
+                value={targetResponses[check.wordId] ?? ''}
+                onChange={(event) => setTargetResponses((current) => ({
+                  ...current,
+                  [check.wordId]: event.target.value,
+                }))}
+                placeholder="用自己的话解释它在这里的意思"
+                aria-label={`解释 ${check.targetWord} 在文中的意思`}
+              />
+            </div>
+          ))}
+          <p className="muted">理解整段：哪一句最贴合这段的主旨？</p>
           {options.map((opt, i) => (
             <div key={i} style={{ marginBottom: 8 }}>
-              <button className="ghost" style={{ textAlign: 'left' }} onClick={() => answer(i)}>
+              <button
+                className={selectedAnswer === i ? 'primary' : 'ghost'}
+                style={{ textAlign: 'left' }}
+                onClick={() => setSelectedAnswer(i)}
+                aria-pressed={selectedAnswer === i}
+              >
                 {String.fromCharCode(65 + i)}. {opt}
               </button>
             </div>
           ))}
+          <button
+            className="primary"
+            disabled={selectedAnswer == null || checks.some((check) => !targetResponses[check.wordId]?.trim())}
+            onClick={answer}
+          >
+            提交理解
+          </button>
         </>
       )}
     </div>

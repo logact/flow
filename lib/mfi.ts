@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { STOPWORDS } from './vocab-data';
 import { cleanSentences } from './book';
+import { assessContinuousMaterial, type MaterialIssue } from './material';
 
 // MFI 可理解输入任务的材料切片（RPD「MFI —— 可理解输入任务」）：
 // 从书源原文切一段 150–300 词的连续篇章，要求目标 KP 出现且段内已知词覆盖率 ≥ 95%，
@@ -11,6 +12,30 @@ export interface MfiMaterial {
   words: number;
   options: string[];
   answerIndex: number;
+  targetChecks: readonly {
+    wordId: number;
+    targetWord: string;
+    expectedMeaning: string;
+    anchorSentence: string;
+  }[];
+}
+
+export type MfiUnavailableReason = MaterialIssue | 'comprehension_context_missing';
+
+export type MfiSliceResult =
+  | { available: true; material: MfiMaterial }
+  | { available: false; reason: MfiUnavailableReason };
+
+export interface MfiTargetWord {
+  wordId: number;
+  chunk: string;
+  meaning: string;
+}
+
+export interface MfiSliceOptions {
+  rotation?: number;
+  topicTerms?: readonly string[];
+  targetWords?: readonly MfiTargetWord[];
 }
 
 const TOKEN_RE = /[A-Za-z][A-Za-z'-]*/g;
@@ -38,10 +63,35 @@ export function sliceMfi(
   isKnown: (token: string) => boolean,
   rotation = 0
 ): MfiMaterial | null {
+  const result = sliceMfiDetailed(text, chunk, isKnown, { rotation });
+  return result.available ? result.material : null;
+}
+
+/** Like sliceMfi, but preserves the material gap so scheduling can explain it. */
+export function sliceMfiDetailed(
+  text: string,
+  chunk: string,
+  isKnown: (token: string) => boolean,
+  sliceOptions: MfiSliceOptions = {}
+): MfiSliceResult {
+  const rotation = sliceOptions.rotation ?? 0;
   const sentences = cleanSentences(text);
   const re = new RegExp(`\\b${escapeRegExp(chunk)}\\b`, 'i');
   const hits = sentences.map((s, i) => (re.test(s) ? i : -1)).filter((i) => i >= 0);
-  if (hits.length === 0) return null;
+  if (hits.length === 0) {
+    if (sentences.length === 0 && text.trim()) {
+      const sourceCheck = assessContinuousMaterial(text, {
+        minWords: 1,
+        maxWords: Number.MAX_SAFE_INTEGER,
+        minLanguageCoverage: 0.85,
+      });
+      if (sourceCheck.issues.includes('language_coverage_low')) {
+        return { available: false, reason: 'language_coverage_low' };
+      }
+      if (sourceCheck.wordCount === 0) return { available: false, reason: 'empty_text' };
+    }
+    return { available: false, reason: 'target_word_missing' };
+  }
 
   // 同一 KP 多次出现时按 rotation 轮换锚点，避免每次 MFI 都切同一段
   const center = hits[rotation % hits.length];
@@ -82,7 +132,9 @@ export function sliceMfi(
       if (w.length < 4 || STOPWORDS.has(w) || knownWithMorph(w, isKnown)) known++;
     }
   }
-  if (tot === 0 || known / tot < CONFIG.MFI_COVERAGE) return null;
+  if (tot === 0 || known / tot < CONFIG.MFI_COVERAGE) {
+    return { available: false, reason: 'known_word_coverage_low' };
+  }
 
   // 主旨三选一：正确项取篇内最具代表性的句子（最长句），干扰项取窗外相邻句——
   // 与原文相邻但未入篇，需要真正读过才能区分
@@ -96,18 +148,49 @@ export function sliceMfi(
       if (s !== correct && !distractors.includes(s)) distractors.push(s);
     }
   }
-  if (distractors.length < 2) return null;
+  if (distractors.length < 2) return { available: false, reason: 'comprehension_context_missing' };
 
-  const options = [correct, ...distractors];
+  const choices = [correct, ...distractors];
   // Fisher-Yates 洗牌，记录正确项落点
-  for (let i = options.length - 1; i > 0; i--) {
+  for (let i = choices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [options[i], options[j]] = [options[j], options[i]];
+    [choices[i], choices[j]] = [choices[j], choices[i]];
   }
-  return {
-    passage: window.join(' '),
-    words: total,
-    options,
-    answerIndex: options.indexOf(correct),
-  };
+  const passage = window.join(' ');
+  const targetWords = sliceOptions.targetWords ?? [{ wordId: 0, chunk, meaning: '' }];
+  const targetChecks = targetWords.flatMap((target) => {
+    const targetRe = new RegExp(`\\b${escapeRegExp(target.chunk)}\\b`, 'i');
+    const anchorSentence = window.find((sentence) => targetRe.test(sentence));
+    return anchorSentence
+      ? [{
+          wordId: target.wordId,
+          targetWord: target.chunk,
+          expectedMeaning: target.meaning,
+          anchorSentence,
+        }]
+      : [];
+  });
+  if (targetWords.length > 0 && targetChecks.length < targetWords.length) {
+    return { available: false, reason: 'target_word_missing' };
+  }
+
+  const assessment = assessContinuousMaterial(passage, {
+    minWords: CONFIG.MFI_MIN_WORDS,
+    maxWords: CONFIG.MFI_MAX_WORDS,
+    minLanguageCoverage: 0.85,
+    topicTerms: sliceOptions.topicTerms,
+    targetWords: targetWords.map((target) => ({ wordId: target.wordId, text: target.chunk })),
+  });
+  if (!assessment.eligible) {
+    const reason = assessment.issues[0] ?? 'empty_text';
+    return { available: false, reason };
+  }
+
+  return { available: true, material: {
+    passage,
+    words: assessment.wordCount,
+    options: choices,
+    answerIndex: choices.indexOf(correct),
+    targetChecks,
+  } };
 }

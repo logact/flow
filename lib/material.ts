@@ -14,6 +14,128 @@ export interface Material {
   freq: number | null; // 来源语料中的词频，用于调度器优先引入高频词
 }
 
+export type MaterialIssue =
+  | 'empty_text'
+  | 'too_short'
+  | 'too_long'
+  | 'language_coverage_low'
+  | 'known_word_coverage_low'
+  | 'topic_mismatch'
+  | 'target_word_missing';
+
+export interface ContinuousMaterialRequirements {
+  minWords: number;
+  maxWords: number;
+  minLanguageCoverage?: number;
+  topicTerms?: readonly string[];
+  targetWords?: readonly { wordId: number; text: string }[];
+  minimumTopicCoverage?: number;
+}
+
+export interface ContinuousMaterialAssessment {
+  eligible: boolean;
+  wordCount: number;
+  languageCoverage: number;
+  topicCoverage: number;
+  targetWordIds: readonly number[];
+  issues: readonly MaterialIssue[];
+}
+
+export interface ContinuousTimingEvidence {
+  wordCount: number;
+  durationMs: number;
+  wordsPerMinute: number;
+}
+
+/** A speed result is usable only when both the measured span and duration are real. */
+export function continuousTimingEvidence(
+  wordCount: number,
+  durationMs: number
+): ContinuousTimingEvidence | null {
+  if (!Number.isFinite(wordCount) || wordCount <= 0) return null;
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
+  const wordsPerMinute = (wordCount * 60_000) / durationMs;
+  if (!Number.isFinite(wordsPerMinute) || wordsPerMinute <= 0) return null;
+  return { wordCount, durationMs, wordsPerMinute };
+}
+
+const materialTokens = (text: string): string[] =>
+  (text.match(/[\p{L}][\p{L}'’-]*/gu) ?? []).map((token) => token.toLocaleLowerCase());
+
+/**
+ * Check whether a passage is usable for continuous reading or writing evidence.
+ * Topic matching is opt-in: callers provide the expected topic vocabulary when
+ * the source has a declared topic; a passage without topic metadata is not guessed.
+ */
+export function assessContinuousMaterial(
+  text: string,
+  requirements: ContinuousMaterialRequirements
+): ContinuousMaterialAssessment {
+  const tokens = materialTokens(text);
+  const latinTokens = text.match(/[\p{Script=Latin}][\p{Script=Latin}'’-]*/gu) ?? [];
+  const wordCount = tokens.length;
+  const languageCoverage = wordCount === 0 ? 0 : latinTokens.length / wordCount;
+  const issues: MaterialIssue[] = [];
+
+  if (wordCount === 0) issues.push('empty_text');
+  else {
+    if (wordCount < requirements.minWords) issues.push('too_short');
+    if (wordCount > requirements.maxWords) issues.push('too_long');
+  }
+  if (languageCoverage < (requirements.minLanguageCoverage ?? 0.85)) {
+    issues.push('language_coverage_low');
+  }
+
+  const normalized = new Set(tokens);
+  const topicTerms = (requirements.topicTerms ?? [])
+    .map((term) => term.toLocaleLowerCase().trim())
+    .filter(Boolean);
+  const topicHits = topicTerms.filter((term) => normalized.has(term)).length;
+  const topicCoverage = topicTerms.length === 0 ? 1 : topicHits / topicTerms.length;
+  if (
+    topicTerms.length > 0 &&
+    topicCoverage < (requirements.minimumTopicCoverage ?? 0.2)
+  ) issues.push('topic_mismatch');
+
+  const requestedTargets = requirements.targetWords ?? [];
+  const targetWordIds = requestedTargets
+    .filter(({ text: target }) => {
+      const escaped = target.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escaped.length > 0 && new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+    })
+    .map(({ wordId }) => wordId);
+  if (requestedTargets.length > 0 && targetWordIds.length < requestedTargets.length) {
+    issues.push('target_word_missing');
+  }
+
+  return {
+    eligible: issues.length === 0,
+    wordCount,
+    languageCoverage,
+    topicCoverage,
+    targetWordIds,
+    issues,
+  };
+}
+
+export interface WordAssessmentOutcome {
+  wordId: number;
+  targetWordCorrect: boolean;
+  overallCorrect: boolean;
+}
+
+/** Attribute each evidence result to a specific target word for server scoring. */
+export function attributeWordEvidence(
+  outcomes: readonly WordAssessmentOutcome[]
+): Readonly<Record<number, { target_word: boolean; overall: boolean }>> {
+  return Object.fromEntries(
+    outcomes.map(({ wordId, targetWordCorrect, overallCorrect }) => [wordId, {
+      target_word: targetWordCorrect,
+      overall: overallCorrect,
+    }])
+  );
+}
+
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // 词表导入：每行一个词条，支持 "chunk - 释义" 格式。
