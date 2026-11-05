@@ -23,18 +23,35 @@ function readInstance(row: InstanceRow): TaskInstance {
   return JSON.parse(row.instance_json) as TaskInstance;
 }
 
-/** Never send answer keys or target meanings stored for server-side verification. */
+const isMeaningAnswerKey = (key: string) => {
+  const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
+  return [
+    'meaning',
+    'expectedmeaning',
+    'targetmeaning',
+    'meaninganswer',
+    'answemeaning',
+  ].includes(normalizedKey);
+};
+
+function redactMeaningAnswers(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactMeaningAnswers);
+  if (!isObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !isMeaningAnswerKey(key))
+      .map(([key, nested]) => [key, redactMeaningAnswers(nested)])
+  );
+}
+
+/** Keep server-side answer data private for independent R tasks. */
 function publicInstance(task: ScheduledTaskInstance): ScheduledTaskInstance {
   if (task.type === 'EMPTY') return task;
-  const payload = { ...task.payload };
+  const isIndependentRTask = task.axis === 'r' && task.type !== 'ENCODE';
+  const payload = isIndependentRTask
+    ? (redactMeaningAnswers(task.payload) as Record<string, unknown>)
+    : { ...task.payload };
   delete payload.answer_index;
-  if (Array.isArray(payload.target_checks)) {
-    payload.target_checks = payload.target_checks.map((value) => {
-      if (!isObject(value)) return value;
-      const { expectedMeaning: _expectedMeaning, ...safe } = value;
-      return safe;
-    });
-  }
   return { ...task, payload };
 }
 
