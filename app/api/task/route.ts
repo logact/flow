@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getNextTask, snapshot } from '@/lib/scheduler';
+import { getOrIssueTask, TaskApiError } from './service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const db = getDb();
-  return NextResponse.json({ task: getNextTask(db), ...snapshot(db) });
+  try {
+    return NextResponse.json(getOrIssueTask(db));
+  } catch (error) {
+    if (error instanceof TaskApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 }

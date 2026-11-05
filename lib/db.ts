@@ -186,6 +186,17 @@ function init(db: Database.Database) {
       result TEXT,
       detail TEXT
     );
+    CREATE TABLE IF NOT EXISTS task_instances (
+      instance_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL CHECK (status IN ('issued', 'submitted')),
+      instance_json TEXT NOT NULL,
+      issued_at INTEGER NOT NULL,
+      submitted_at INTEGER,
+      response_json TEXT,
+      writeback_json TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS one_issued_task_instance
+      ON task_instances(status) WHERE status = 'issued';
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT NOT NULL,
