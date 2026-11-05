@@ -1,0 +1,255 @@
+.page {
+  --ink: #24352d;
+  --muted: #78857c;
+  --line: #dfe8de;
+  --green: #2d7755;
+  --green-dark: #20573e;
+  min-height: 100vh;
+  padding: 22px max(18px, env(safe-area-inset-left)) calc(32px + env(safe-area-inset-bottom));
+  color: var(--ink);
+  background: #f4f7f1;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.header {
+  width: min(100%, 1020px);
+  min-height: 54px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.brand {
+  color: #244b38;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand span { color: #69a46d; }
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress,
+.goalProgress {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.headerActions a { color: #53735e; text-decoration: none; }
+.headerActions a:hover { text-decoration: underline; }
+
+.headerActions select {
+  max-width: 210px;
+  padding: 8px 30px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+}
+
+.scopeToggle {
+  width: min(100%, 1020px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -10px auto 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.scopeToggle input { accent-color: var(--green); }
+
+.flowViewport {
+  width: min(100%, 1020px);
+  margin: 0 auto;
+  touch-action: pan-y;
+}
+
+.taskCard,
+.emptyCard,
+.loading {
+  width: min(100%, 760px);
+  min-height: min(650px, calc(100dvh - 160px));
+  margin: 0 auto;
+  border: 1px solid #e0e9df;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 16px 42px rgb(37 74 48 / 8%);
+}
+
+.taskCard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.taskTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 21px 28px;
+  border-bottom: 1px solid #edf1eb;
+}
+
+.taskTags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #66756a; font-size: 12px; }
+.axisTag { padding: 4px 9px; border-radius: 999px; background: #edf5eb; color: var(--green-dark); font-weight: 700; }
+.checkpoint { color: #748277; font-size: 12px; white-space: nowrap; }
+
+.taskContent {
+  flex: 1;
+  padding: clamp(24px, 5vw, 48px);
+}
+
+.instruction { margin: 0 0 22px; color: #6f7e73; font-size: 14px; }
+.targetWord { margin: 8px 0 10px; color: #26573f; font-size: clamp(30px, 5vw, 46px); line-height: 1.18; letter-spacing: -.8px; }
+.meaning { margin: 12px 0; color: #40594a; font-size: 18px; }
+.scene { margin: 18px 0; padding: 14px 16px; border-left: 3px solid #8dbd8a; border-radius: 0 10px 10px 0; background: #f4f8f1; color: #506357; line-height: 1.75; }
+.targetPrompt { color: #53695a; }
+
+.material {
+  max-height: min(46vh, 340px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 16px 0 24px;
+  padding: 20px 22px;
+  border: 1px solid #e8eee6;
+  border-radius: 13px;
+  background: #f8faf6;
+  color: #384d3d;
+  font-size: 16px;
+  line-height: 1.9;
+  -webkit-overflow-scrolling: touch;
+}
+
+.material p { margin: 0; white-space: pre-wrap; }
+.missing { color: #a36b42; }
+.fieldLabel { display: block; margin: 20px 0 8px; color: #53645a; font-size: 13px; font-weight: 700; }
+.taskContent input,
+.taskContent textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #cfdccf;
+  border-radius: 10px;
+  outline: 0;
+  color: #23362a;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.taskContent input:focus,
+.taskContent textarea:focus { border-color: #64a77a; box-shadow: 0 0 0 3px rgb(70 145 91 / 13%); }
+.taskContent textarea { resize: vertical; }
+.taskContent .longAnswer { min-height: 220px; }
+
+.options { display: grid; gap: 8px; margin: 20px 0 0; padding: 14px; border: 1px solid #e1e9df; border-radius: 12px; }
+.options legend { padding: 0 6px; color: #53645a; font-size: 13px; font-weight: 700; }
+.option { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 9px; color: #45594a; cursor: pointer; }
+.option:hover { background: #f5f8f3; }
+.option input { width: 18px; min-height: 18px; margin: 2px 0 0; accent-color: var(--green); }
+.writingPrompt { padding: 14px 16px; border-radius: 11px; background: #f4f8f1; color: #53645a; }
+.writingPrompt p { margin: 0; }
+.writingPrompt ul { margin: 8px 0 0; padding-left: 20px; }
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  border-top: 1px solid #edf1eb;
+  background: #fcfdfb;
+}
+
+.statusNote { color: #879188; font-size: 12px; }
+.primaryButton,
+.secondaryButton {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  color: #fff;
+  background: var(--green);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+
+.primaryButton:hover:not(:disabled),
+.secondaryButton:hover { background: var(--green-dark); transform: translateY(-1px); }
+.primaryButton:disabled { opacity: .48; cursor: wait; }
+.secondaryButton { color: var(--green-dark); background: #fff; }
+
+.feedback { display: flex; gap: 17px; align-items: flex-start; padding: clamp(28px, 6vw, 58px); }
+.feedbackIcon,
+.emptyMark { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; color: #2c8050; background: #e8f4e7; font-size: 22px; font-weight: 800; }
+.feedback h2 { margin: 4px 0 8px; color: #294d37; font-size: 24px; }
+.feedback p { color: #728076; }
+.feedback .primaryButton { margin-top: 18px; }
+.swipeHint { margin-top: 10px; font-size: 12px; }
+.error { margin: 0 28px 14px; padding: 10px 12px; border: 1px solid #efc5bc; border-radius: 9px; color: #9a4837; background: #fff7f4; font-size: 13px; }
+.error button { margin-left: 8px; border: 0; color: #944331; background: transparent; text-decoration: underline; cursor: pointer; }
+
+.emptyCard { display: flex; min-height: 420px; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; }
+.emptyCard h1 { margin: 18px 0 4px; color: #294d37; font-size: 30px; }
+.emptyCard p { margin: 5px; }
+.muted, .countdown { color: var(--muted); font-size: 13px; }
+.countdown { margin: 16px 0; }
+.emptyCard .secondaryButton { margin-top: 20px; }
+.loading { display: grid; min-height: 360px; place-items: center; color: var(--muted); }
+.debugDetails { width: min(100%, 760px); margin: 18px auto 0; color: var(--muted); font-size: 12px; }
+.debugDetails summary { width: fit-content; cursor: pointer; }
+.debugBody { max-height: 240px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.debugBody pre { font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+
+@media (max-width: 640px) {
+  .page { padding: 12px 12px calc(14px + env(safe-area-inset-bottom)); }
+  .header { min-height: 48px; margin-bottom: 12px; gap: 10px; }
+  .brand { font-size: 19px; }
+  .headerMeta { gap: 5px; }
+  .goalProgress { display: none; }
+  .headerActions { gap: 8px; font-size: 12px; }
+  .headerActions select { max-width: 130px; padding: 7px 22px 7px 8px; font-size: 12px; }
+  .scopeToggle { margin: 0 auto 10px; }
+  .taskCard, .emptyCard, .loading { min-height: calc(100dvh - 106px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); border-radius: 17px; }
+  .taskTopline { align-items: flex-start; padding: 15px 16px; }
+  .taskTags { gap: 6px; font-size: 11px; }
+  .checkpoint { font-size: 11px; }
+  .taskContent { padding: 20px 17px; }
+  .material { max-height: 38dvh; padding: 15px; font-size: 15px; }
+  .cardFooter { position: sticky; bottom: 0; flex-direction: column; align-items: stretch; padding: 13px 16px calc(13px + env(safe-area-inset-bottom)); }
+  .primaryButton { width: 100%; min-height: 48px; }
+  .statusNote { text-align: center; }
+  .feedback { padding: 25px 19px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primaryButton, .secondaryButton { transition: none; }
+}
