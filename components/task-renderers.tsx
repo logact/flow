@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { TaskEvidence, TaskInstance, SpeedMode } from '@/lib/tasks';
 
 type PublicTargetCheck = {
@@ -139,6 +139,26 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
     }
   };
 
+  const keyboardSubmit = (
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+    mode: 'enter' | 'modified-enter',
+    ready: boolean
+  ) => {
+    if (
+      event.key !== 'Enter' ||
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229 ||
+      submitting ||
+      !ready
+    ) return;
+    const shouldSubmit = mode === 'enter'
+      ? !event.shiftKey && !event.ctrlKey && !event.metaKey
+      : (event.ctrlKey || event.metaKey);
+    if (!shouldSubmit) return;
+    event.preventDefault();
+    void submit();
+  };
+
   if (task.type === 'ENCODE') {
     return (
       <article className="card">
@@ -179,6 +199,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
           autoFocus
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
+          onKeyDown={(event) => keyboardSubmit(event, 'enter', !!answer.trim())}
           disabled={submitting || revealed}
           rows={3}
         />
@@ -234,6 +255,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
             rows={8}
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
+            onKeyDown={(event) => keyboardSubmit(event, 'modified-enter', writingWords >= 30)}
             disabled={submitting}
             placeholder="写一段完整表达，说明语境并自然使用目标表达。"
           />
