@@ -8,6 +8,12 @@ const root = path.resolve(__dirname, '..');
 const buildDir = process.env.FLOW_TEST_BUILD_DIR;
 if (!buildDir) throw new Error('Run with node test/run-task-flow-tests.cjs');
 
+const originalLoad = Module._load;
+Module._load = function load(request, parent, isMain) {
+  if (request === 'server-only') return {};
+  return originalLoad.call(this, request, parent, isMain);
+};
+
 const resolveFilename = Module._resolveFilename;
 Module._resolveFilename = function resolveAlias(request, parent, isMain, options) {
   if (request.startsWith('@/')) {
@@ -96,8 +102,8 @@ test('import → first verified task → refresh resume → duplicate submit →
     ...firstInput,
     evidence: { ...firstInput.evidence, speed_mode: 'none' },
   };
-  assert.throws(
-    () => submitTaskResult(db, rejected, FIXED_NOW + 2),
+  await assert.rejects(
+    submitTaskResult(db, rejected, FIXED_NOW + 2),
     (error) => error.status === 400
   );
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '0');
@@ -105,13 +111,13 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(db.prepare('SELECT status FROM task_instances WHERE instance_id = ?').get(first.instance_id).status, 'issued');
 
   // A corrected retry uses the still-mounted task and completes exactly once.
-  const firstResult = submitTaskResult(db, firstInput, FIXED_NOW + 2);
+  const firstResult = await submitTaskResult(db, firstInput, FIXED_NOW + 2);
   assert.equal(firstResult.duplicate, false);
   assert.equal(firstResult.writeback.qualified, true);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '1');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, 1);
 
-  const repeated = submitTaskResult(db, firstInput, FIXED_NOW + 3);
+  const repeated = await submitTaskResult(db, firstInput, FIXED_NOW + 3);
   assert.equal(repeated.duplicate, true);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '1');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, 1);
@@ -121,7 +127,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(second.type, 'RETRIEVE');
   assert.equal(second.axis, 'p');
   assert.equal(second.purpose, 'verify');
-  const secondResult = submitTaskResult(db, answerInput(second, word), FIXED_NOW + CONFIG.H_CACHE_MS + 101);
+  const secondResult = await submitTaskResult(db, answerInput(second, word), FIXED_NOW + CONFIG.H_CACHE_MS + 101);
   assert.equal(secondResult.writeback.qualified, true);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '2');
 
@@ -131,7 +137,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(review.axis, 'r');
   assert.equal(review.purpose, 'review');
   assert.equal(review.checkpoint, 50);
-  const recheck = submitTaskResult(db, answerInput(review, word), FIXED_NOW + 2 * CONFIG.H_CACHE_MS + 201);
+  const recheck = await submitTaskResult(db, answerInput(review, word), FIXED_NOW + 2 * CONFIG.H_CACHE_MS + 201);
   assert.equal(recheck.writeback.passed, true);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '3');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, 3);

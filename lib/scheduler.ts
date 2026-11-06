@@ -364,17 +364,6 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     };
   };
 
-  // 1. Explicitly pending same-axis relearning always resumes first.
-  for (const word of scopedWords) {
-    if (word.graduated) continue;
-    const axis = axes.find((a) => axisRelearnPending(word, a) === 1);
-    if (!axis) continue;
-    const material = taskMaterial(word, axis);
-    const definition = TASK_LIBRARY.find((item) => item.id === `encode-${axis}`);
-    if (definition) return createInstance(definition, axis, 'relearn', [word.id], null, makePayload(word, axis, definition, null, material), now);
-  }
-
-  // 2. Same-axis integration has priority over emergency and ordinary review.
   const pendingMaterialAxes: {
     word_ids: number[];
     axis: Direction;
@@ -383,11 +372,45 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     purpose: TaskPurpose;
     reasons: string[];
   }[] = [];
+
+  // 1. Explicitly pending same-axis relearning always resumes first.
+  for (const word of scopedWords) {
+    if (word.graduated) continue;
+    const axis = axes.find((a) => axisRelearnPending(word, a) === 1);
+    if (!axis) continue;
+    if (axis === 'r' && !word.meaning.trim()) {
+      pendingMaterialAxes.push({
+        word_ids: [word.id], axis, definition_id: 'encode-r', checkpoint: null,
+        purpose: 'relearn', reasons: ['gloss_missing'],
+      });
+      continue;
+    }
+    const material = taskMaterial(word, axis);
+    const definition = TASK_LIBRARY.find((item) => item.id === `encode-${axis}`);
+    if (definition) return createInstance(definition, axis, 'relearn', [word.id], null, makePayload(word, axis, definition, null, material), now);
+  }
+
+  // 2. Same-axis integration has priority over emergency and ordinary review.
   for (const axis of axes) {
     const pool = scopedWords.filter((word) =>
       !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
-      axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1
+      axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1 &&
+      (axis !== 'r' || word.meaning.trim().length > 0)
     ).sort((a, b) => (b.freq ?? 0) - (a.freq ?? 0) || a.id - b.id);
+    if (axis === 'r') {
+      const missingGloss = scopedWords.filter((word) =>
+        !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
+        axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1 &&
+        !word.meaning.trim()
+      );
+      if (missingGloss.length >= CONFIG.BATCH_SIZE) {
+        pendingMaterialAxes.push({
+          word_ids: missingGloss.slice(0, CONFIG.BATCH_SIZE).map((word) => word.id),
+          axis, definition_id: 'integrate-r', checkpoint: CONFIG.INTEGRATE_FLOOR,
+          purpose: 'review', reasons: ['gloss_missing'],
+        });
+      }
+    }
     if (pool.length < CONFIG.BATCH_SIZE) continue;
     const batch = pool.slice(0, CONFIG.BATCH_SIZE);
     if (axis === 'r') {
@@ -460,6 +483,7 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     for (const axis of axes) {
       const anchor = axisTimeAnchor(word, axis);
       if (axisObservation(word, axis) !== 1 || anchor === 0 || axisComplete(word, axis)) continue;
+      if (axis === 'r' && !word.meaning.trim()) continue;
       const retention = retrievabilityParts(word, tick, now, axis).l;
       if (retention < CONFIG.RELEARN_R) emergencies.push({ word, axis, retention });
     }
@@ -487,6 +511,15 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     if (!word.introduced || word.graduated) continue;
     for (const axis of axes) {
       if (axisComplete(word, axis) || axisRelearnPending(word, axis)) continue;
+      if (axis === 'r' && !word.meaning.trim()) {
+        const missingType: TaskDefinition['type'] = axisScore(word, axis) >= CONFIG.ACCURACY_FLOOR ? 'FLUENCY' : 'RETRIEVE';
+        pendingMaterialAxes.push({
+          word_ids: [word.id], axis, definition_id: `${missingType.toLowerCase()}-r`,
+          checkpoint: nextCheckpoint(word, axis, missingType, 'review'), purpose: 'review',
+          reasons: ['gloss_missing'],
+        });
+        continue;
+      }
       const score = axisScore(word, axis);
       const hasObservation = axisObservation(word, axis) === 1;
       const purpose: TaskPurpose = !hasObservation ? 'verify' : score >= axisTarget(word, axis) ? 'maintain' : 'review';
@@ -550,7 +583,9 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
   const newWord = scopedWords.filter((word) => word.introduced === 0)
     .sort((a, b) => (b.freq ?? -1) - (a.freq ?? -1) || a.id - b.id)[0];
   if (newWord) {
-    const axis: Direction = (newWord.target_in - newWord.fluency_r) >= (newWord.target_out - newWord.fluency) ? 'r' : 'p';
+    const axis: Direction = !newWord.meaning.trim()
+      ? 'p'
+      : (newWord.target_in - newWord.fluency_r) >= (newWord.target_out - newWord.fluency) ? 'r' : 'p';
     const q = newWord.prior_mastery_q ?? 0;
     const purpose: TaskPurpose = q < 0.3 ? 'introduce' : q < 0.7 ? 'diagnose' : 'verify';
     const type = q < 0.3 ? 'ENCODE' : 'RETRIEVE';

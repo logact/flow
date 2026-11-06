@@ -22,8 +22,11 @@ const config = {
   },
   files: [
     path.join(root, 'app/api/task/service.ts'),
+    path.join(root, 'app/api/goals/route.ts'),
     path.join(root, 'lib/goals.ts'),
+    path.join(root, 'lib/llm.ts'),
     path.join(root, 'lib/task-analytics.ts'),
+    path.join(root, 'types/server-only.d.ts'),
   ],
 };
 
@@ -37,6 +40,7 @@ try {
     const run = spawnSync(process.execPath, [
       '--test',
       path.join(__dirname, 'task-flow-journey.test.cjs'),
+      path.join(__dirname, 'gloss-flow.test.cjs'),
       path.join(__dirname, 'task-analytics.test.cjs'),
     ], {
       cwd: root,

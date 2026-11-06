@@ -11,6 +11,11 @@ Module._resolveFilename = function resolveAlias(request, parent, isMain, options
   if (request.startsWith('@/')) request = path.join(buildDir, `${request.slice(2)}.js`);
   return resolveFilename.call(this, request, parent, isMain, options);
 };
+const originalLoad = Module._load;
+Module._load = function load(request, parent, isMain) {
+  if (request === 'server-only') return {};
+  return originalLoad.call(this, request, parent, isMain);
+};
 
 const Database = require('better-sqlite3');
 const { createDb } = require(path.join(buildDir, 'lib/db.js'));

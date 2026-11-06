@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { SAMPLE_TEXT } from '@/lib/vocab-data';
 
 type GoalType = 'wordlist' | 'book' | 'ielts';
@@ -17,6 +17,7 @@ type GoalProgress = {
     source_id?: number;
   } | null;
   total: number;
+  glossMissing: number;
   graduated: number;
   mastered: number;
   integrable: number;
@@ -25,6 +26,9 @@ type GoalProgress = {
   fluency: number;
   attainment: number; // 双轴均达个人目标的 KP 的词频加权占比（0–1）
 };
+
+type GoalWord = { id: number; chunk: string; meaning: string };
+const GLOSS_PAGE_SIZE = 100;
 
 type BookAnalysis = {
   sourceId: number;
@@ -72,6 +76,14 @@ export default function GoalsPage() {
   const [analysis, setAnalysis] = useState<BookAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [pdfJob, setPdfJob] = useState<PdfJob | null>(null);
+  const [glossGoalId, setGlossGoalId] = useState<number | null>(null);
+  const [glossWords, setGlossWords] = useState<GoalWord[]>([]);
+  const [glossTotal, setGlossTotal] = useState(0);
+  const [glossOffset, setGlossOffset] = useState(0);
+  const [glossDrafts, setGlossDrafts] = useState<Record<number, string>>({});
+  const [glossSuggestions, setGlossSuggestions] = useState<Record<number, string>>({});
+  const [glossBusy, setGlossBusy] = useState<number | null>(null);
+  const [glossMessage, setGlossMessage] = useState('');
 
   // PDF 任务进度轮询：完成后自动拉取分析摘要进入预览
   useEffect(() => {
@@ -94,6 +106,69 @@ export default function GoalsPage() {
     const res = await fetch('/api/goals', { cache: 'no-store' });
     setGoals((await res.json()).goals);
   }, []);
+
+  const loadGlossPage = useCallback(async (goalId: number, offset = 0) => {
+    const res = await fetch(`/api/goals?words=${goalId}&offset=${offset}&limit=${GLOSS_PAGE_SIZE}`, { cache: 'no-store' });
+    const data = await res.json();
+    if (!res.ok) {
+      setGlossMessage(`错误：${data.error}`);
+      return;
+    }
+    const words = data.words as GoalWord[];
+    setGlossGoalId(goalId);
+    setGlossOffset(offset);
+    setGlossWords(words);
+    setGlossTotal(data.total);
+    setGlossDrafts(Object.fromEntries(words.map((word) => [word.id, word.meaning])));
+    setGlossSuggestions({});
+    setGlossMessage('');
+  }, []);
+
+  const saveGloss = async (wordId: number, meaning = glossDrafts[wordId] ?? '') => {
+    setGlossBusy(wordId);
+    setGlossMessage('');
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ wordId, meaning }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGlossWords((current) => current.map((word) => word.id === wordId ? { ...word, meaning: data.meaning } : word));
+      setGlossDrafts((current) => ({ ...current, [wordId]: data.meaning }));
+      setGlossSuggestions((current) => {
+        const next = { ...current };
+        delete next[wordId];
+        return next;
+      });
+      setGlossMessage('释义已保存。');
+      await load();
+    } catch (error) {
+      setGlossMessage(`错误：${(error as Error).message}`);
+    } finally {
+      setGlossBusy(null);
+    }
+  };
+
+  const suggestGloss = async (wordId: number) => {
+    setGlossBusy(wordId);
+    setGlossMessage('');
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'suggest_gloss', wordId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGlossSuggestions((current) => ({ ...current, [wordId]: data.suggestion }));
+    } catch (error) {
+      setGlossMessage(`错误：${(error as Error).message}`);
+    } finally {
+      setGlossBusy(null);
+    }
+  };
 
   const removeGoal = useCallback(
     async (g: GoalProgress) => {
@@ -435,6 +510,7 @@ export default function GoalsPage() {
             </thead>
             <tbody>
               {goals.map((g) => (
+                <Fragment key={g.id}>
                 <tr key={g.id}>
                   <td>{g.title}</td>
                   <td>{TYPE_LABEL[g.type] ?? g.type}</td>
@@ -454,11 +530,58 @@ export default function GoalsPage() {
                     </span>
                   </td>
                   <td>
+                    <button
+                      className="ghost"
+                      onClick={() => glossGoalId === g.id ? setGlossGoalId(null) : loadGlossPage(g.id)}
+                    >
+                      释义管理{g.glossMissing > 0 ? `（缺 ${g.glossMissing}）` : ''}
+                    </button>
                     <button className="ghost" onClick={() => removeGoal(g)}>
                       删除
                     </button>
                   </td>
                 </tr>
+                {glossGoalId === g.id && (
+                  <tr key={`gloss-${g.id}`}>
+                    <td colSpan={4}>
+                      <div className="card" style={{ margin: '8px 0' }}>
+                        <div className="muted">逐条确认释义。AI 结果只是建议；只有点击保存/采用建议后才会用于 R 学习。</div>
+                        {glossWords.map((word) => (
+                          <div key={word.id} style={{ borderTop: '1px solid #ddd', padding: '10px 0' }}>
+                            <div><strong>{word.chunk}</strong></div>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                              <input
+                                aria-label={`${word.chunk} 释义`}
+                                value={glossDrafts[word.id] ?? ''}
+                                onChange={(event) => setGlossDrafts((current) => ({ ...current, [word.id]: event.target.value }))}
+                                placeholder="手动添加释义"
+                              />
+                              <button className="primary" disabled={glossBusy === word.id} onClick={() => saveGloss(word.id)}>
+                                保存
+                              </button>
+                              <button className="ghost" disabled={glossBusy === word.id} onClick={() => suggestGloss(word.id)}>
+                                {glossBusy === word.id ? '处理中…' : 'AI 建议'}
+                              </button>
+                            </div>
+                            {glossSuggestions[word.id] && (
+                              <p className="muted">
+                                AI 建议（尚未保存）：{glossSuggestions[word.id]}{' '}
+                                <button className="ghost" disabled={glossBusy === word.id} onClick={() => saveGloss(word.id, glossSuggestions[word.id])}>
+                                  采用并保存
+                                </button>
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        {glossMessage && <p className={glossMessage.startsWith('错误') ? 'fail' : 'pass'}>{glossMessage}</p>}
+                        <button className="ghost" disabled={glossOffset <= 0} onClick={() => loadGlossPage(g.id, Math.max(0, glossOffset - GLOSS_PAGE_SIZE))}>上一页</button>
+                        <span className="muted"> {glossTotal === 0 ? 0 : glossOffset + 1}–{Math.min(glossOffset + glossWords.length, glossTotal)} / {glossTotal} </span>
+                        <button className="ghost" disabled={glossOffset + GLOSS_PAGE_SIZE >= glossTotal} onClick={() => loadGlossPage(g.id, glossOffset + GLOSS_PAGE_SIZE)}>下一页</button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

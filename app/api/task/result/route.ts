@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const db = getDb();
   try {
     const input: unknown = await req.json();
-    const result = submitTaskResult(db, input);
+    const result = await submitTaskResult(db, input);
     return NextResponse.json({ ...result, ...taskSnapshot(db) });
   } catch (error) {
     if (error instanceof TaskApiError) {
