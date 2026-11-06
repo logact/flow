@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import fs from 'node:fs';
 import path from 'path';
 import { CONFIG } from './config';
 import { seed } from './seed';
@@ -582,7 +583,12 @@ export function createDb(file: string): Database.Database {
 
 export function getDb(): Database.Database {
   if (!globalForDb.__flowDb) {
-    globalForDb.__flowDb = createDb(path.join(process.cwd(), 'flow.db'));
+    const manualTestMode = process.env.NODE_ENV === 'development' && process.env.FLOW_MANUAL_TEST_MODE === '1';
+    const file = manualTestMode
+      ? path.join(process.cwd(), '.manual-test', 'flow.db')
+      : path.join(process.cwd(), 'flow.db');
+    if (manualTestMode) fs.mkdirSync(path.dirname(file), { recursive: true });
+    globalForDb.__flowDb = createDb(file);
   }
   return globalForDb.__flowDb;
 }

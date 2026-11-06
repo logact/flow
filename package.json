@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 0.0.0.0",
+    "dev:manual-test": "FLOW_MANUAL_TEST_MODE=1 next dev --hostname 0.0.0.0 -p 3101",
     "build": "next build",
     "start": "next start"
   },

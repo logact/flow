@@ -260,6 +260,7 @@ export default function Home() {
             {goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
           </select>
           <a href="/goals">目标</a>
+          <a href="/score-history">分数记录</a>
         </nav>
       </header>
 

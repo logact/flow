@@ -1070,11 +1070,17 @@ export function applyTaskResult(
       return row != null && row.score > 0 && checkpoint <= row.score;
     });
     const updatedWordIds: number[] = [];
+    const scoreBefore = new Map<number, { score: number; verified: number; speedVerified: number }>();
 
     for (const id of instance.word_ids) {
       const row = db.prepare('SELECT * FROM words WHERE id = ?').get(id) as WordRow | undefined;
       if (!row) continue;
       const word = toWord(row);
+      scoreBefore.set(id, {
+        score: axis === 'r' ? word.fluency_r : word.fluency,
+        verified: axis === 'r' ? word.verified_r : word.verified_p,
+        speedVerified: axis === 'r' ? word.speed_verified_r : word.speed_verified_p,
+      });
       const isTeaching = instance.type === 'ENCODE' ||
         instance.purpose === 'introduce' || instance.purpose === 'relearn';
 
@@ -1178,6 +1184,23 @@ export function applyTaskResult(
         speed_value: evidence.speed_value,
         duration_ms: evidence.duration_ms,
         word_results: evidence.word_results,
+        score_changes: updatedWordIds.map((id) => {
+          const before = scoreBefore.get(id);
+          const after = db.prepare('SELECT chunk, fluency, fluency_r, verified_p, verified_r, speed_verified_p, speed_verified_r FROM words WHERE id = ?').get(id) as
+            | { chunk: string; fluency: number; fluency_r: number; verified_p: number; verified_r: number; speed_verified_p: number; speed_verified_r: number }
+            | undefined;
+          return before && after ? {
+            word_id: id,
+            word: after.chunk,
+            axis,
+            score_before: before.score,
+            score_after: axis === 'r' ? after.fluency_r : after.fluency,
+            verified_before: before.verified,
+            verified_after: axis === 'r' ? after.verified_r : after.verified_p,
+            speed_verified_before: before.speedVerified,
+            speed_verified_after: axis === 'r' ? after.speed_verified_r : after.speed_verified_p,
+          } : null;
+        }).filter((change) => change != null),
       })
     );
     return { passed: taskPassed, qualified, checkpoint, updatedWordIds };
