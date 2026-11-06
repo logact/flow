@@ -313,6 +313,7 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     });
     const materials = new Set<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>(['word', 'example_sentence']);
     let continuousText = assessment.eligible ? text : null;
+    if (assessment.eligible) materials.add('continuous_text');
     let mfi: ReturnType<typeof sliceMfiDetailed> | null = null;
     if (axis === 'r') {
       const sourceText = bookTextFor(db, word);
@@ -335,7 +336,7 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     // example sentences can support retrieval, but cannot certify continuous
     // reading comprehension. Only MFI material currently carries that answer key.
     if (axis === 'r' && mfi?.available) checks.add('passage_comprehension');
-    else if (axis === 'p') checks.add('expression');
+    else if (axis === 'p' && word.meaning.trim()) checks.add('expression');
     return { text: continuousText, materials, checks, wordCount: continuousText?.match(/[\p{L}][\p{L}'’-]*/gu)?.length ?? 0, mfi };
   };
 
@@ -395,7 +396,7 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
     const pool = scopedWords.filter((word) =>
       !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
       axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1 &&
-      (axis !== 'r' || word.meaning.trim().length > 0)
+      (word.meaning.trim().length > 0)
     ).sort((a, b) => (b.freq ?? 0) - (a.freq ?? 0) || a.id - b.id);
     if (axis === 'r') {
       const missingGloss = scopedWords.filter((word) =>
@@ -407,6 +408,20 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
         pendingMaterialAxes.push({
           word_ids: missingGloss.slice(0, CONFIG.BATCH_SIZE).map((word) => word.id),
           axis, definition_id: 'integrate-r', checkpoint: CONFIG.INTEGRATE_FLOOR,
+          purpose: 'review', reasons: ['gloss_missing'],
+        });
+      }
+    }
+    if (axis === 'p') {
+      const missingGloss = scopedWords.filter((word) =>
+        !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
+        axisScore(word, axis) >= CONFIG.INTEGRATE_FLOOR && axisVerified(word, axis) === 1 &&
+        !word.meaning.trim()
+      );
+      if (missingGloss.length >= CONFIG.BATCH_SIZE) {
+        pendingMaterialAxes.push({
+          word_ids: missingGloss.slice(0, CONFIG.BATCH_SIZE).map((word) => word.id),
+          axis, definition_id: 'integrate-p', checkpoint: CONFIG.INTEGRATE_FLOOR,
           purpose: 'review', reasons: ['gloss_missing'],
         });
       }
@@ -566,10 +581,18 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
         continue;
       }
       const score = axisScore(word, axis);
+      const pFluencyNeedsGloss = axis === 'p' && score >= CONFIG.ACCURACY_FLOOR && !word.meaning.trim();
+      if (pFluencyNeedsGloss) {
+        pendingMaterialAxes.push({
+          word_ids: [word.id], axis, definition_id: 'fluency-p',
+          checkpoint: nextCheckpoint(word, axis, 'FLUENCY', 'review'), purpose: 'review',
+          reasons: ['gloss_missing'],
+        });
+      }
       const hasObservation = axisObservation(word, axis) === 1;
       const purpose: TaskPurpose = !hasObservation ? 'verify' : score >= axisTarget(word, axis) ? 'maintain' : 'review';
       const material = taskMaterial(word, axis);
-      const preferredType = score >= CONFIG.ACCURACY_FLOOR ? 'FLUENCY' : 'RETRIEVE';
+      const preferredType = score >= CONFIG.ACCURACY_FLOOR && !pFluencyNeedsGloss ? 'FLUENCY' : 'RETRIEVE';
       let definitions = axisCandidateDefinitions(
         word,
         axis,
@@ -612,7 +635,20 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       if (taskPriority <= 0) continue;
       const payload = {
         ...makePayload(word, axis, definition, checkpoint, material),
-        material_fallback: usedFallback,
+        material_fallback: pFluencyNeedsGloss
+          ? 'p_expression_gloss_missing'
+          : usedFallback ? 'continuous_material_unavailable' : undefined,
+        ...(pFluencyNeedsGloss ? { material_gap_checkpoint: nextCheckpoint(word, 'p', 'FLUENCY', purpose) } : {}),
+        material_gaps: pendingMaterialAxes
+          .filter((gap) => gap.axis === axis && gap.word_ids.includes(word.id))
+          .flatMap((gap) => gap.reasons.map((reason) => ({
+            definition_id: gap.definition_id,
+            axis: gap.axis,
+            word_ids: gap.word_ids,
+            checkpoint: gap.checkpoint,
+            purpose: gap.purpose,
+            reason,
+          }))),
       };
       ready.push({ word, axis, definition, purpose, checkpoint, priority: taskPriority, payload });
     }

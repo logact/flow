@@ -53,6 +53,9 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
   const targetChecks = payload.target_checks ?? [];
   const comprehensionQuestion = readable(payload.comprehension_question);
   const materialFallback = readable(payload.material_fallback);
+  const materialFallbackMessage = materialFallback === 'p_expression_gloss_missing'
+    ? '缺少已确认释义，暂不能验证连续表达。可到目标页手动添加释义或请求 AI 建议。'
+    : materialFallback ? '连续篇章材料暂不可用，先安排可用的词语任务。' : '';
   const options = payload.options ?? [];
   const [started, setStarted] = useState(task.type === 'ENCODE' || task.type === 'RETRIEVE');
   const [answer, setAnswer] = useState('');
@@ -167,6 +170,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
     return (
       <article className="card">
         <div className="badge">建立联系 · {axisP ? '产出 P' : '认读 R'} · 教学</div>
+        {materialFallbackMessage && <p className="muted">{materialFallbackMessage}</p>}
         <div className="scene">{scene}</div>
         <div className="chunk">{chunk}</div>
           <p className="muted">{meaning}</p>
@@ -183,7 +187,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
     return (
       <article className="card">
         <div className="badge">准确提取 · {axisP ? '产出 P' : '认读 R'} · {task.purpose}</div>
-        {materialFallback && <p className="muted">篇章理解题暂不可用，先安排单词认读。</p>}
+        {materialFallbackMessage && <p className="muted">{materialFallbackMessage}</p>}
         {scene && <div className="scene">{scene}</div>}
         {axisP ? (
           <>
@@ -249,7 +253,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
   return (
     <article className="card">
       <div className="badge">{task.type === 'INTEGRATE' ? '综合运用' : '流利训练'} · {axisP ? '产出 P' : '认读 R'} · {task.purpose}</div>
-      {materialFallback && <p className="muted">篇章理解题暂不可用，先安排单词认读。</p>}
+      {materialFallbackMessage && <p className="muted">{materialFallbackMessage}</p>}
       {axisP ? (
         <>
           <div className="scene">{scene || '围绕目标表达完成一段连贯写作。'}</div>
