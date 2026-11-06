@@ -42,6 +42,7 @@ try {
       path.join(__dirname, 'task-flow-journey.test.cjs'),
       path.join(__dirname, 'gloss-flow.test.cjs'),
       path.join(__dirname, 'r-comprehension-flow.test.cjs'),
+      path.join(__dirname, 'topic-flow.test.cjs'),
       path.join(__dirname, 'p-expression-flow.test.cjs'),
       path.join(__dirname, 'task-analytics.test.cjs'),
     ], {

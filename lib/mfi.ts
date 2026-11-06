@@ -20,7 +20,7 @@ export interface MfiMaterial {
   }[];
 }
 
-export type MfiUnavailableReason = MaterialIssue | 'comprehension_context_missing';
+export type MfiUnavailableReason = MaterialIssue | 'comprehension_context_missing' | 'topic_missing';
 
 export type MfiSliceResult =
   | { available: true; material: MfiMaterial }
@@ -96,6 +96,11 @@ export function sliceMfiDetailed(
     }
     return { available: false, reason: 'target_word_missing' };
   }
+
+  const topicTerms = sliceOptions.topicTerms
+    ?.map((term) => term.trim().toLocaleLowerCase())
+    .filter(Boolean) ?? [];
+  if (topicTerms.length === 0) return { available: false, reason: 'topic_missing' };
 
   // Pick the narrowest contiguous span around an occurrence of the first target
   // that contains every target. This avoids selecting an early repeated hit that
@@ -179,7 +184,7 @@ export function sliceMfiDetailed(
     minWords: CONFIG.MFI_MIN_WORDS,
     maxWords: CONFIG.MFI_MAX_WORDS,
     minLanguageCoverage: 0.85,
-    topicTerms: sliceOptions.topicTerms,
+    topicTerms,
     targetWords: targetWords.map((target) => ({ wordId: target.wordId, text: target.chunk })),
   });
   if (!assessment.eligible) {

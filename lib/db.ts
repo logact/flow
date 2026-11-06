@@ -245,6 +245,7 @@ function init(db: Database.Database) {
       total_sentences INTEGER NOT NULL,
       text TEXT,
       summary TEXT,
+      topic_terms TEXT,
       created_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS book_words (
@@ -537,6 +538,7 @@ function migrate(db: Database.Database) {
   );
   if (!sourceCols.has('text')) db.exec('ALTER TABLE book_sources ADD COLUMN text TEXT');
   if (!sourceCols.has('summary')) db.exec('ALTER TABLE book_sources ADD COLUMN summary TEXT');
+  if (!sourceCols.has('topic_terms')) db.exec('ALTER TABLE book_sources ADD COLUMN topic_terms TEXT');
 }
 
 export function createDb(file: string): Database.Database {

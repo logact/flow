@@ -68,9 +68,16 @@ function memoryDb(sourceId, text) {
   db.prepare('DELETE FROM goals').run();
   db.prepare("INSERT INTO meta (key, value) VALUES ('global_tick', '10') ON CONFLICT(key) DO UPDATE SET value = '10'").run();
   db.prepare("INSERT INTO meta (key, value) VALUES ('vocab_estimate', '5000') ON CONFLICT(key) DO UPDATE SET value = '5000'").run();
-  db.prepare(`INSERT INTO book_sources (id, title, total_tokens, total_sentences, text, created_at)
-              VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(sourceId, `Source ${sourceId}`, text.split(/\s+/).length, text.split('.').length, text, NOW);
+  db.prepare(`INSERT INTO book_sources (id, title, total_tokens, total_sentences, text, topic_terms, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+    sourceId,
+    `Source ${sourceId}`,
+    text.split(/\s+/).length,
+    text.split('.').length,
+    text,
+    JSON.stringify(['team', 'people', 'example']),
+    NOW
+  );
   const goalId = Number(db.prepare(`INSERT INTO goals (type, title, target, created_at) VALUES ('book', ?, ?, ?)`)
     .run(`Goal ${sourceId}`, JSON.stringify({ source_id: sourceId }), NOW).lastInsertRowid);
   return { db, goalId };

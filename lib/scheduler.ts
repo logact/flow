@@ -158,6 +158,24 @@ function bookTextFor(db: Database.Database, w: Word): string | null {
   return bookTextCache.get(sourceId) ?? null;
 }
 
+/** Topic metadata is read directly so legacy-source tagging cannot leave a stale cache. */
+function bookTopicTermsFor(db: Database.Database, w: Word): string[] | null {
+  const sourceId = getProfile(db, w.goal_id).source_id;
+  if (sourceId == null) return null;
+  const row = db.prepare('SELECT topic_terms FROM book_sources WHERE id = ?').get(sourceId) as
+    | { topic_terms: string | null }
+    | undefined;
+  if (!row?.topic_terms) return null;
+  try {
+    const value: unknown = JSON.parse(row.topic_terms);
+    if (!Array.isArray(value) || value.length < 3 || value.length > 8 ||
+        !value.every((term) => typeof term === 'string' && /^[a-z][a-z-]{2,31}$/i.test(term))) return null;
+    return [...new Set(value.map((term: string) => term.trim().toLowerCase()))];
+  } catch {
+    return null;
+  }
+}
+
 // MFI 的「已知词」集合：词频表前 vocab_estimate 词（假定已知）∪ 测量确认词 ∪ 已学 KP 的 token
 // （虚词与短词在 sliceMfi 内部视同已知）
 function knownTokenSet(db: Database.Database, words: Word[]): Set<string> {
@@ -320,8 +338,10 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       if (sourceText) {
         const allWords = words;
         const known = knownTokenSet(db, allWords);
+        const topicTerms = bookTopicTermsFor(db, word);
         mfi = sliceMfiDetailed(sourceText, word.chunk, (token) => known.has(token), {
           rotation: tick,
+          topicTerms: topicTerms ?? undefined,
           targetWords: [{ wordId: word.id, chunk: word.chunk, meaning: word.meaning }],
         });
         if (mfi.available) {
@@ -443,8 +463,10 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
         const batch = sourceWords.slice(0, CONFIG.BATCH_SIZE);
         const sourceText = bookTextFor(db, batch[0]);
         if (!sourceText) continue;
+        const topicTerms = bookTopicTermsFor(db, batch[0]);
         const sliced = sliceMfiDetailed(sourceText, batch[0].chunk, (token) => known.has(token), {
           rotation: tick,
+          topicTerms: topicTerms ?? undefined,
           targetWords: batch.map((word) => ({ wordId: word.id, chunk: word.chunk, meaning: word.meaning })),
         });
         if (!sliced.available) {
@@ -592,6 +614,14 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       const hasObservation = axisObservation(word, axis) === 1;
       const purpose: TaskPurpose = !hasObservation ? 'verify' : score >= axisTarget(word, axis) ? 'maintain' : 'review';
       const material = taskMaterial(word, axis);
+      if (axis === 'r' && material.mfi && !material.mfi.available &&
+          (material.mfi.reason === 'topic_missing' || material.mfi.reason === 'topic_mismatch')) {
+        pendingMaterialAxes.push({
+          word_ids: [word.id], axis, definition_id: 'fluency-r',
+          checkpoint: nextCheckpoint(word, axis, 'FLUENCY', purpose), purpose,
+          reasons: [material.mfi.reason],
+        });
+      }
       const preferredType = score >= CONFIG.ACCURACY_FLOOR && !pFluencyNeedsGloss ? 'FLUENCY' : 'RETRIEVE';
       let definitions = axisCandidateDefinitions(
         word,
