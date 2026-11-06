@@ -232,6 +232,7 @@ W1/W2 必须 fail closed；AI 故障不能静默跳过需求。Worker 一次只�
 | W2 AI keyed R comprehension + R INTEGRATE | DONE | `lib/mfi.ts`、`lib/scheduler.ts`、task service、renderer、测试；`f006450` | 独立复跑 flow 18/18、DAG 8/8、TypeScript、提交检查通过。覆盖 R FLUENCY/INTEGRATE key redaction、正确/错误理解、目标/释义缺失、AI 失败回退、并发签发及轴隔离。跨进程并发仍可能重复调用 provider，但只保留一个实例。 |
 | W3 AI P expression | DONE | task service、scheduler、renderer、`test/p-expression-flow.test.cjs`；`f762e20` | 独立复跑 flow 32/32、DAG 8/8、TypeScript、提交检查通过。验证服务端 AI 判定、短文本/语义/结构失败、缺 gloss 回退/缺口及 P/R 隔离。 |
 | W4 自动主题识别 | DONE | `lib/goals.ts`、`lib/db.ts`、`lib/mfi.ts`、`lib/scheduler.ts`、`test/topic-flow.test.cjs`；`4c72718` | 独立复跑 flow 36/36、DAG 8/8、TypeScript、提交检查通过。覆盖新/旧书源标记、主题匹配/不匹配、识别失败缺口及 R retrieval 回退。匹配 fixture 经 scheduler 未必当次派连续任务，但无主题 gap，MFI material eligibility 已直接验证。 |
-| W5–W6 | NOT_STARTED | — | W4 是依赖闸门；后续包尚未派发。 |
+| W5 显式 Skip | DONE | `app/api/task/service.ts`、`app/api/task/skip/route.ts`、任务 UI、`lib/task-analytics.ts`；`adf4ae5` | 独立复跑 flow 39/39、DAG 8/8、TypeScript、提交检查通过。额外审阅确认 skip 只改实例状态/分析事件；后续普通签发不调用学习状态回写；tick、words、events 快照不变；重复 skip 幂等，exit 与 skip 互斥。 |
+| W6 窄视口与整体交付闸门 | BLOCKED | 无新增代码 | 仓库无浏览器自动化依赖；已尝试连接可用 Browser runtime，但运行环境拒绝加载其 `node:process` 依赖，页面级窄视口行为未能观察。现有 Node 流程测试不能替代浏览器验证。需恢复浏览器控制能力后按 W6 场景核验；物理设备仍由用户手动核验。 |
 
 计划文档提交：`249219a`、`f947239`。本计划与 W0/W1 代码各自分开提交。当前预存 `next-env.d.ts` 修改及未跟踪 `implementation-status.md` 不属于上述包。
