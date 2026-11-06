@@ -229,6 +229,7 @@ W1/W2 必须 fail closed；AI 故障不能静默跳过需求。Worker 一次只�
 |---|---|---|---|
 | W0 Server AI adapter | DONE | `lib/llm.ts` 等；`8e0e51d` | mock provider 5/5、TypeScript、提交检查通过；server-only 配置与错误边界已审阅。Orca 调度因 401 未启动，改由备用子 agent 实现。 |
 | W1 Gloss 与 R 资格 | DONE | `lib/goals.ts`、`lib/scheduler.ts`、task service、goals UI/API、测试；`79b807a` | `node test/run-task-flow-tests.cjs` 12/12，`node test/run-task-dag-tests.cjs` 8/8，TypeScript 和提交检查通过。独立审阅确认释义未保存前 P 可学、R 被阻止；AI 错义/故障 fail closed。Worker 另报告真实 provider 同义词 smoke 通过。 |
-| W2–W6 | NOT_STARTED | — | W1 是依赖闸门；后续包尚未派发。 |
+| W2 AI keyed R comprehension + R INTEGRATE | DONE | `lib/mfi.ts`、`lib/scheduler.ts`、task service、renderer、测试；`f006450` | 独立复跑 flow 18/18、DAG 8/8、TypeScript、提交检查通过。覆盖 R FLUENCY/INTEGRATE key redaction、正确/错误理解、目标/释义缺失、AI 失败回退、并发签发及轴隔离。跨进程并发仍可能重复调用 provider，但只保留一个实例。 |
+| W3–W6 | NOT_STARTED | — | W2 是依赖闸门；后续包尚未派发。 |
 
 计划文档提交：`249219a`、`f947239`。本计划与 W0/W1 代码各自分开提交。当前预存 `next-env.d.ts` 修改及未跟踪 `implementation-status.md` 不属于上述包。
