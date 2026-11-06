@@ -84,7 +84,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(word.fluency_r, 0);
   assert.ok(word.prior_mastery_q >= 0.7);
 
-  const first = getOrIssueTask(db, FIXED_NOW).task;
+  const first = (await getOrIssueTask(db, FIXED_NOW)).task;
   assert.equal(first.type, 'RETRIEVE');
   assert.equal(first.axis, 'r');
   assert.equal(first.purpose, 'verify');
@@ -93,7 +93,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   // An independent reading task must not reveal its expected meaning in the public payload.
   assert.equal(first.payload.meaning, undefined);
 
-  const refreshed = getOrIssueTask(db, FIXED_NOW + 1).task;
+  const refreshed = (await getOrIssueTask(db, FIXED_NOW + 1)).task;
   assert.equal(refreshed.instance_id, first.instance_id);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM task_instances WHERE status = 'issued'").get().count, 1);
 
@@ -123,7 +123,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, 1);
 
   // The next axis is independently verified after the shared 20-minute cooldown.
-  const second = getOrIssueTask(db, FIXED_NOW + CONFIG.H_CACHE_MS + 100).task;
+  const second = (await getOrIssueTask(db, FIXED_NOW + CONFIG.H_CACHE_MS + 100)).task;
   assert.equal(second.type, 'RETRIEVE');
   assert.equal(second.axis, 'p');
   assert.equal(second.purpose, 'verify');
@@ -132,7 +132,7 @@ test('import → first verified task → refresh resume → duplicate submit →
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, '2');
 
   // The older R trace becomes the next review candidate and is rechecked at its existing score.
-  const review = getOrIssueTask(db, FIXED_NOW + 2 * CONFIG.H_CACHE_MS + 200).task;
+  const review = (await getOrIssueTask(db, FIXED_NOW + 2 * CONFIG.H_CACHE_MS + 200)).task;
   assert.equal(review.type, 'RETRIEVE');
   assert.equal(review.axis, 'r');
   assert.equal(review.purpose, 'review');

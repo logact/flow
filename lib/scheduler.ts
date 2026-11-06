@@ -412,21 +412,66 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       }
     }
     if (pool.length < CONFIG.BATCH_SIZE) continue;
-    const batch = pool.slice(0, CONFIG.BATCH_SIZE);
     if (axis === 'r') {
-      // The batch passage currently has no server-keyed comprehension answer
-      // covering all target words. Keep it out of the queue until such a check
-      // exists; ordinary same-axis retrieval may still be issued below.
-      pendingMaterialAxes.push({
-        word_ids: batch.map((word) => word.id),
-        axis,
-        definition_id: 'integrate-r',
-        checkpoint: CONFIG.INTEGRATE_FLOOR,
-        purpose: 'review',
-        reasons: ['comprehension_context_missing'],
-      });
+      const batchesBySource = new Map<number, Word[]>();
+      for (const word of pool) {
+        const sourceId = getProfile(db, word.goal_id).source_id;
+        if (sourceId == null) continue;
+        const group = batchesBySource.get(sourceId) ?? [];
+        group.push(word);
+        batchesBySource.set(sourceId, group);
+      }
+      const allWords = words;
+      const known = knownTokenSet(db, allWords);
+      for (const [sourceId, sourceWords] of batchesBySource) {
+        if (sourceWords.length < CONFIG.BATCH_SIZE) continue;
+        const batch = sourceWords.slice(0, CONFIG.BATCH_SIZE);
+        const sourceText = bookTextFor(db, batch[0]);
+        if (!sourceText) continue;
+        const sliced = sliceMfiDetailed(sourceText, batch[0].chunk, (token) => known.has(token), {
+          rotation: tick,
+          targetWords: batch.map((word) => ({ wordId: word.id, chunk: word.chunk, meaning: word.meaning })),
+        });
+        if (!sliced.available) {
+          pendingMaterialAxes.push({
+            word_ids: batch.map((word) => word.id), axis, definition_id: 'integrate-r',
+            checkpoint: CONFIG.INTEGRATE_FLOOR, purpose: 'review', reasons: [sliced.reason],
+          });
+          continue;
+        }
+        const definition = eligibleTaskDefinitions({
+          axis: 'r', score: CONFIG.INTEGRATE_FLOOR, purpose: 'review',
+          materials: new Set(['word', 'example_sentence', 'continuous_text', 'book_text']),
+          accuracyChecks: new Set(['target_word', 'passage_comprehension']),
+          wordCount: sliced.material.words,
+          independentResponseAvailable: true,
+        }).find((item) => item.type === 'INTEGRATE');
+        if (!definition) continue;
+        return createInstance(definition, 'r', 'review', batch.map((word) => word.id), CONFIG.INTEGRATE_FLOOR, {
+          word_ids: batch.map((word) => word.id),
+          target_words: batch.map((word) => ({ word_id: word.id, chunk: word.chunk, meaning: word.meaning })),
+          continuous_text: sliced.material.passage,
+          target_checks: sliced.material.targetChecks,
+          options: [],
+          answer_index: null,
+          passage_words: sliced.material.words,
+          evidence: definition.evidence,
+        }, now);
+      }
+      {
+        const sameSource = [...batchesBySource.values()].find((group) => group.length >= CONFIG.BATCH_SIZE);
+        const batch = (sameSource ?? pool).slice(0, CONFIG.BATCH_SIZE);
+        if (batch.length >= CONFIG.BATCH_SIZE && !pendingMaterialAxes.some((item) => item.definition_id === 'integrate-r' && item.word_ids.some((id) => batch.some((word) => word.id === id)))) {
+          pendingMaterialAxes.push({
+            word_ids: batch.map((word) => word.id), axis, definition_id: 'integrate-r',
+            checkpoint: CONFIG.INTEGRATE_FLOOR, purpose: 'review',
+            reasons: ['book_source_missing_or_incomplete'],
+          });
+        }
+      }
       continue;
     }
+    const batch = pool.slice(0, CONFIG.BATCH_SIZE);
     const materialText = batch.map((word) => word.step4_sentences.join(' ')).join(' ');
     const minWords = 30;
     const materialCheck = assessContinuousMaterial(materialText, {
@@ -742,7 +787,7 @@ function serve(db: Database.Database, b: { w: Word; cand: Candidate }, tick: num
       const words = (db.prepare('SELECT * FROM words').all() as WordRow[]).map(toWord);
       const known = knownTokenSet(db, words);
       const mfi = sliceMfi(text, w.chunk, (t) => known.has(t), tick);
-      if (mfi) {
+      if (mfi && mfi.options.length === 3 && mfi.answerIndex >= 0) {
         const cursor = getCursor(db, 'reading', CONFIG.V_FLOOR_READING);
         return {
           kind: 'MFI',

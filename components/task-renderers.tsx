@@ -16,6 +16,8 @@ type PublicPayload = {
   example_sentence?: string;
   continuous_text?: string | null;
   target_checks?: readonly PublicTargetCheck[];
+  comprehension_question?: string;
+  material_fallback?: string;
   options?: readonly string[];
   passage_words?: number;
   time_budget_ms?: number;
@@ -49,6 +51,8 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
   const example = readable(payload.example_sentence);
   const passage = readable(payload.continuous_text);
   const targetChecks = payload.target_checks ?? [];
+  const comprehensionQuestion = readable(payload.comprehension_question);
+  const materialFallback = readable(payload.material_fallback);
   const options = payload.options ?? [];
   const [started, setStarted] = useState(task.type === 'ENCODE' || task.type === 'RETRIEVE');
   const [answer, setAnswer] = useState('');
@@ -64,7 +68,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
   const continuous = task.type === 'FLUENCY' || task.type === 'INTEGRATE';
   const axisP = task.axis === 'p';
   const revealable = axisP ? chunk.length > 0 : meaning.length > 0;
-  const keyedPassageQuestion = task.axis === 'r' && options.length >= 2;
+  const keyedPassageQuestion = task.axis === 'r' && !!comprehensionQuestion && options.length === 3;
   const needsTargetAnswers = task.axis === 'r' && continuous;
   const targetIds = useMemo(
     () => (targetChecks.length ? targetChecks.map((check) => check.wordId) : [...task.word_ids]),
@@ -179,6 +183,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
     return (
       <article className="card">
         <div className="badge">准确提取 · {axisP ? '产出 P' : '认读 R'} · {task.purpose}</div>
+        {materialFallback && <p className="muted">篇章理解题暂不可用，先安排单词认读。</p>}
         {scene && <div className="scene">{scene}</div>}
         {axisP ? (
           <>
@@ -244,6 +249,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
   return (
     <article className="card">
       <div className="badge">{task.type === 'INTEGRATE' ? '综合运用' : '流利训练'} · {axisP ? '产出 P' : '认读 R'} · {task.purpose}</div>
+      {materialFallback && <p className="muted">篇章理解题暂不可用，先安排单词认读。</p>}
       {axisP ? (
         <>
           <div className="scene">{scene || '围绕目标表达完成一段连贯写作。'}</div>
@@ -305,7 +311,7 @@ export function TaskRenderer({ task, onSubmit }: TaskRendererProps) {
           ))}
           {keyedPassageQuestion ? (
             <>
-              <p className="muted">理解整段：选择最符合材料主旨的一项。</p>
+              <p className="muted">{comprehensionQuestion}</p>
               {options.map((option, index) => (
                 <button
                   type="button"

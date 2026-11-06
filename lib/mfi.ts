@@ -5,7 +5,7 @@ import { assessContinuousMaterial, type MaterialIssue } from './material';
 
 // MFI 可理解输入任务的材料切片（RPD「MFI —— 可理解输入任务」）：
 // 从书源原文切一段 150–300 词的连续篇章，要求目标 KP 出现且段内已知词覆盖率 ≥ 95%，
-// 主旨三选一的选项由相邻段落句规则生成（原型不做 AI）。
+// 篇章 comprehension 由服务层 AI 生成并保存答案键；本模块只切出合格原文。
 
 export interface MfiMaterial {
   passage: string;
@@ -76,9 +76,13 @@ export function sliceMfiDetailed(
 ): MfiSliceResult {
   const rotation = sliceOptions.rotation ?? 0;
   const sentences = cleanSentences(text);
-  const re = new RegExp(`\\b${escapeRegExp(chunk)}\\b`, 'i');
-  const hits = sentences.map((s, i) => (re.test(s) ? i : -1)).filter((i) => i >= 0);
-  if (hits.length === 0) {
+  const targetWords = sliceOptions.targetWords ?? [{ wordId: 0, chunk, meaning: '' }];
+  const indicesFor = (target: MfiTargetWord) => {
+    const re = new RegExp(`\\b${escapeRegExp(target.chunk)}\\b`, 'i');
+    return sentences.map((sentence, index) => re.test(sentence) ? index : -1).filter((index) => index >= 0);
+  };
+  const targetIndices = targetWords.map(indicesFor);
+  if (targetIndices.some((indices) => indices.length === 0)) {
     if (sentences.length === 0 && text.trim()) {
       const sourceCheck = assessContinuousMaterial(text, {
         minWords: 1,
@@ -93,32 +97,50 @@ export function sliceMfiDetailed(
     return { available: false, reason: 'target_word_missing' };
   }
 
-  // 同一 KP 多次出现时按 rotation 轮换锚点，避免每次 MFI 都切同一段
-  const center = hits[rotation % hits.length];
-  let lo = center;
-  let hi = center;
-  let total = wordsOf(sentences[center]);
-  while (total < CONFIG.MFI_MIN_WORDS && (lo > 0 || hi < sentences.length - 1)) {
-    if (hi < sentences.length - 1) {
+  // Pick the narrowest contiguous span around an occurrence of the first target
+  // that contains every target. This avoids selecting an early repeated hit that
+  // cannot fit the batch when a later hit can.
+  const firstHits = targetIndices[0];
+  const anchors = firstHits.map((center) => {
+    const chosen = [center, ...targetIndices.slice(1).map((indices) =>
+      [...indices].sort((a, b) => Math.abs(a - center) - Math.abs(b - center))[0]
+    )];
+    const lo = Math.min(...chosen);
+    const hi = Math.max(...chosen);
+    return { center, lo, hi, total: sentences.slice(lo, hi + 1).reduce((sum, sentence) => sum + wordsOf(sentence), 0) };
+  }).sort((a, b) => a.total - b.total || a.center - b.center);
+  const anchor = anchors[rotation % anchors.length];
+  const center = anchor.center;
+  let lo = anchor.lo;
+  let hi = anchor.hi;
+  let total = anchor.total;
+  const containsAllTargets = () => targetIndices.every((indices) => indices.some((index) => index >= lo && index <= hi));
+  while ((total < CONFIG.MFI_MIN_WORDS || !containsAllTargets()) && (lo > 0 || hi < sentences.length - 1)) {
+    const missing = targetIndices.find((indices) => !indices.some((index) => index >= lo && index <= hi));
+    if (missing) {
+      const left = missing.filter((index) => index < lo).sort((a, b) => b - a)[0];
+      const right = missing.filter((index) => index > hi).sort((a, b) => a - b)[0];
+      if (left != null && (right == null || lo - left <= right - hi)) {
+        lo--;
+        total += wordsOf(sentences[lo]);
+      } else if (right != null) {
+        hi++;
+        total += wordsOf(sentences[hi]);
+      } else break;
+    } else if (hi < sentences.length - 1 && (center - lo >= hi - center || lo === 0)) {
+      hi++;
+      total += wordsOf(sentences[hi]);
+    } else if (lo > 0) {
+      lo--;
+      total += wordsOf(sentences[lo]);
+    } else if (hi < sentences.length - 1) {
       hi++;
       total += wordsOf(sentences[hi]);
     }
-    if (total >= CONFIG.MFI_MIN_WORDS) break;
-    if (lo > 0) {
-      lo--;
-      total += wordsOf(sentences[lo]);
-    }
   }
-  while (total > CONFIG.MFI_MAX_WORDS && hi - lo > 0) {
-    // 从离锚点更远的一侧裁剪，保持目标词居中
-    if (hi - center >= center - lo) {
-      total -= wordsOf(sentences[hi]);
-      hi--;
-    } else {
-      total -= wordsOf(sentences[lo]);
-      lo++;
-    }
-  }
+  if (!containsAllTargets()) return { available: false, reason: 'target_word_missing' };
+  if (total < CONFIG.MFI_MIN_WORDS) return { available: false, reason: 'too_short' };
+  if (total > CONFIG.MFI_MAX_WORDS) return { available: false, reason: 'too_long' };
   const window = sentences.slice(lo, hi + 1);
 
   // 已知词覆盖率：虚词 + 短词 + 已学词 的 token 占比（可理解输入的 95% 底线）
@@ -136,28 +158,7 @@ export function sliceMfiDetailed(
     return { available: false, reason: 'known_word_coverage_low' };
   }
 
-  // 主旨三选一：正确项取篇内最具代表性的句子（最长句），干扰项取窗外相邻句——
-  // 与原文相邻但未入篇，需要真正读过才能区分
-  const correct = [...window].sort((a, b) => b.length - a.length)[0];
-  const distractors: string[] = [];
-  for (const i of [lo - 1, hi + 1, lo - 2, hi + 2]) {
-    if (distractors.length >= 2) break;
-    // 窗外下标必然未入篇；再按内容去重，避免与正确项或其他干扰项撞句
-    if (i >= 0 && i < sentences.length) {
-      const s = sentences[i];
-      if (s !== correct && !distractors.includes(s)) distractors.push(s);
-    }
-  }
-  if (distractors.length < 2) return { available: false, reason: 'comprehension_context_missing' };
-
-  const choices = [correct, ...distractors];
-  // Fisher-Yates 洗牌，记录正确项落点
-  for (let i = choices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [choices[i], choices[j]] = [choices[j], choices[i]];
-  }
   const passage = window.join(' ');
-  const targetWords = sliceOptions.targetWords ?? [{ wordId: 0, chunk, meaning: '' }];
   const targetChecks = targetWords.flatMap((target) => {
     const targetRe = new RegExp(`\\b${escapeRegExp(target.chunk)}\\b`, 'i');
     const anchorSentence = window.find((sentence) => targetRe.test(sentence));
@@ -189,8 +190,10 @@ export function sliceMfiDetailed(
   return { available: true, material: {
     passage,
     words: assessment.wordCount,
-    options: choices,
-    answerIndex: choices.indexOf(correct),
+    // Keyed comprehension is deliberately absent here. The service layer must
+    // add a validated AI question before it can issue an R continuous task.
+    options: [],
+    answerIndex: -1,
     targetChecks,
   } };
 }

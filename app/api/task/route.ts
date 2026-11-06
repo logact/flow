@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const db = getDb();
   try {
-    return NextResponse.json(getOrIssueTask(db));
+    return NextResponse.json(await getOrIssueTask(db));
   } catch (error) {
     if (error instanceof TaskApiError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

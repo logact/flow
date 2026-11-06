@@ -155,7 +155,7 @@ test('glossless new word receives P first, and stale/malformed R cannot pass wit
   const db = cleanDb();
   const imported = await createGoal(db, { type: 'wordlist', title: 'P fallback', text: 'serendipity' }, NOW);
   const word = db.prepare('SELECT * FROM words WHERE goal_id = ?').get(imported.goalId);
-  const first = getOrIssueTask(db, NOW).task;
+  const first = (await getOrIssueTask(db, NOW)).task;
   assert.notEqual(first.type, 'EMPTY');
   assert.equal(first.axis, 'p');
   assert.equal(first.word_ids[0], word.id);
@@ -168,7 +168,7 @@ test('glossless new word receives P first, and stale/malformed R cannot pass wit
     (error) => error instanceof TaskApiError && error.status === 409);
   assert.equal(db.prepare("SELECT value FROM meta WHERE key = 'global_tick'").get().value, tickBefore);
   assert.equal(db.prepare('SELECT status FROM task_instances WHERE instance_id = ?').get(r.instance_id).status, 'issued');
-  const reissued = getOrIssueTask(db, NOW + 2).task;
+  const reissued = (await getOrIssueTask(db, NOW + 2)).task;
   assert.equal(reissued.axis, 'p');
   db.close();
 });
