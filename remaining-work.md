@@ -201,7 +201,7 @@ flowchart TD
 
 W1/W2 必须 fail closed；AI 故障不能静默跳过需求。Worker 一次只实现一个包；Verifier 独立于 Worker；Integrator 只整合验证通过的提交。
 
-## 6. 并行风险与共享文件冲突
+## 7. 并行风险与共享文件冲突
 
 | 并行组合 | 风险 | 约束 |
 |---|---|---|
