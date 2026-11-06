@@ -133,7 +133,7 @@ flowchart TD
 - **用户可观察结果**：≥30 词文本只有在语义连贯、目标表达正确并符合 AI 输出判据时才通过；AI 不可用时不得以词数替代判定。
 - **入口 / 出口**：现有 P 连续写作实例进入 result endpoint；出口为 P 认证/综合状态或明确失败，不影响 R。
 - **涉及模块**：task service、LLM evaluator、必要的 renderer 反馈和 API 行为测试。
-- **必要前置**：W0；服务端把文本、目标词和 gloss 送给模型；不向客户端暴露内部判分键。
+- **必要前置**：W0；服务端把文本、目标词和已确认 gloss 送给模型；无 gloss 时 P ENCODE/RETRIEVE 保持可用，但需要语义核验的 P FLUENCY/INTEGRATE 不签发并给出 material gap；不向客户端暴露内部判分键。
 - **最小修改范围**：替换 `wordCount >= 30 && target_word` 的 expression 判据；复用现有 P task 和状态写回。
 - **行为验收**：mock LLM 对合格文本通过；语法明显错误、目标词误义/只列词、无关重复文本拒绝；29 词拒绝；endpoint timeout/invalid JSON 拒绝且不写认证；通过只改 P 字段。
 - **DONE**：服务端实际 AI verdict 决定 P expression 并按轴隔离写回。**BLOCKED**：AI 失败仍被当通过或模型响应不校验 schema。
