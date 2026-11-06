@@ -23,6 +23,7 @@ const config = {
   files: [
     path.join(root, 'app/api/task/service.ts'),
     path.join(root, 'lib/goals.ts'),
+    path.join(root, 'lib/task-analytics.ts'),
   ],
 };
 
@@ -33,7 +34,11 @@ try {
   if (compile.stderr) process.stderr.write(compile.stderr);
   if (compile.status !== 0) process.exitCode = compile.status ?? 1;
   else {
-    const run = spawnSync(process.execPath, ['--test', path.join(__dirname, 'task-flow-journey.test.cjs')], {
+    const run = spawnSync(process.execPath, [
+      '--test',
+      path.join(__dirname, 'task-flow-journey.test.cjs'),
+      path.join(__dirname, 'task-analytics.test.cjs'),
+    ], {
       cwd: root,
       encoding: 'utf8',
       env: {

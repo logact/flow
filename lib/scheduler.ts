@@ -375,7 +375,14 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
   }
 
   // 2. Same-axis integration has priority over emergency and ordinary review.
-  const pendingMaterialAxes: { word_id: number; axis: Direction; reasons: string[] }[] = [];
+  const pendingMaterialAxes: {
+    word_ids: number[];
+    axis: Direction;
+    definition_id: string | null;
+    checkpoint: number | null;
+    purpose: TaskPurpose;
+    reasons: string[];
+  }[] = [];
   for (const axis of axes) {
     const pool = scopedWords.filter((word) =>
       !word.graduated && !axisComplete(word, axis) && axisIntegrated(word, axis) !== 1 &&
@@ -388,8 +395,11 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       // covering all target words. Keep it out of the queue until such a check
       // exists; ordinary same-axis retrieval may still be issued below.
       pendingMaterialAxes.push({
-        word_id: batch[0].id,
+        word_ids: batch.map((word) => word.id),
         axis,
+        definition_id: 'integrate-r',
+        checkpoint: CONFIG.INTEGRATE_FLOOR,
+        purpose: 'review',
         reasons: ['comprehension_context_missing'],
       });
       continue;
@@ -401,7 +411,17 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       maxWords: 2_000,
       targetWords: batch.map((word) => ({ wordId: word.id, text: word.chunk })),
     });
-    if (!materialCheck.eligible) continue;
+    if (!materialCheck.eligible) {
+      pendingMaterialAxes.push({
+        word_ids: batch.map((word) => word.id),
+        axis,
+        definition_id: `integrate-${axis}`,
+        checkpoint: CONFIG.INTEGRATE_FLOOR,
+        purpose: 'review',
+        reasons: materialCheck.issues.length ? [...materialCheck.issues] : ['material_ineligible'],
+      });
+      continue;
+    }
     const checks = new Set<'target_word' | 'passage_comprehension' | 'expression'>(['target_word', 'expression']);
     const materials = new Set<'word' | 'example_sentence' | 'continuous_text' | 'book_text'>(['word', 'example_sentence', 'continuous_text']);
     const definition = eligibleTaskDefinitions({
@@ -413,7 +433,17 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       wordCount: materialCheck.wordCount,
       independentResponseAvailable: true,
     }).find((item) => item.type === 'INTEGRATE');
-    if (!definition) continue;
+    if (!definition) {
+      pendingMaterialAxes.push({
+        word_ids: batch.map((word) => word.id),
+        axis,
+        definition_id: `integrate-${axis}`,
+        checkpoint: CONFIG.INTEGRATE_FLOOR,
+        purpose: 'review',
+        reasons: ['task_definition_ineligible'],
+      });
+      continue;
+    }
     return createInstance(definition, axis, 'review', batch.map((word) => word.id), CONFIG.INTEGRATE_FLOOR, {
       word_ids: batch.map((word) => word.id),
       target_words: batch.map((word) => ({ word_id: word.id, chunk: word.chunk, meaning: word.meaning })),
@@ -478,7 +508,15 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
         usedFallback = definitions.length > 0;
       }
       if (definitions.length === 0) {
-        pendingMaterialAxes.push({ word_id: word.id, axis, reasons: material.text ? ['ineligible_continuous_material'] : ['continuous_text_unavailable'] });
+        const missingType: TaskDefinition['type'] = preferredType === 'FLUENCY' ? 'RETRIEVE' : preferredType;
+        pendingMaterialAxes.push({
+          word_ids: [word.id],
+          axis,
+          definition_id: `${missingType.toLowerCase()}-${axis}`,
+          checkpoint: nextCheckpoint(word, axis, missingType, purpose),
+          purpose,
+          reasons: material.text ? ['ineligible_continuous_material'] : ['continuous_text_unavailable'],
+        });
         continue;
       }
       const anchor = axisTimeAnchor(word, axis);
@@ -539,11 +577,32 @@ export function getNextTaskInstance(db: Database.Database, now = Date.now()): Sc
       ? 'materials_unavailable'
       : unfinished.length === 0 ? 'all_complete' : 'materials_unavailable';
   const nextAvailableAt = reason === 'waiting_cooldown' && waitingAt.length > 0 ? Math.min(...waitingAt) : null;
+  const materialGapsByDimension = new Map<string, NonNullable<EmptyTaskInstance['material_gaps']>[number]>();
+  for (const item of pendingMaterialAxes) {
+    for (const gapReason of item.reasons) {
+      const key = JSON.stringify([item.definition_id, item.axis, item.checkpoint, item.purpose, gapReason]);
+      const existing = materialGapsByDimension.get(key);
+      if (existing) {
+        existing.affected_candidate_count += item.word_ids.length;
+        existing.word_ids = [...new Set([...existing.word_ids, ...item.word_ids])];
+      }
+      else materialGapsByDimension.set(key, {
+        definition_id: item.definition_id,
+        axis: item.axis,
+        word_ids: [...item.word_ids],
+        checkpoint: item.checkpoint,
+        purpose: item.purpose,
+        reason: gapReason,
+        affected_candidate_count: item.word_ids.length,
+      });
+    }
+  }
   const empty: EmptyTaskInstance = {
     type: 'EMPTY',
     reason,
     next_available_at: nextAvailableAt,
     ...(pendingMaterialAxes.length ? { unavailable_materials: [...new Set(pendingMaterialAxes.flatMap((item) => item.reasons))] } : {}),
+    ...(materialGapsByDimension.size ? { material_gaps: [...materialGapsByDimension.values()] } : {}),
   };
   return empty;
 }
@@ -858,6 +917,12 @@ export function applyTaskResult(
     const taskPassed = instance.type === 'INTEGRATE'
       ? definitionValid && independent && checksPresent && allWordsCorrect
       : qualified;
+    const recheck = checkpoint != null && instance.word_ids.some((id) => {
+      const row = db.prepare(`SELECT ${scoreColumn} AS score FROM words WHERE id = ?`).get(id) as
+        | { score: number }
+        | undefined;
+      return row != null && row.score > 0 && checkpoint <= row.score;
+    });
     const updatedWordIds: number[] = [];
 
     for (const id of instance.word_ids) {
@@ -959,6 +1024,7 @@ export function applyTaskResult(
         instance_id: instance.instance_id,
         definition_id: instance.definition_id,
         checkpoint,
+        recheck,
         qualified,
         independent,
         accuracy: evidence.accuracy,

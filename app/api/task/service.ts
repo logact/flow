@@ -68,6 +68,43 @@ function insertIssued(db: Database.Database, now: number): ScheduledTaskInstance
       `INSERT INTO task_instances (instance_id, status, instance_json, issued_at)
        VALUES (?, 'issued', ?, ?)`
     ).run(task.instance_id, JSON.stringify(task), task.issued_at);
+  } else if (task.reason === 'materials_unavailable') {
+    const tick = Number((db.prepare(`SELECT value FROM meta WHERE key = 'global_tick'`).get() as { value?: string } | undefined)?.value ?? 0);
+    const unavailable = [...(task.unavailable_materials ?? [])].sort();
+    const gaps = task.material_gaps?.length ? task.material_gaps : [{
+      definition_id: null,
+      axis: null,
+      word_ids: [],
+      checkpoint: null,
+      purpose: null,
+      reason: unavailable.join(',') || 'unspecified',
+      affected_candidate_count: 1,
+    }];
+    const recordGap = db.prepare(
+      `INSERT INTO task_analytics_events
+       (event_id, event_type, definition_id, axis, checkpoint, purpose, ts, detail)
+       VALUES (?, 'material_missing', ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id) DO UPDATE SET ts = excluded.ts, detail = excluded.detail`
+    );
+    for (const gap of gaps) {
+      const eventId = [
+        'material', tick, gap.definition_id ?? 'unknown', gap.axis ?? 'unknown',
+        gap.checkpoint ?? 'none', gap.purpose ?? 'unknown', gap.reason,
+      ].join(':');
+      recordGap.run(
+        eventId,
+        gap.definition_id,
+        gap.axis,
+        gap.checkpoint,
+        gap.purpose,
+        now,
+        JSON.stringify({
+          reason: gap.reason,
+          word_ids: gap.word_ids,
+          affected_candidate_count: gap.affected_candidate_count,
+        })
+      );
+    }
   }
   return task;
 }
@@ -75,6 +112,31 @@ function insertIssued(db: Database.Database, now: number): ScheduledTaskInstance
 export function getOrIssueTask(db: Database.Database, now = Date.now()) {
   const task = db.transaction(() => insertIssued(db, now))();
   return { task: publicInstance(task), ...snapshot(db) };
+}
+
+/** Record a privacy-safe abandonment marker for an issued instance, once per instance. */
+export function recordTaskExit(db: Database.Database, instanceId: string, now = Date.now()): boolean {
+  return db.transaction(() => {
+    const row = db.prepare(
+      `SELECT status, instance_json FROM task_instances WHERE instance_id = ?`
+    ).get(instanceId) as { status: string; instance_json: string } | undefined;
+    if (!row || row.status !== 'issued') return false;
+    const task = JSON.parse(row.instance_json) as TaskInstance;
+    const inserted = db.prepare(
+      `INSERT OR IGNORE INTO task_analytics_events
+       (event_id, event_type, instance_id, definition_id, axis, checkpoint, purpose, ts, detail)
+       VALUES (?, 'task_exit', ?, ?, ?, ?, ?, ?, '{}')`
+    ).run(
+      `exit:${instanceId}`,
+      instanceId,
+      task.definition_id,
+      task.axis,
+      task.checkpoint,
+      task.purpose,
+      now
+    );
+    return inserted.changes > 0;
+  })();
 }
 
 const normalized = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');

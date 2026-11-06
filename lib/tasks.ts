@@ -86,6 +86,15 @@ export interface EmptyTaskInstance {
   reason: EmptyReason;
   next_available_at: number | null;
   unavailable_materials?: readonly string[];
+  material_gaps?: readonly {
+    definition_id: string | null;
+    axis: Axis;
+    word_ids: readonly number[];
+    checkpoint: number | null;
+    purpose: TaskPurpose;
+    reason: string;
+    affected_candidate_count: number;
+  }[];
 }
 
 export type ScheduledTaskInstance = TaskInstance | EmptyTaskInstance;

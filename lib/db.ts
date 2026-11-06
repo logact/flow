@@ -186,6 +186,21 @@ function init(db: Database.Database) {
       result TEXT,
       detail TEXT
     );
+    CREATE TABLE IF NOT EXISTS task_analytics_events (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      instance_id TEXT,
+      definition_id TEXT,
+      axis TEXT,
+      checkpoint REAL,
+      purpose TEXT,
+      ts INTEGER NOT NULL,
+      result TEXT,
+      speed_value REAL,
+      detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS task_analytics_events_type_ts
+      ON task_analytics_events(event_type, ts);
     CREATE TABLE IF NOT EXISTS task_instances (
       instance_id TEXT PRIMARY KEY,
       status TEXT NOT NULL CHECK (status IN ('issued', 'submitted')),

@@ -57,7 +57,7 @@ const purposeNames: Record<TaskInstance['purpose'], string> = {
 
 const axisNames = { r: '阅读 R', p: '产出 P' } as const;
 
-function isTask(task: ScheduledTaskInstance | null): task is TaskInstance {
+function isTask(task: ScheduledTaskInstance | null | undefined): task is TaskInstance {
   return task != null && task.type !== 'EMPTY';
 }
 
@@ -112,6 +112,26 @@ export default function Home() {
     const timer = window.setTimeout(() => void load(), wait + 30);
     return () => window.clearTimeout(timer);
   }, [data, load]);
+
+  useEffect(() => {
+    const current = data?.task;
+    if (!isTask(current) || (status !== 'ready' && status !== 'error')) return;
+    const instanceId = current.instance_id;
+    const reportExit = () => {
+      const body = JSON.stringify({ event_type: 'task_exit', instance_id: instanceId });
+      const blob = new Blob([body], { type: 'application/json' });
+      if (!navigator.sendBeacon('/api/task/analytics', blob)) {
+        void fetch('/api/task/analytics', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body,
+          keepalive: true,
+        });
+      }
+    };
+    window.addEventListener('pagehide', reportExit);
+    return () => window.removeEventListener('pagehide', reportExit);
+  }, [data?.task, status]);
 
   const setActiveGoal = useCallback(async (goalId: number | null, strict?: boolean) => {
     try {
