@@ -203,12 +203,13 @@ function init(db: Database.Database) {
       ON task_analytics_events(event_type, ts);
     CREATE TABLE IF NOT EXISTS task_instances (
       instance_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL CHECK (status IN ('issued', 'submitted')),
+      status TEXT NOT NULL CHECK (status IN ('issued', 'submitted', 'skipped')),
       instance_json TEXT NOT NULL,
       issued_at INTEGER NOT NULL,
       submitted_at INTEGER,
       response_json TEXT,
-      writeback_json TEXT
+      writeback_json TEXT,
+      skipped_at INTEGER
     );
     CREATE UNIQUE INDEX IF NOT EXISTS one_issued_task_instance
       ON task_instances(status) WHERE status = 'issued';
@@ -273,12 +274,43 @@ function init(db: Database.Database) {
       updated_at INTEGER NOT NULL
     );
   `);
+  migrateTaskInstances(db);
   migrate(db);
   db.prepare(
     `INSERT INTO meta (key, value) VALUES ('global_tick', '0') ON CONFLICT(key) DO NOTHING`
   ).run();
   const count = (db.prepare('SELECT COUNT(*) AS c FROM words').get() as { c: number }).c;
   if (count === 0) seed(db);
+}
+
+/** Upgrade the task-instance status constraint without losing resumable issued rows. */
+function migrateTaskInstances(db: Database.Database) {
+  const definition = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_instances'")
+    .get() as { sql?: string } | undefined;
+  if (!definition?.sql || definition.sql.includes("'skipped'")) {
+    const cols = new Set((db.prepare('PRAGMA table_info(task_instances)').all() as { name: string }[]).map((c) => c.name));
+    if (!cols.has('skipped_at')) db.exec('ALTER TABLE task_instances ADD COLUMN skipped_at INTEGER');
+    return;
+  }
+  db.transaction(() => {
+    db.exec(`DROP INDEX IF EXISTS one_issued_task_instance;
+      ALTER TABLE task_instances RENAME TO task_instances_before_skip;
+      CREATE TABLE task_instances (
+        instance_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL CHECK (status IN ('issued', 'submitted', 'skipped')),
+        instance_json TEXT NOT NULL,
+        issued_at INTEGER NOT NULL,
+        submitted_at INTEGER,
+        response_json TEXT,
+        writeback_json TEXT,
+        skipped_at INTEGER
+      );
+      INSERT INTO task_instances (instance_id, status, instance_json, issued_at, submitted_at, response_json, writeback_json, skipped_at)
+        SELECT instance_id, status, instance_json, issued_at, submitted_at, response_json, writeback_json, NULL
+        FROM task_instances_before_skip;
+      DROP TABLE task_instances_before_skip;
+      CREATE UNIQUE INDEX one_issued_task_instance ON task_instances(status) WHERE status = 'issued';`);
+  })();
 }
 
 // 老库迁移：状态机列 → 连续流利度模型（见 RPD「Schema changes vs the current code」）

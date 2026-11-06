@@ -6,7 +6,7 @@ import { requestLlmJson } from '@/lib/llm';
 
 type InstanceRow = {
   instance_id: string;
-  status: 'issued' | 'submitted';
+  status: 'issued' | 'submitted' | 'skipped';
   instance_json: string;
   response_json: string | null;
   writeback_json: string | null;
@@ -325,6 +325,32 @@ export function recordTaskExit(db: Database.Database, instanceId: string, now = 
   })();
 }
 
+/** Explicitly skip an issued card without touching learning state. */
+export async function skipTask(db: Database.Database, instanceId: string, now = Date.now()) {
+  if (typeof instanceId !== 'string' || !instanceId) throw new TaskApiError('instance_id is required', 400);
+  const result = db.transaction(() => {
+    const row = db.prepare('SELECT status, instance_json FROM task_instances WHERE instance_id = ?')
+      .get(instanceId) as { status: string; instance_json: string } | undefined;
+    if (!row) throw new TaskApiError('task instance not found', 404);
+    if (row.status === 'submitted') throw new TaskApiError('submitted task cannot be skipped', 409);
+    if (row.status === 'skipped') return false;
+    const task = JSON.parse(row.instance_json) as TaskInstance;
+    // A prior pagehide remains resumable telemetry until explicit user intent makes
+    // this instance terminal. Remove it so lifecycle categories stay exclusive.
+    db.prepare("DELETE FROM task_analytics_events WHERE event_id = ? AND event_type = 'task_exit'")
+      .run(`exit:${instanceId}`);
+    db.prepare(`INSERT OR IGNORE INTO task_analytics_events
+      (event_id, event_type, instance_id, definition_id, axis, checkpoint, purpose, ts, detail)
+      VALUES (?, 'task_skipped', ?, ?, ?, ?, ?, ?, '{}')`)
+      .run(`skip:${instanceId}`, instanceId, task.definition_id, task.axis, task.checkpoint, task.purpose, now);
+    db.prepare("UPDATE task_instances SET status = 'skipped', skipped_at = ? WHERE instance_id = ? AND status = 'issued'")
+      .run(now, instanceId);
+    return true;
+  })();
+  const next = await getOrIssueTask(db, now);
+  return { skipped: result, task: next.task, ...snapshot(db) };
+}
+
 const normalized = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 
 type PExpressionJudgment = {
@@ -593,6 +619,7 @@ export async function submitTaskResult(db: Database.Database, input: unknown, no
          FROM task_instances WHERE instance_id = ?`
   ).get(result.instance_id) as InstanceRow | undefined;
   if (!row) throw new TaskApiError('task instance not found', 404);
+  if (row.status === 'skipped') throw new TaskApiError('skipped task cannot be submitted', 409);
   if (row.status === 'submitted') {
     const current = db.prepare('SELECT * FROM task_instances WHERE instance_id = ?').get(result.instance_id) as InstanceRow | undefined;
     if (!current) throw new TaskApiError('task instance not found', 404);

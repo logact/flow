@@ -149,7 +149,8 @@ test('swipe before confirmed feedback is ignored; retry keeps the mounted answer
   const renderer = fs.readFileSync(path.join(root, 'components/task-renderers.tsx'), 'utf8');
   assert.match(page, /status !== 'feedback'\) return/);
   assert.match(page, /requestLock\.current/);
-  assert.doesNotMatch(page, /api\/task\/skip/);
+  assert.match(page, /api\/task\/skip/);
+  assert.match(page, /onSkip=\{\(\) => skip\(task\)\}/);
   assert.match(page, /key=\{task\.instance_id\}/);
   assert.match(page, /setStatus\('error'\);\s*throw error;/);
   assert.match(renderer, /value=\{answer\}/);

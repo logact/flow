@@ -96,6 +96,28 @@ export default function Home() {
     }
   }, []);
 
+  const skip = useCallback(async (instance: TaskInstance) => {
+    if (requestLock.current) return;
+    requestLock.current = true;
+    setStatus('submitting');
+    setErrorMessage('');
+    try {
+      const result = await readJson<ApiTask>(await fetch('/api/task/skip', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ instance_id: instance.instance_id }),
+      }));
+      setData(result);
+      setNextTask(null);
+      setWriteback(null);
+      setStatus('ready');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '跳过失败，请重试。');
+      setStatus('error');
+    } finally {
+      requestLock.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void fetch('/api/goals', { cache: 'no-store' })
@@ -268,6 +290,7 @@ export default function Home() {
             errorMessage={errorMessage}
             writeback={writeback}
             onSubmit={(submission) => submit(task, submission)}
+            onSkip={() => skip(task)}
             onContinue={continueToNext}
           />
         ) : (
@@ -292,6 +315,7 @@ function TaskCard({
   errorMessage,
   writeback,
   onSubmit,
+  onSkip,
   onContinue,
 }: {
   task: TaskInstance;
@@ -299,6 +323,7 @@ function TaskCard({
   errorMessage: string;
   writeback: { passed: boolean; qualified: boolean; checkpoint: number | null } | null;
   onSubmit: (submission: Submission) => Promise<void>;
+  onSkip: () => Promise<void>;
   onContinue: () => void;
 }) {
   return (
@@ -334,6 +359,9 @@ function TaskCard({
               })}
             />
           </div>
+          <button className={styles.secondaryButton} disabled={status === 'submitting'} onClick={() => void onSkip()}>
+            {status === 'submitting' ? '正在处理…' : '跳过此任务'}
+          </button>
           {status === 'error' && <p className={styles.error} role="alert">{errorMessage || '提交失败，当前作答已保留。请重试。'}</p>}
         </div>
       )}

@@ -21,6 +21,8 @@ export interface TaskAnalyticsGroup {
   material_missing: number;
   skipped: number;
   exits: number;
+  skip_denominator: number;
+  exit_denominator: number;
   skip_rate: number | null;
   exit_rate: number | null;
   speed_distribution: {
@@ -72,6 +74,8 @@ const emptyGroup = (dims: Dimensions): MutableGroup => ({
   material_missing: 0,
   skipped: 0,
   exits: 0,
+  skip_denominator: 0,
+  exit_denominator: 0,
   skip_rate: null,
   exit_rate: null,
   speed_distribution: { count: 0, mean: null, min: null, p50: null, p90: null, max: null },
@@ -185,13 +189,16 @@ export function getTaskAnalytics(db: Database.Database, filter: TaskAnalyticsFil
 
   const result = [...groups.values()].map(({ speeds, ...group }) => {
     const sorted = [...speeds].sort((a, b) => a - b);
-    const attemptsAndLifecycle = group.attempts + group.exits + group.skipped;
+    const skipDenominator = group.attempts + group.skipped;
+    const exitDenominator = group.attempts + group.exits + group.skipped;
     return {
       ...group,
       pass_rate: group.attempts > 0 ? group.passed / group.attempts : null,
       recheck_failure_rate: group.recheck_attempts > 0 ? group.recheck_failures / group.recheck_attempts : null,
-      skip_rate: attemptsAndLifecycle > 0 ? group.skipped / attemptsAndLifecycle : null,
-      exit_rate: attemptsAndLifecycle > 0 ? group.exits / attemptsAndLifecycle : null,
+      skip_denominator: skipDenominator,
+      exit_denominator: exitDenominator,
+      skip_rate: skipDenominator > 0 ? group.skipped / skipDenominator : null,
+      exit_rate: exitDenominator > 0 ? group.exits / exitDenominator : null,
       speed_distribution: {
         count: sorted.length,
         mean: sorted.length ? sorted.reduce((sum, value) => sum + value, 0) / sorted.length : null,
@@ -219,6 +226,8 @@ export function getTaskAnalytics(db: Database.Database, filter: TaskAnalyticsFil
       material_missing: totals.material_missing + group.material_missing,
       skip_count: totals.skip_count + group.skipped,
       exit_count: totals.exit_count + group.exits,
+      skip_denominator: totals.skip_denominator + group.attempts + group.skipped,
+      exit_denominator: totals.exit_denominator + group.attempts + group.exits + group.skipped,
       speed_samples: totals.speed_samples + group.speed_distribution.count,
     }), {
       attempts: 0,
@@ -228,14 +237,15 @@ export function getTaskAnalytics(db: Database.Database, filter: TaskAnalyticsFil
       material_missing: 0,
       skip_count: 0,
       exit_count: 0,
+      skip_denominator: 0,
+      exit_denominator: 0,
       speed_samples: 0,
     }),
     groups: result,
     instrumentation: {
       material_missing: true,
       exits: true,
-      skips: false,
-      skip_note: 'No explicit skip/defer action is currently exposed; unsubmitted swipe is ignored.',
+      skips: true,
     },
   };
 }
