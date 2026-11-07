@@ -68,9 +68,9 @@
         "T01"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t02_atomic_settlement",
+      "owner": "/root/t02_review_rules",
       "contract_version": "0.3",
-      "source_revision": "d8708c1",
+      "source_revision": "4368590",
       "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "evidence": [
         "lib/new-algorithm-score.ts",
@@ -82,7 +82,7 @@
       "actual": "当前确定性子范围已实现：新分档、R/P提取与FLUENCY公式、移除D2半衰期增强、双0词连接纯函数及settlement中axis=both双轴初始化/目标轴学习完成投影。协调者在集成树运行Jest 16/16通过。完整原子排期回写、DB settlement测试和due/review/预约更新未完成。npx tsc --noEmit 仍只报告既有 app/score-history/page.tsx:57 与 lib/manual-test-fixtures.ts:183 错误。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "新的独立 subagent 按用户确认 O1–O3 补原子 settlement、due/review/预约/容量写回与 DB 集成测试。",
+      "next_action": "新的独立 subagent 先实现并验证轴级复习状态转移纯函数；随后接入 schema v2 原子 settlement。",
       "stale_reason": null
     },
     {
