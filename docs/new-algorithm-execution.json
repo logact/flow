@@ -14,24 +14,25 @@
     {
       "id": "T00",
       "phase": "S0",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [],
       "decision_dependencies": [],
       "owner": "/root/t00_contract_freeze",
       "contract_version": "0.3",
-      "source_revision": "94a9728",
-      "working_tree_diff_hash": "dd3dca40eba25726e5c7a0ef808377cf3dd2eff751b9518e77d515c774d5218a",
+      "source_revision": "fa75362",
+      "working_tree_diff_hash": "f18a936cf84836354f5ab205a02df09fef74e76847b5a1b40662a8323960257d",
       "evidence": [
-        "test-report/new-algorithm/T00/baseline.md"
+        "docs/new-algorithm-contracts.md",
+        "docs/new-algorithm-decisions.md",
+        "docs/new-algorithm-test-mapping.md",
+        "docs/new-algorithm-scenarios-draft.md"
       ],
       "expected": "按现行 due_at_R/P、容量、词汇量估计初分与跳档、按需连接、独立轴复习/毕业规范冻结 C1–C7、决策和测试迁移清单",
-      "actual": "契约 v0.2、用户授权的 D1–D8 原型决策、24 节点 DAG 台账、旧测试迁移清单；旧 DAG 8/8；该结果仅属旧规范，当前不可计入新版验收",
-      "blockers": [
-        "T00 证据由协调者复核，尚未提交最终状态"
-      ],
+      "actual": "冻结现行规范明确的 C1–C7 与 D1–D8 适用状态；旧测试逐项映射为新版承接项或 STALE；O1–O3 明列未决边界、受影响节点和解锁条件。场景草稿明确为未整体确认且未执行。文档检查通过；未运行测试。",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "协调者复核契约、决策台账、测试迁移映射；通过后提交 T00 交付与 DONE 状态",
-      "stale_reason": "v0.3 草案已记录 R/P 独立排期；仍须逐条审计 C1–C7、D1–D8 和测试映射后冻结"
+      "next_action": "T00 完成；T01 是当前唯一无未决实现边界门禁的 READY 节点",
+      "stale_reason": null
     },
     {
       "id": "T01",
@@ -56,7 +57,8 @@
       ],
       "repair_attempts": 0,
       "next_action": "扩展独立临时库 schema 与约束，不接触 flow.db",
-      "stale_reason": "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴"
+      "stale_reason": "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴",
+      "open_dependencies": []
     },
     {
       "id": "T02",
@@ -83,7 +85,11 @@
       ],
       "repair_attempts": 0,
       "next_action": "按轴重写连接/FLUENCY 达标证据/1-3-7-30 复习与容量预约纯函数和原子结算测试",
-      "stale_reason": "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写"
+      "stale_reason": "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写",
+      "open_dependencies": [
+        "O2",
+        "O3"
+      ]
     },
     {
       "id": "T03",
@@ -112,7 +118,10 @@
       ],
       "repair_attempts": 0,
       "next_action": "待 T00/T01 新契约后重验 0/20/40/60 初分与首题、容量，再继续材料/API 管线",
-      "stale_reason": "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现"
+      "stale_reason": "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现",
+      "open_dependencies": [
+        "O1"
+      ]
     },
     {
       "id": "T04",
@@ -179,7 +188,10 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "核对依赖与产品决策后领取节点",
+      "open_dependencies": [
+        "O1"
+      ]
     },
     {
       "id": "T06",
@@ -403,7 +415,12 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "核对依赖与产品决策后领取节点",
+      "open_dependencies": [
+        "O1",
+        "O2",
+        "O3"
+      ]
     },
     {
       "id": "T13",
@@ -431,7 +448,12 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "核对依赖与产品决策后领取节点",
+      "open_dependencies": [
+        "O1",
+        "O2",
+        "O3"
+      ]
     },
     {
       "id": "V05",
@@ -453,7 +475,12 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "核对依赖与产品决策后领取节点",
+      "open_dependencies": [
+        "O1",
+        "O2",
+        "O3"
+      ]
     },
     {
       "id": "V06",
@@ -559,9 +586,12 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "核对依赖与产品决策后领取节点",
+      "open_dependencies": [
+        "O1"
+      ]
     }
   ],
   "current_algorithm_sha256": "6bb076a7713d03e4b6790e0cec868a97ebb30e131e697ad0d2fdb052d5dc3fb0",
-  "contract_status": "IN_PROGRESS: T00 audit complete; coordinator review and task commit pending"
+  "contract_status": "FROZEN_FOR_CONFIRMED_RULES: v0.3; OPEN O1–O3 gate affected node scopes as listed"
 }
