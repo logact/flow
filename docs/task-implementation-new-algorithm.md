@@ -45,7 +45,7 @@
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
 | T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 HTTP/UI 接线及生产 provider 留给 T07/T13 |
-| T07 | IN_PROGRESS | 双轴三档提取交互与反馈；依赖 T05/T06 已满足 |
+| T07 | DONE | 六档 renderer 与输入载荷已实现；专项 4/4、全 Jest 116/116；API 生命周期待 T13，人工验收待 V02 |
 | T08 | DONE | R 流利材料生成/评估契约；专项 11/11；HTTP、计时、UI、恢复留 T09/T13 |
 | T10 | IN_PROGRESS | P 流利材料生成与服务端评估 |
 | T09、T11–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
@@ -170,13 +170,13 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given R 同义/近义但错义、P 大小写/额外内部字符/许可与非许可词形；When 同档提交；Then 按规范成功或失败；uncertain/service_error 不改状态且持久化待重试；每档都有生产材料，free 不带选项/字母答案。
 - **交付/验证**：六档材料校验、choice/R 语义/P 精确判分、T03 有界材料 job wrapper、T02 结算映射，以及可在事务中持久化 uncertain/service_error 并遵守两次判分上限的 helper。Jest 专项 26/26、全套 9 suites / 98 tests、`git diff --check` 通过。材料与判分均通过注入 provider；没有配置生产 AI provider。T06 helper 尚未接入 HTTP 提交/并发生命周期：T07 负责提取 UI，T13 负责正式异步派发、重试和恢复接线；不得把本节点表述为端到端提取闭环。
 
-### T07 · S2 · 双轴提取交互与反馈（IN_PROGRESS）
+### T07 · S2 · 双轴提取交互与反馈（DONE）
 
 - **依赖**：T05、T06。**文件**：拆分的 retrieval renderer、`components/task-renderers.tsx` 路由。
 - **输入→输出**：六档 public payload → 选择/提示输入/无提示输入及首次完整 response。
 - **范围/非目标**：复用选择控件、键盘/移动输入/反馈；不编写客户端评分；不把按要求使用提示视为作弊。
 - **G/W/T**：Given 两轴三档签发；When 用户使用提供的提示或无提示作答；Then 控件与 stage 一致，错误后展示讲解且下一次按新分数调度，不能反馈后修改覆盖首次成绩；P free 显示意思/意图但不泄词。
-- **验证/证据**：组件行为测试，六档操作请求；B/H 在 V02。**阻塞**：共用文本框掩盖 choice/cued/free 的正式语义差异。
+- **交付/验证**：独立 `components/new-algorithm-retrieval-renderer.tsx` 区分 choice (`selected_index`) 与 cued/free (`answer`) 并委托服务端判分；页面按服务端 stage 路由，不暴露私有答案、不做客户端计分。专项 4/4、全 Jest 12 suites / 116 tests、diff check 通过。当前 T04 API 仍只签发 choice，故 cued/free 的真实请求/反馈生命周期由 T13 接线，六档端到端与视觉人工证据留 V02。
 
 ### T08 · S3 · R 流利材料与服务端评估（DONE）
 
@@ -342,7 +342,7 @@ flowchart TD
   T05["T05 S1 基础交互 DONE"]
   V01["V01 最小闭环"]
   T06["T06 S2 提取材料评估 DONE"]
-  T07["T07 S2 提取交互 IN_PROGRESS"]
+  T07["T07 S2 提取交互 DONE"]
   V02["V02 双轴提取"]
   T08["T08 S3 R材料评估 DONE"]
   T09["T09 S3 R计时交互"]

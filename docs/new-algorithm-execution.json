@@ -226,7 +226,7 @@
     {
       "id": "T07",
       "phase": "S2",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T05",
         "T06"
@@ -234,14 +234,20 @@
       "decision_dependencies": [],
       "owner": "/root/t07_retrieval_ui",
       "contract_version": null,
-      "source_revision": "44e306c",
+      "source_revision": "d08840d",
       "working_tree_diff_hash": null,
-      "evidence": [],
-      "expected": "将六档 R/P retrieval public payload 接入交互控件，提交首次完整响应并展示服务端反馈",
-      "actual": "T05 isolated UI and T06 retrieval material/evaluator contracts are complete; T07 starts retrieval renderer and interaction integration.",
+      "evidence": [
+        "components/new-algorithm-retrieval-renderer.tsx",
+        "components/new-algorithm-task-view.tsx",
+        "test/new-algorithm-retrieval-renderer.jest.test.cjs",
+        "test/new-algorithm-task-view.jest.test.cjs",
+        "test-report/new-algorithm/T07/retrieval-renderer.md"
+      ],
+      "expected": "六档 R/P retrieval payload 对应 choice/cued/free 交互和首次响应；服务端负责判分",
+      "actual": "Added an isolated renderer for choice, cued and free payloads. Choice submits selected_index; cued/free submit entered text; no client scoring/private answer access. T05 page routes supplied task stages through the renderer. Focused Jest 4/4 and full Jest 12 suites/116 tests pass; diff check passes. Current T04 API issues choice only; cued/free issuance/submission, feedback lifecycle and human visual acceptance are not claimed and remain T13/V02.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement separate choice/cued/free interaction rendering and wire it into the isolated new-algorithm task page without client-side scoring."
+      "next_action": "T13 wires cued/free service issuance and HTTP lifecycle; V02 performs manual six-path end-to-end acceptance."
     },
     {
       "id": "V02",
