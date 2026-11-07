@@ -39,4 +39,4 @@ API 返回可区分的 `INVALID_INPUT`、`INSTANCE_CONFLICT`、`MATERIAL_PENDING
 
 ## 共用验证接口
 
-T01 提供临时 SQLite 工厂、可控毫秒时钟、固定 ID 序列、可设置状态的材料库、判分 provider 桩与并发栅栏。测试采用现有 `node test/run-task-dag-tests.cjs`、`node test/run-task-flow-tests.cjs`、`node test/run-llm-tests.cjs`，新增新版 runner 时不得把旧规则断言删除后直接宣称通过。证据目录 `test-report/new-algorithm/<ID>/` 至少记录命令与退出码、版本、夹具、期望/实际、DB 前后与事件。浏览器证据额外包含截图、操作顺序及 instance_id。
+T01 提供临时 SQLite 工厂、可控毫秒时钟、固定 ID 序列、可设置状态的材料库、判分 provider 桩与并发栅栏。新版测试命令为 `node test/run-new-algorithm-score-tests.cjs`、`node test/run-new-algorithm-db-tests.cjs`、`node test/run-new-algorithm-scenarios.cjs`；通用 LLM 基础设施仍用 `node test/run-llm-tests.cjs`。旧 DAG/任务流测试已移除，其历史运行日志只用于 T00 基线，不能作为新版通过证据。证据目录 `test-report/new-algorithm/<ID>/` 至少记录命令与退出码、版本、夹具、期望/实际、DB 前后与事件。浏览器证据额外包含截图、操作顺序及 instance_id。

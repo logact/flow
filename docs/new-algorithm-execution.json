@@ -60,10 +60,11 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": "70f190c9d113aa691946c3354a8d56acf492b36b10c83eade6e27e3405c37d48",
       "evidence": [
-        "test-report/new-algorithm/T02/partial.md"
+        "test-report/new-algorithm/T02/partial.md",
+        "test-report/new-algorithm/scenarios.md"
       ],
       "expected": "唯一分档、全部分数表及 D2 单轴原子结算；失败回滚、无效不变和幂等",
-      "actual": "纯函数 5/5；临时库结算 7 项并随 DB runner 11/11；正式服务接入留给 T04",
+      "actual": "纯计分 5/5、独立新库 13/13、新版分数→下一档场景 21/21；正式调度派题另由 T04/T12 验证",
       "blockers": [],
       "repair_attempts": 0,
       "next_action": "T03 材料与导入后由 T04 接入正式服务"
