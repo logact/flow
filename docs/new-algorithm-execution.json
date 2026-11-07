@@ -151,22 +151,23 @@
     {
       "id": "T05",
       "phase": "S1",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T04"
       ],
       "decision_dependencies": [],
-      "owner": null,
+      "owner": "/root/t05_isolated_ui",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "608430d",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式页面一次词级连接、R/P choice 交互与反馈",
-      "actual": null,
+      "actual": "T04 isolated ENCODE/choice API is available; T05 is implementing the separate /new-algorithm UI without changing the legacy homepage.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Implement accessible connection/choice renderer and submit/error feedback using only /api/new-algorithm/task; add focused tests.",
+      "stale_reason": null
     },
     {
       "id": "V01",
