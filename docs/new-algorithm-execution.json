@@ -88,7 +88,7 @@
     {
       "id": "T03",
       "phase": "S1",
-      "status": "BLOCKED",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T01"
@@ -98,10 +98,10 @@
         "D3",
         "D5"
       ],
-      "owner": "/root/t03_import_materials",
+      "owner": "/root/t03_goals_pipeline",
       "contract_version": "0.3",
-      "source_revision": "528bc13",
-      "working_tree_diff_hash": "7769714451e2159bf9d0e424335e55bdba34e17d9b9e96ac6347559585232e79",
+      "source_revision": "d8708c1",
+      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "evidence": [
         "lib/new-algorithm-import.ts",
         "lib/new-algorithm-material-jobs.ts",
@@ -110,12 +110,9 @@
       ],
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
       "actual": "V/rank初分映射、显式时区导入、缺省容量gate fail-closed、0/0未引入与due-now状态、gloss变更失效、D5有限材料生成helper已实现。独立T03 Jest 11/11通过；集成T01/T02/T03共32/32通过。npx tsc --noEmit 仅有既知 score-history/page.tsx:57 和 manual-test-fixtures.ts:183 错误，没有T03新增错误。",
-      "blockers": [
-        "正式 goals API/page 接入尚未完成。",
-        "材料 job 持久化 worker 与 ready-material 查询/签发链尚未完成。"
-      ],
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "由新的独立 subagent 完成正式 goals API/page、持久化材料 job 与 ready 查询，再验收导入闭环。",
+      "next_action": "新的独立 subagent 按用户确认 O1 接入容量/本地时间窗 gate、正式 goals API/page 和持久化材料 job/ready 查询。",
       "stale_reason": null
     },
     {
