@@ -2,6 +2,14 @@
   "schema_version": 1,
   "algorithm_source": "docs/algorithm.md",
   "contract_version": "0.3-draft",
+  "execution_policy": {
+    "unit": "one DAG node per subagent",
+    "reuse_subagent_across_nodes": false,
+    "parallelism": "dispatch independent READY nodes in isolated worktrees; serialize overlapping file or shared-resource changes",
+    "ledger_writer": "coordinator",
+    "integration_gate": "coordinator verifies evidence and reruns affected checks on the integrated revision",
+    "commit_discipline": "one commit per DAG node; coordinator commits each execution-state transition; node completion commit includes its evidence and final status"
+  },
   "nodes": [
     {
       "id": "T00",
