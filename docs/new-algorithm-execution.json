@@ -62,15 +62,15 @@
     {
       "id": "T02",
       "phase": "S1",
-      "status": "BLOCKED",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T01"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t02_review_rules",
+      "owner": "/root/t02_atomic_settlement_v2",
       "contract_version": "0.3",
-      "source_revision": "4368590",
+      "source_revision": "f6ddb31",
       "working_tree_diff_hash": "258bc2d86d582f5e95ca8faf803d00ccd78b779779398735e4f0122fdd9089a2",
       "evidence": [
         "lib/new-algorithm-score.ts",
@@ -81,12 +81,10 @@
         "test-report/new-algorithm/T02/partial.md"
       ],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
-      "actual": "Pure scoring/connection suite 16/16 and axis-review transition suite 9/9 pass; coordinator ran both together 25/25. O2/O3 rules implemented as pure helpers. DB atomic settlement, task_count consumption, target-change projection and reservation/rollback integration remain incomplete pending T01 schema v3.",
-      "blockers": [
-        "T01 schema v3 is in progress; current v2 cannot count and atomically consume 3/5/7/9 introduction tasks."
-      ],
+      "actual": "Pure score/review rules are complete and passing; database settlement integration begins against committed schema v3.",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "T01 v3 committed and DONE后由新的独立 subagent 接入 review helper 到 schema v3 settlement，覆盖任务消耗、目标变化、预约重算与幂等回滚。",
+      "next_action": "Implement transactional score settlement, task_count consumption, axis reservation/projection updates, target changes, replay and rollback tests.",
       "stale_reason": null
     },
     {

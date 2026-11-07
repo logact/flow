@@ -40,7 +40,7 @@
 |---|---|---|
 | T00 | DONE | v0.3 冻结 C1–C7；用户已确认 O1–O3 的可调整原型默认值 |
 | T01 | DONE | schema v3、容量 task_count/预约类型约束、拒绝旧库与事务测试；7/7 Jest 通过，未触碰 `flow.db` |
-| T02 | BLOCKED | 纯计分与复习纯规则已提交并通过 25 项测试；T01 schema v3 后完成原子结算/预约消耗 |
+| T02 | IN_PROGRESS | 纯计分与复习规则 25 项通过；现基于 schema v3 实现原子结算、容量消耗与轴级预约更新 |
 | T03 | IN_PROGRESS | 初分、时间窗、API/page 与材料 helper 已实现；补 route 测试，T01 v3 后接 task_count 原子准入 |
 | T04–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
