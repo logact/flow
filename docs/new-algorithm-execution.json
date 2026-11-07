@@ -226,22 +226,22 @@
     {
       "id": "T07",
       "phase": "S2",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T05",
         "T06"
       ],
       "decision_dependencies": [],
-      "owner": null,
+      "owner": "/root/t07_retrieval_ui",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "44e306c",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
-      "actual": null,
+      "expected": "将六档 R/P retrieval public payload 接入交互控件，提交首次完整响应并展示服务端反馈",
+      "actual": "T05 isolated UI and T06 retrieval material/evaluator contracts are complete; T07 starts retrieval renderer and interaction integration.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Implement separate choice/cued/free interaction rendering and wire it into the isolated new-algorithm task page without client-side scoring."
     },
     {
       "id": "V02",
