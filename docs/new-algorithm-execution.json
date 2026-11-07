@@ -37,26 +37,24 @@
     {
       "id": "T01",
       "phase": "S1",
-      "status": "STALE",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00"
       ],
       "decision_dependencies": [],
-      "owner": "Codex",
-      "contract_version": "0.2",
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
-      "working_tree_diff_hash": "6c1b2adb5fbc217511bb8c404628b1475e7129d156b25cd35b18c53d73b6b1be",
+      "owner": "/root/t01_schema",
+      "contract_version": "0.3",
+      "source_revision": "650fda7",
+      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "evidence": [
         "test-report/new-algorithm/T01/schema.md",
         "test-report/new-algorithm/T01/schema.sql"
       ],
       "expected": "独立新版 schema、连接双轴实例、due_at_R/P、review_level_R/P、轴级毕业、容量约束、临时库幂等与回滚",
       "actual": "独立 schema v1 与可控夹具；新库测试 5/5，含版本拒绝、材料外键、单活跃实例、冻结作答、事件去重和回滚；该结果仅属旧规范，当前不可计入新版验收",
-      "blockers": [
-        "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴"
-      ],
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "扩展独立临时库 schema 与约束，不接触 flow.db",
+      "next_action": "T01 subagent 实现新版独立 schema 与临时库工厂，交付约束/回滚证据；协调者复核集成",
       "stale_reason": "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴",
       "open_dependencies": []
     },
