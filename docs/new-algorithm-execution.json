@@ -37,25 +37,25 @@
     {
       "id": "T01",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T00"
       ],
       "decision_dependencies": [],
       "owner": "/root/t01_capacity_reservations",
       "contract_version": "0.3",
-      "source_revision": "2de9cb0",
-      "working_tree_diff_hash": "b57c5c43cd3dfa16cb564ca8255317f2ba0753acf4e6583ede9371699edcb7da",
+      "source_revision": "05bc892",
+      "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-db.ts",
         "test/new-algorithm-db.jest.test.cjs",
         "test-report/new-algorithm/T01/schema.md"
       ],
       "expected": "独立新版 schema、连接双轴实例、due_at_R/P、review_level_R/P、轴级毕业、容量约束、临时库幂等与回滚",
-      "actual": "T01 schema v3 revalidation is under coordinator review: the v3 diff and report are present; integrated 7-test run and diff check pass. Final scope review and node completion commit are pending.",
+      "actual": "Schema v3 initializes idempotently and rejects unversioned nonempty, v1, and v2 databases without migration. Capacity reservations enforce positive integer task_count (including 3/5/7/9), introduction only on both axes, and review reservations on R/P. Integrated Jest 7/7 passes; scoped diff check passes. flow.db untouched.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Coordinator completes scoped diff review, then commits schema v3, tests, report, and DONE state as the T01 delivery.",
+      "next_action": "下游 T02/T03 可基于 schema v3 实现原子结算与新词容量预约。",
       "stale_reason": null,
       "open_dependencies": []
     },

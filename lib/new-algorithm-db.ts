@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-export const NEW_ALGORITHM_SCHEMA_VERSION = 2;
+export const NEW_ALGORITHM_SCHEMA_VERSION = 3;
 
 const schema = `
   CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -116,11 +116,13 @@ const schema = `
   CREATE TABLE IF NOT EXISTS capacity_reservations (
     reservation_id TEXT PRIMARY KEY,
     word_id INTEGER NOT NULL REFERENCES words(id),
-    axis TEXT NOT NULL CHECK(axis IN ('r','p')),
+    axis TEXT NOT NULL CHECK(axis IN ('r','p','both')),
     local_date TEXT NOT NULL,
     timezone TEXT NOT NULL,
-    reservation_kind TEXT NOT NULL CHECK(reservation_kind IN ('determined','conditional')),
+    reservation_kind TEXT NOT NULL CHECK(reservation_kind IN ('determined','conditional','introduction')),
+    task_count INTEGER NOT NULL CHECK(typeof(task_count)='integer' AND task_count > 0),
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','cancelled','consumed')),
+    CHECK((reservation_kind='introduction' AND axis='both') OR (reservation_kind IN ('determined','conditional') AND axis IN ('r','p'))),
     UNIQUE(word_id, axis, local_date, timezone, reservation_kind)
   );
   CREATE INDEX IF NOT EXISTS reservations_by_day ON capacity_reservations(local_date,timezone,status);

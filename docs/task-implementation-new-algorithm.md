@@ -18,7 +18,7 @@
 
 | 模块与主要源码 | 可复用部分 | 必须修改、替换或补全 |
 |---|---|---|
-| `lib/new-algorithm-db.ts`、测试 DB 工厂 | schema v2 已有独立轴级 due/review/graduation、`axis=both` 连接、日容量和按轴确定/条件预约约束，Jest 临时库测试不碰 `flow.db` | 仍未接正式 app；T02/T03/T12 等节点实现结算、导入与真实调度 |
+| `lib/new-algorithm-db.ts`、测试 DB 工厂 | schema v3 已有独立轴级 due/review/graduation、`axis=both` 连接、含 `task_count` 的容量预约约束，Jest 临时库测试不碰 `flow.db` | 仍未接正式 app；T02/T03/T12 等节点实现结算、导入与真实调度 |
 | `lib/new-algorithm-score.ts`、`lib/new-algorithm-settlement.ts` | R/P 提取与 FLUENCY 分数纯函数、冻结作答原子结算与幂等 | ENCODE 现只更新单轴；须改成一次连接同时 `max(F_R,5)`/`max(F_P,5)`，并在同一事务独立更新目标轴学习完成、复习级别、排期和容量；旧 H 增强不得进入新版派题 |
 | `lib/new-algorithm-memory.ts`、Jest 记忆场景 | 旧版本的 L/H/C 算例可留作历史回归材料 | 新规范不以 L/H 选任务；共享冷却改按 7 个任务或 20 分钟的布尔门槛。现有记忆测试不是新版调度验收 |
 | `lib/new-algorithm-import.ts` | 临时库导入、目标与初分校验、词义版本失效 | 导入时按词汇量和可比词频排名估计 R/P 初分，仅双轴 0 分词先做连接；补词级引入日期、容量前置检查及正式 goals API/page |
@@ -39,7 +39,7 @@
 | 节点 | 本次核对状态 | 已有成果与下一步 |
 |---|---|---|
 | T00 | DONE | v0.3 冻结 C1–C7；用户已确认 O1–O3 的可调整原型默认值 |
-| T01 | IN_PROGRESS | 独立 subagent 已交付 schema v3；协调者复核 7 项 Jest、约束及回滚证据后提交 DONE |
+| T01 | DONE | schema v3、容量 task_count/预约类型约束、拒绝旧库与事务测试；7/7 Jest 通过，未触碰 `flow.db` |
 | T02 | BLOCKED | 纯计分与复习纯规则已提交并通过 25 项测试；T01 schema v3 后完成原子结算/预约消耗 |
 | T03 | IN_PROGRESS | 初分、时间窗、API/page 与材料 helper 已实现；补 route 测试，T01 v3 后接 task_count 原子准入 |
 | T04–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
