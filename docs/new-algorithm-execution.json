@@ -37,25 +37,26 @@
     {
       "id": "T01",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T00"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t01_schema_impl",
+      "owner": "/root/t01_complete",
       "contract_version": "0.3",
-      "source_revision": "35fd82a",
-      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_revision": "93bb4df",
+      "working_tree_diff_hash": "b57c5c43cd3dfa16cb564ca8255317f2ba0753acf4e6583ede9371699edcb7da",
       "evidence": [
-        "test-report/new-algorithm/T01/schema.md",
-        "test-report/new-algorithm/T01/schema.sql"
+        "lib/new-algorithm-db.ts",
+        "test/new-algorithm-db.jest.test.cjs",
+        "test-report/new-algorithm/T01/schema.md"
       ],
       "expected": "独立新版 schema、连接双轴实例、due_at_R/P、review_level_R/P、轴级毕业、容量约束、临时库幂等与回滚",
-      "actual": "独立 schema v1 与可控夹具；新库测试 5/5，含版本拒绝、材料外键、单活跃实例、冻结作答、事件去重和回滚；该结果仅属旧规范，当前不可计入新版验收",
+      "actual": "Schema version 2；5/5 Jest tests pass。覆盖空库重复初始化、拒绝非空和 v1 数据库、R/P 独立状态、axis=both ENCODE 成功唯一、材料复合外键、daily capacity 约束、确定/条件预约、事件去重、单活跃实例、invalid 后新 attempt 与事务回滚。协调者在集成工作树复跑同一命令通过；flow.db 未触碰。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "独立 subagent 正在实际实现新版 schema、临时库工厂与约束测试；协调者复核真实验证结果",
-      "stale_reason": "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴",
+      "next_action": "T01 完成；T02/T03 可按不重叠文件范围并行开始确定性子范围，但受 O2/O3 与 O1 门禁影响的验收不得 DONE。",
+      "stale_reason": null,
       "open_dependencies": []
     },
     {
