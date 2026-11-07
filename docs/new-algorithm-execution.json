@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "algorithm_source": "docs/algorithm.md",
-  "contract_version": "0.2",
+  "contract_version": "0.3-draft",
   "nodes": [
     {
       "id": "T00",
       "phase": "S0",
-      "status": "DONE",
+      "status": "STALE",
       "depends_on": [],
       "decision_dependencies": [],
       "owner": "Codex",
@@ -16,16 +16,19 @@
       "evidence": [
         "test-report/new-algorithm/T00/baseline.md"
       ],
-      "expected": "C1–C7、状态转移、D1–D8、旧测试迁移清单和可复现 runner",
-      "actual": "契约 v0.2、用户授权的 D1–D8 原型决策、24 节点 DAG 台账、旧测试迁移清单；旧 DAG 8/8",
-      "blockers": [],
+      "expected": "按现行 due_at_R/P、容量、词汇量估计初分与跳档、按需连接、独立轴复习/毕业规范冻结 C1–C7、决策和测试迁移清单",
+      "actual": "契约 v0.2、用户授权的 D1–D8 原型决策、24 节点 DAG 台账、旧测试迁移清单；旧 DAG 8/8；该结果仅属旧规范，当前不可计入新版验收",
+      "blockers": [
+        "v0.3 草案已记录 R/P 独立排期；仍须逐条审计 C1–C7、D1–D8 和测试映射后冻结"
+      ],
       "repair_attempts": 0,
-      "next_action": "T01 新 schema 与测试工厂"
+      "next_action": "复核 v0.3 草案中 R/P 独立排期、容量和旧参数，冻结新契约",
+      "stale_reason": "v0.3 草案已记录 R/P 独立排期；仍须逐条审计 C1–C7、D1–D8 和测试映射后冻结"
     },
     {
       "id": "T01",
       "phase": "S1",
-      "status": "DONE",
+      "status": "STALE",
       "depends_on": [
         "T00"
       ],
@@ -38,41 +41,46 @@
         "test-report/new-algorithm/T01/schema.md",
         "test-report/new-algorithm/T01/schema.sql"
       ],
-      "expected": "独立版本 schema、临时库夹具、初始化幂等、唯一约束与事务回滚",
-      "actual": "独立 schema v1 与可控夹具；新库测试 5/5，含版本拒绝、材料外键、单活跃实例、冻结作答、事件去重和回滚",
-      "blockers": [],
+      "expected": "独立新版 schema、连接双轴实例、due_at_R/P、review_level_R/P、轴级毕业、容量约束、临时库幂等与回滚",
+      "actual": "独立 schema v1 与可控夹具；新库测试 5/5，含版本拒绝、材料外键、单活跃实例、冻结作答、事件去重和回滚；该结果仅属旧规范，当前不可计入新版验收",
+      "blockers": [
+        "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴"
+      ],
       "repair_attempts": 0,
-      "next_action": "T02 原子回写完整分支验证"
+      "next_action": "扩展独立临时库 schema 与约束，不接触 flow.db",
+      "stale_reason": "旧 schema 缺 review_level_R/P、due_at_R/P、轴级毕业、容量/预约约束，连接实例仅支持单轴"
     },
     {
       "id": "T02",
       "phase": "S1",
-      "status": "DONE",
+      "status": "STALE",
       "depends_on": [
         "T00",
         "T01"
       ],
-      "decision_dependencies": [
-        "D2"
-      ],
+      "decision_dependencies": [],
       "owner": "Codex",
       "contract_version": "0.2",
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": "70f190c9d113aa691946c3354a8d56acf492b36b10c83eade6e27e3405c37d48",
       "evidence": [
         "test-report/new-algorithm/T02/partial.md",
-        "test-report/new-algorithm/scenarios.md"
+        "test-report/new-algorithm/scenarios.md",
+        "test-report/new-algorithm/memory.md"
       ],
-      "expected": "唯一分档、全部分数表及 D2 单轴原子结算；失败回滚、无效不变和幂等",
-      "actual": "纯计分 5/5、独立新库 13/13、新版分数→下一档场景 21/21；正式调度派题另由 T04/T12 验证",
-      "blockers": [],
+      "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
+      "actual": "纯计分 5/5、独立新库 13/13、新版计分状态转移 14/14 个场景、23 次转移；正式调度派题另由 T04/T12 验证；该结果仅属旧规范，当前不可计入新版验收",
+      "blockers": [
+        "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写"
+      ],
       "repair_attempts": 0,
-      "next_action": "T03 材料与导入后由 T04 接入正式服务"
+      "next_action": "按轴重写连接/FLUENCY 达标证据/1-3-7-30 复习与容量预约纯函数和原子结算测试",
+      "stale_reason": "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写"
     },
     {
       "id": "T03",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "STALE",
       "depends_on": [
         "T00",
         "T01"
@@ -89,11 +97,14 @@
       "evidence": [
         "test-report/new-algorithm/T03/partial.md"
       ],
-      "expected": "原子导入、已确认 gloss 和 ENCODE/choice 版本材料管线",
-      "actual": "新库原子导入、直接目标/初分校验、词义版本失效；临时库新增 2 项测试通过，正式 API 和材料作业尚未实现",
-      "blockers": [],
+      "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
+      "actual": "新库原子导入、直接目标/初分校验、词义版本失效；临时库新增 2 项测试通过，正式 API 和材料作业尚未实现；该结果仅属旧规范，当前不可计入新版验收",
+      "blockers": [
+        "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现"
+      ],
       "repair_attempts": 0,
-      "next_action": "实现 ENCODE/choice 材料仓储、生成校验与有界后台作业，再接 goals API/page"
+      "next_action": "待 T00/T01 新契约后重验 0/20/40/60 初分与首题、容量，再继续材料/API 管线",
+      "stale_reason": "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现"
     },
     {
       "id": "T04",
@@ -105,7 +116,6 @@
         "T03"
       ],
       "decision_dependencies": [
-        "D2",
         "D6",
         "D7"
       ],
@@ -114,7 +124,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式连接/choice 实例服务，冻结答案、幂等结算、按 due_at_a 与共享冷却选学习候选",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -134,7 +144,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式页面一次词级连接、R/P choice 交互与反馈",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -157,7 +167,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "从正式导入到一次词级连接双轴初始化、choice、反馈和下一任务/EMPTY 的 I/E/B 证据",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -219,7 +229,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式六档提取升降分、目标变化后学习完成与排期资格重算",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -335,7 +345,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -356,7 +366,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -381,7 +391,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "due_at_R/P、容量、共享冷却、材料的到期轴复习→轴学习→新词调度，41 天按轴预约与可解释 EMPTY",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -431,7 +441,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式入口完成同日学习、R/P 错开达标和各自 1/3/7/30 复习、单轴失败退级、容量与词级毕业旅程",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -451,7 +461,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "新版 due_at/容量/复习任务下的连续流和异常恢复",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -474,7 +484,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "事件来源的分数、轴级排期/复习级别/毕业、容量与词级毕业历史/指标",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -493,7 +503,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式历史中分数与新版复习/毕业事件可对账",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -518,7 +528,7 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "新库切换并退役正式入口的旧 L/H 急救、单轴 ENCODE 与旧毕业语义",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
@@ -537,11 +547,13 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
+      "expected": "正式入口完整连接、同日学习、R/P 各自 1/3/7/30 天复习与词级毕业的独立验收",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
       "next_action": "核对依赖与产品决策后领取节点"
     }
-  ]
+  ],
+  "current_algorithm_sha256": "6bb076a7713d03e4b6790e0cec868a97ebb30e131e697ad0d2fdb052d5dc3fb0",
+  "contract_status": "STALE: v0.3 draft records independent R/P due_at and review levels; T00 must audit and freeze all contracts, decisions, and test mapping"
 }

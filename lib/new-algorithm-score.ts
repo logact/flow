@@ -11,6 +11,10 @@ export function stageForScore(score: number): Stage {
   return 'fluency';
 }
 
+export function encodeScore(completed: boolean): number {
+  return completed ? 5 : 0;
+}
+
 export function retrievalScore(stage: 'choice' | 'cued' | 'free', passed: boolean): number {
   if (stage === 'choice') return passed ? 20 : 5;
   if (stage === 'cued') return passed ? 40 : 5;

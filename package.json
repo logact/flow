@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "dev:manual-test": "FLOW_MANUAL_TEST_MODE=1 next dev --hostname 0.0.0.0 -p 3101",
+    "test:new-algorithm-scenarios": "jest --runInBand test/new-algorithm-scenarios.jest.test.cjs",
+    "test:new-algorithm-memory": "jest --runInBand test/new-algorithm-memory.jest.test.cjs",
     "build": "next build",
     "start": "next start"
   },
@@ -18,11 +20,13 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@swc/jest": "^0.2.39",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
     "@types/pdfkit": "^0.17.7",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "jest": "^30.5.2",
     "pdfkit": "^0.20.2",
     "typescript": "^7.0.2"
   }
