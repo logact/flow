@@ -48,7 +48,8 @@
 | T07 | DONE | 六档 renderer 与输入载荷已实现；专项 4/4、全 Jest 116/116；API 生命周期待 T13，人工验收待 V02 |
 | T08 | DONE | R 流利材料生成/评估契约；专项 11/11；HTTP、计时、UI、恢复留 T09/T13 |
 | T10 | IN_PROGRESS | P 流利材料生成与服务端评估 |
-| T09、T11–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
+| T09 | IN_PROGRESS | R 阅读、回看与计时交互；依赖 T05/T08 已满足 |
+| T11–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。
 
@@ -186,7 +187,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 99/100/101 词、目标 4/5 次、错义或难度不合材料；When 生成后校验；Then 仅完全合格材料可签发；两题键在签发前固定。Given 有效计时；When 两题结果四组合；Then 交 T02 得出规定分支，整体失败不变分不等于 invalid。
 - **交付/验证**：`lib/new-algorithm-r-fluency.ts` 校验恰好 100 个空白分隔词、目标词形至少 5 次、两道公开题与两条冻结私有答案/依据；通过 T03 的 D5 两次/8 秒持久 job 封装；注入式 evaluator 保留 invalid/uncertain/service_error，valid 才映射 T02 规则。专项 Jest 11/11、执行者报告全 Jest 10 suites/109 tests、`git diff --check` 通过。未配置或声称生产 AI；HTTP/计时/UI/恢复仍归 T09/T13，provider fixture 不构成真实内容质量验收。
 
-### T09 · S3 · R 阅读、回看与计时
+### T09 · S3 · R 阅读、回看与计时（IN_PROGRESS）
 
 - **依赖**：T05、T08；D4。**文件**：R fluency renderer、新 timing 协议/服务校验模块、service 接线。
 - **输入→输出**：C2/C3 timing_protocol → 初次/各次回看片段、两题 response、有效性结果。
@@ -345,7 +346,7 @@ flowchart TD
   T07["T07 S2 提取交互 DONE"]
   V02["V02 双轴提取"]
   T08["T08 S3 R材料评估 DONE"]
-  T09["T09 S3 R计时交互"]
+  T09["T09 S3 R计时交互 IN_PROGRESS"]
   T10["T10 S3 P材料评估 IN_PROGRESS"]
   T11["T11 S3 P计时交互"]
   V03["V03 R流利闭环"]
