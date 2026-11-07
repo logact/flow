@@ -62,16 +62,16 @@
     {
       "id": "T02",
       "phase": "S1",
-      "status": "BLOCKED",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T01"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t02_score_settlement",
+      "owner": "/root/t02_atomic_settlement",
       "contract_version": "0.3",
-      "source_revision": "e53e0a6",
-      "working_tree_diff_hash": "7b7265db1309fa4224f277e806aebb2efb7d235fd142be439c50ec2db501da73",
+      "source_revision": "d8708c1",
+      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "evidence": [
         "lib/new-algorithm-score.ts",
         "lib/new-algorithm-settlement.ts",
@@ -80,11 +80,9 @@
       ],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
       "actual": "当前确定性子范围已实现：新分档、R/P提取与FLUENCY公式、移除D2半衰期增强、双0词连接纯函数及settlement中axis=both双轴初始化/目标轴学习完成投影。协调者在集成树运行Jest 16/16通过。完整原子排期回写、DB settlement测试和due/review/预约更新未完成。npx tsc --noEmit 仍只报告既有 app/score-history/page.tsx:57 与 lib/manual-test-fixtures.ts:183 错误。",
-      "blockers": [
-        "部分分数/连接核心已提交；剩余 schema v2 原子 settlement、复习级别/due/容量预约回写和 DB 状态测试尚未完成。"
-      ],
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "按已确认 O2/O3 由新的独立 subagent 完成原子复习结算与跨日/逾期/预约测试。",
+      "next_action": "新的独立 subagent 按用户确认 O1–O3 补原子 settlement、due/review/预约/容量写回与 DB 集成测试。",
       "stale_reason": null
     },
     {
