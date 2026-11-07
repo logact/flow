@@ -314,7 +314,7 @@
     {
       "id": "T10",
       "phase": "S3",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T02",
         "T03",
@@ -326,16 +326,16 @@
         "D5",
         "D8"
       ],
-      "owner": null,
+      "owner": "/root/t10_p_fluency",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "1e7699f",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
-      "actual": null,
+      "expected": "生成不泄漏英文目标的中文 P 流利材料，并独立校验有效词数、目标表达和整体复述质量",
+      "actual": "T02/T03/T04/T06 prerequisites are complete; T10 starts as a separate P fluency material/evaluator module, independent from R fluency content.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Implement Chinese-scene generation and English-leak validation, meaningful word count, two-part injected evaluator outcomes and T02 settlement mapping."
     },
     {
       "id": "T11",
