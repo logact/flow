@@ -37,14 +37,14 @@
     {
       "id": "T01",
       "phase": "S1",
-      "status": "STALE",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t01_complete",
+      "owner": "/root/t01_capacity_reservations",
       "contract_version": "0.3",
-      "source_revision": "93bb4df",
+      "source_revision": "2de9cb0",
       "working_tree_diff_hash": "b57c5c43cd3dfa16cb564ca8255317f2ba0753acf4e6583ede9371699edcb7da",
       "evidence": [
         "lib/new-algorithm-db.ts",
@@ -52,13 +52,11 @@
         "test-report/new-algorithm/T01/schema.md"
       ],
       "expected": "独立新版 schema、连接双轴实例、due_at_R/P、review_level_R/P、轴级毕业、容量约束、临时库幂等与回滚",
-      "actual": "Schema version 2；5/5 Jest tests pass。覆盖空库重复初始化、拒绝非空和 v1 数据库、R/P 独立状态、axis=both ENCODE 成功唯一、材料复合外键、daily capacity 约束、确定/条件预约、事件去重、单活跃实例、invalid 后新 attempt 与事务回滚。协调者在集成工作树复跑同一命令通过；flow.db 未触碰。",
-      "blockers": [
-        "新增 task_count 与 introduction reservation kind/axis=both 约束；扩展唯一/回滚测试并 bump schema version。"
-      ],
+      "actual": "T01 schema v3 revalidation is under coordinator review: the v3 diff and report are present; integrated 7-test run and diff check pass. Final scope review and node completion commit are pending.",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "协调者重派独立 subagent 完成 schema v3 capacity reservation 扩展，复跑 T01 测试后恢复 DONE。",
-      "stale_reason": "用户确认 O1 后，schema v2 capacity_reservations 无 task_count，也不能区分 word-level introduction budget；T03 无法原子累计 3/5/7/9 准入任务，T02 无法逐任务消耗预算。需要 schema v3 扩展并重验。",
+      "next_action": "Coordinator completes scoped diff review, then commits schema v3, tests, report, and DONE state as the T01 delivery.",
+      "stale_reason": null,
       "open_dependencies": []
     },
     {

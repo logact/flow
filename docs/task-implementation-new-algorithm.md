@@ -39,7 +39,7 @@
 | 节点 | 本次核对状态 | 已有成果与下一步 |
 |---|---|---|
 | T00 | DONE | v0.3 冻结 C1–C7；用户已确认 O1–O3 的可调整原型默认值 |
-| T01 | STALE | v2 测试仍通过；O1 需要每日预约累计 task_count 与原子消耗，须升级 schema 并重验 |
+| T01 | IN_PROGRESS | 独立 subagent 已交付 schema v3；协调者复核 7 项 Jest、约束及回滚证据后提交 DONE |
 | T02 | BLOCKED | 纯计分与复习纯规则已提交并通过 25 项测试；T01 schema v3 后完成原子结算/预约消耗 |
 | T03 | IN_PROGRESS | 初分、时间窗、API/page 与材料 helper 已实现；补 route 测试，T01 v3 后接 task_count 原子准入 |
 | T04–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
