@@ -121,7 +121,7 @@
     {
       "id": "T04",
       "phase": "S1",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T01",
         "T02",
@@ -131,16 +131,17 @@
         "D6",
         "D7"
       ],
-      "owner": null,
+      "owner": "/root/t04_isolated_task_service",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "3159446",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式连接/choice 实例服务、冻结答案、幂等结算与按 due_at_a/共享冷却选学习候选；容量任务冻结 snapshot_json.capacity_reservation_id",
-      "actual": null,
+      "actual": "T04 starts on the isolated new-algorithm runtime DB. Legacy task API and flow.db remain out of scope; exact reservation ID must be frozen in each task snapshot.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "实现正式任务签发时选择并冻结精确容量预约 ID，提交后交由 T02 settlement 单次消费。"
+      "next_action": "Implement isolated connection/choice issue and submission routes, with DB-backed transaction and Jest evidence.",
+      "stale_reason": null
     },
     {
       "id": "T05",
