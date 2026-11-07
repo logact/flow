@@ -414,7 +414,7 @@
     {
       "id": "T12",
       "phase": "S4",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T02",
         "T03",
@@ -425,16 +425,16 @@
         "D5",
         "D7"
       ],
-      "owner": null,
+      "owner": "/root/t12_scheduler",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "22c346a",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": "按复习→学习→新词优先级调度、41天确定/条件容量投影、共享冷却、材料保底；签发任务冻结 capacity_reservation_id",
-      "actual": null,
+      "expected": "按新版规范实现双轴逾期/学习/新词优先级、共享冷却和41天确定/条件容量投影",
+      "actual": "T02 settlement, T03 reservations/material jobs, T04 isolated task service and T06 retrieval contracts are complete; T12 starts isolated scheduling/projection work.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "实现容量投影与候选调度，并在实例 snapshot_json 写入本次具体 reservation_id。"
+      "next_action": "Implement deterministic candidate ordering and 41-local-day capacity projections against isolated schema, with temporary DB boundary tests and reservation trace."
     },
     {
       "id": "T13",
