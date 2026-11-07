@@ -90,7 +90,7 @@
     {
       "id": "T03",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T00",
         "T01"
@@ -102,8 +102,8 @@
       ],
       "owner": "/root/t03_goals_pipeline",
       "contract_version": "0.3",
-      "source_revision": "f6ddb31",
-      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_revision": "2391d67",
+      "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-import.ts",
         "lib/new-algorithm-material-jobs.ts",
@@ -111,10 +111,10 @@
         "test-report/new-algorithm/T03/import-materials.md"
       ],
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
-      "actual": "Import, daily availability gate, goals API/page, isolated runtime DB and material-ready lookup are implemented in the shared worktree. Schema v3 is now available; atomic 3/5/7/9 task-count reservation is resumed.",
+      "actual": "V/rank estimates, explicit timezone and local-window gating, atomic import plus v3 3/5/7/9 introduction reservations, isolated goals API/page, meaning-version invalidation, bounded material generation state and ready lookup are implemented. Integrated import/API Jest 22/22 pass; diff check passes. Runtime DB is isolated from flow.db. Browser/manual UI evidence and worker/provider invocation remain later gates.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Complete transactional introduction admission with capacity accounting and rollback/concurrency tests; then coordinator reviews and commits T03.",
+      "next_action": "T02 settlement must consume/release reservations; later DAG nodes integrate ready-material lookup into dispatch. Human UI check stays in its V node.",
       "stale_reason": null
     },
     {

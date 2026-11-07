@@ -1,5 +1,6 @@
 'use client';
 
+import { NewAlgorithmGoalImport } from '@/components/new-algorithm-goal-import';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { SAMPLE_TEXT } from '@/lib/vocab-data';
 
@@ -281,6 +282,7 @@ export default function GoalsPage() {
         <h1>目标管理</h1>
         <a href="/">← 返回练习</a>
       </header>
+      <NewAlgorithmGoalImport />
       <div className="layout">
         <div>
           <div className="card">

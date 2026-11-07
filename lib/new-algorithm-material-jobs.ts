@@ -19,6 +19,13 @@ export type MaterialJobInput = {
 
 export type MaterialProvider = (input: MaterialJobInput, meaning: string) => Promise<MaterialDraft>;
 export type MaterialValidator = (input: MaterialJobInput, draft: MaterialDraft) => { valid: boolean; reason?: string };
+export type ReadyMaterial = { id:string; version:number; public_payload:string; grading_requirements:string; timing_protocol:string };
+
+export function findReadyNewAlgorithmMaterial(db: Database.Database, input: Pick<MaterialJobInput,'wordId'|'axis'|'stage'|'meaningVersion'>): ReadyMaterial | null {
+  return db.prepare(`SELECT id,version,public_payload,grading_requirements,timing_protocol FROM materials
+    WHERE word_id=? AND axis=? AND stage=? AND meaning_version=? AND status='ready' AND usage_count=0
+    ORDER BY version DESC LIMIT 1`).get(input.wordId,input.axis,input.stage,input.meaningVersion) as ReadyMaterial | undefined ?? null;
+}
 
 const BATCH_ATTEMPTS = 2; // D5
 const PROVIDER_TIMEOUT_MS = 8000; // D5

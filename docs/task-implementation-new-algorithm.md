@@ -41,7 +41,7 @@
 | T00 | DONE | v0.3 冻结 C1–C7；用户已确认 O1–O3 的可调整原型默认值 |
 | T01 | DONE | schema v3、容量 task_count/预约类型约束、拒绝旧库与事务测试；7/7 Jest 通过，未触碰 `flow.db` |
 | T02 | IN_PROGRESS | 纯计分与复习规则 25 项通过；现基于 schema v3 实现原子结算、容量消耗与轴级预约更新 |
-| T03 | IN_PROGRESS | 初分、时间窗、API/page 与材料 helper 已实现；补 route 测试，T01 v3 后接 task_count 原子准入 |
+| T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。

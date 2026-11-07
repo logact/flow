@@ -34,6 +34,58 @@ export type NewWordInput = {
   timezone: string;
 };
 
+export type Availability = { timezone: string; localDate: string; capacity: number; windowStart: string; windowEnd: string };
+
+export function minimumIntroductionTasks(estimate: InitialScoreEstimate): number {
+  if (estimate.requiresConnection) return 9;
+  const axisTasks = (score: number) => score >= 60 ? 1 : score >= 40 ? 2 : score >= 20 ? 3 : 4;
+  return axisTasks(estimate.scoreR) + axisTasks(estimate.scoreP);
+}
+
+export function setDailyAvailability(db: Database.Database, value: Availability): void {
+  if (!Number.isInteger(value.capacity) || value.capacity < 0) throw new Error('Invalid daily capacity');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.localDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.windowStart) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.windowEnd) || value.windowEnd <= value.windowStart) throw new Error('Invalid local training window');
+  new Intl.DateTimeFormat('en', { timeZone: value.timezone }).format(0);
+  db.transaction(() => {
+    db.prepare(`INSERT INTO daily_capacity(local_date,timezone,capacity,completed) VALUES(?,?,?,0)
+      ON CONFLICT(local_date,timezone) DO UPDATE SET capacity=excluded.capacity`).run(value.localDate,value.timezone,value.capacity);
+    for (const [key, val] of [['training_window_start',value.windowStart],['training_window_end',value.windowEnd]] as const) {
+      db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(`${key}:${value.timezone}`,val);
+    }
+  })();
+}
+
+export function canAdmitIntroduction(db: Database.Database, estimates: InitialScoreEstimate[], now: number, timezone: string): boolean {
+  const local = new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
+  const part = (type:string) => local.find(p=>p.type===type)?.value ?? '';
+  const date = `${part('year')}-${part('month')}-${part('day')}`;
+  const row = db.prepare('SELECT capacity,completed FROM daily_capacity WHERE local_date=? AND timezone=?').get(date,timezone) as {capacity:number;completed:number}|undefined;
+  if (!row) return false;
+  const start = db.prepare('SELECT value FROM meta WHERE key=?').get(`training_window_start:${timezone}`) as {value:string}|undefined;
+  const end = db.prepare('SELECT value FROM meta WHERE key=?').get(`training_window_end:${timezone}`) as {value:string}|undefined;
+  if (!start || !end) return false;
+  const minuteNow = Number(part('hour'))*60 + Number(part('minute'));
+  const minuteStart = Number(start.value.slice(0,2))*60 + Number(start.value.slice(3,5));
+  const minuteEnd = Number(end.value.slice(0,2))*60 + Number(end.value.slice(3,5));
+  const reserved=(db.prepare("SELECT COALESCE(SUM(task_count),0) n FROM capacity_reservations WHERE local_date=? AND timezone=? AND status='active'").get(date,timezone) as {n:number}).n;
+  const tasks = estimates.reduce((sum,item)=>sum+minimumIntroductionTasks(item),0);
+  const cooldownMinutes = estimates.reduce((max,item)=>Math.max(max,Math.max(0,minimumIntroductionTasks(item)-1)*20),0);
+  return row.capacity-row.completed-reserved >= tasks && minuteNow >= minuteStart && minuteNow < minuteEnd && minuteEnd-minuteNow >= cooldownMinutes;
+}
+
+export function reserveIntroductionCapacity(db: Database.Database, candidates: {wordId:number;estimate:InitialScoreEstimate}[], now: number, timezone: string): boolean {
+  const dateParts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const p=(type:string)=>dateParts.find(x=>x.type===type)?.value ?? '';
+  const date=`${p('year')}-${p('month')}-${p('day')}`;
+  if (!canAdmitIntroduction(db,candidates.map(x=>x.estimate),now,timezone)) return false;
+  const insert=db.prepare(`INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status)
+    VALUES(?,?, 'both', ?,?, 'introduction',?,'active')`);
+  for (const candidate of candidates) {
+    insert.run(`intro:${candidate.wordId}`,candidate.wordId,date,timezone,minimumIntroductionTasks(candidate.estimate));
+  }
+  return true;
+}
+
 function finiteRange(value: number, min: number, max: number): boolean {
   return Number.isFinite(value) && value >= min && value <= max;
 }
@@ -46,7 +98,7 @@ export function importNewAlgorithmWords(
   db: Database.Database,
   words: NewWordInput[],
   now: number,
-  reserveCapacity: (estimates: InitialScoreEstimate[]) => boolean
+  reserveCapacity: (tx: Database.Database, candidates: {wordId:number;estimate:InitialScoreEstimate}[], now:number, timezone:string) => boolean
 ): number[] {
   if (!Array.isArray(words) || !words.length || !Number.isSafeInteger(now) || now < 0) throw new Error('Invalid import batch');
   if (typeof reserveCapacity !== 'function') throw new Error('CAPACITY_GATE_PENDING: O1 must provide an explicit capacity reservation');
@@ -64,12 +116,15 @@ export function importNewAlgorithmWords(
     if (input.freqSource && input.freq === undefined) throw new Error('Frequency source requires a value');
     return {term,meaning,targetR,targetP,scoreR:estimate.scoreR,scoreP:estimate.scoreP,introduced:estimate.requiresConnection?0:1,level,freq:input.freq ?? null,freqSource:input.freqSource?.trim() ?? null,timezone:input.timezone.trim(),estimate};
   });
-  if (!reserveCapacity(checked.map(row => row.estimate))) throw new Error('CAPACITY_INSUFFICIENT');
   return db.transaction(() => {
     const dueNow = new Date(now).toISOString();
     const insert = db.prepare(`INSERT INTO words(term,meaning,target_r,target_p,score_r,score_p,introduced,due_at_r,due_at_p,level,freq,freq_source,local_timezone,created_at)
       VALUES(@term,@meaning,@targetR,@targetP,@scoreR,@scoreP,@introduced,@dueNow,@dueNow,@level,@freq,@freqSource,@timezone,@now)`);
-    return checked.map(({estimate: _estimate, ...word}) => Number(insert.run({...word,dueNow,now}).lastInsertRowid));
+    const ids=checked.map(({estimate: _estimate, ...word}) => Number(insert.run({...word,dueNow,now}).lastInsertRowid));
+    const tz=checked[0].timezone;
+    if (checked.some(row=>row.timezone!==tz)) throw new Error('IMPORT_TIMEZONE_MISMATCH');
+    if (!reserveCapacity(db,checked.map((row,index)=>({wordId:ids[index],estimate:row.estimate})),now,tz)) throw new Error('CAPACITY_INSUFFICIENT');
+    return ids;
   })();
 }
 
