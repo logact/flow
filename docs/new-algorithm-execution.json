@@ -55,36 +55,37 @@
       "actual": "Schema v3 initializes idempotently and rejects unversioned nonempty, v1, and v2 databases without migration. Capacity reservations enforce positive integer task_count (including 3/5/7/9), introduction only on both axes, and review reservations on R/P. Integrated Jest 7/7 passes; scoped diff check passes. flow.db untouched.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "下游 T02/T03 可基于 schema v3 实现原子结算与新词容量预约。",
+      "next_action": "T02/T03 已基于 schema v3 实现结算与导入预约；flow.db 未触碰。",
       "stale_reason": null,
       "open_dependencies": []
     },
     {
       "id": "T02",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T00",
         "T01"
       ],
       "decision_dependencies": [],
-      "owner": "/root/t02_atomic_settlement_v2",
+      "owner": "/root (coordinator integration after assigned workers produced no code)",
       "contract_version": "0.3",
-      "source_revision": "f6ddb31",
-      "working_tree_diff_hash": "258bc2d86d582f5e95ca8faf803d00ccd78b779779398735e4f0122fdd9089a2",
+      "source_revision": "0545f19",
+      "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-score.ts",
         "lib/new-algorithm-settlement.ts",
         "test/new-algorithm-score.jest.test.cjs",
         "lib/new-algorithm-review.ts",
         "test/new-algorithm-review.jest.test.cjs",
-        "test-report/new-algorithm/T02/partial.md"
+        "test-report/new-algorithm/T02/partial.md",
+        "test/new-algorithm-settlement.jest.test.cjs"
       ],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
-      "actual": "Pure score/review rules are complete and passing; database settlement integration begins against committed schema v3.",
+      "actual": "Pure scoring and independent review transitions are integrated with SQLite settlement. Connection writes both axes once; valid FLUENCY starts axis review; review pass/failure updates due dates, demotion, graduation and R/P-specific determined/conditional reservations atomically. Exact capacity reservation ID is read from frozen snapshot_json, validated and consumed once; completion is counted on the actual local day including midnight crossing. Target updates cancel only the affected axis review reservations and return it to today when it loses eligibility; changes are rejected while the affected task is live. Jest settlement 9/9, score/review/settlement combined 34/34, full Jest 63/63; only two known pre-existing TypeScript errors remain. flow.db untouched.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement transactional score settlement, task_count consumption, axis reservation/projection updates, target changes, replay and rollback tests.",
+      "next_action": "T04/T12 task issuers must freeze capacity_reservation_id in snapshot_json; verify the linked end-to-end dispatch/settlement path in downstream nodes.",
       "stale_reason": null
     },
     {
@@ -111,10 +112,10 @@
         "test-report/new-algorithm/T03/import-materials.md"
       ],
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
-      "actual": "V/rank estimates, explicit timezone and local-window gating, atomic import plus v3 3/5/7/9 introduction reservations, isolated goals API/page, meaning-version invalidation, bounded material generation state and ready lookup are implemented. Integrated import/API Jest 22/22 pass; diff check passes. Runtime DB is isolated from flow.db. Browser/manual UI evidence and worker/provider invocation remain later gates.",
+      "actual": "V/rank estimates, explicit timezone and local-window gating, atomic import plus v3 3/5/7/9 introduction reservations, isolated goals API/page, meaning-version invalidation, bounded material generation state and ready lookup are implemented. Integrated import/API Jest 22/22 passes; diff check passes. Runtime DB is isolated from flow.db. Browser/manual UI evidence and provider/worker dispatch remain later gates.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "T02 settlement must consume/release reservations; later DAG nodes integrate ready-material lookup into dispatch. Human UI check stays in its V node.",
+      "next_action": "Later T04/T06/T08/T10/T12 nodes integrate ready-material lookup and human acceptance remains in V nodes.",
       "stale_reason": null
     },
     {
@@ -135,11 +136,11 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": "正式连接/choice 实例服务，冻结答案、幂等结算、按 due_at_a 与共享冷却选学习候选",
+      "expected": "正式连接/choice 实例服务、冻结答案、幂等结算与按 due_at_a/共享冷却选学习候选；容量任务冻结 snapshot_json.capacity_reservation_id",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "实现正式任务签发时选择并冻结精确容量预约 ID，提交后交由 T02 settlement 单次消费。"
     },
     {
       "id": "T05",
@@ -402,11 +403,11 @@
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": "due_at_R/P、容量、共享冷却、材料的到期轴复习→轴学习→新词调度，41 天按轴预约与可解释 EMPTY",
+      "expected": "按复习→学习→新词优先级调度、41天确定/条件容量投影、共享冷却、材料保底；签发任务冻结 capacity_reservation_id",
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "实现容量投影与候选调度，并在实例 snapshot_json 写入本次具体 reservation_id。"
     },
     {
       "id": "T13",

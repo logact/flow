@@ -71,6 +71,11 @@ function dueAtForLocalDate(localDate: string, timeZone: string): string {
   return new Date(localMidnightUtc(localDate, timeZone)).toISOString();
 }
 
+/** Local midnight for a timestamp's user-local calendar day. */
+export function localDayStart(timestamp: number, timeZone: string): string {
+  return dueAtForLocalDate(localDateString(timestamp,timeZone),timeZone);
+}
+
 export function localCalendarDate(timestamp: number, timeZone: string): string {
   return localDateString(timestamp, timeZone);
 }
