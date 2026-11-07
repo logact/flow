@@ -46,7 +46,7 @@
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
 | T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 HTTP/UI 接线及生产 provider 留给 T07/T13 |
 | T07 | IN_PROGRESS | 双轴三档提取交互与反馈；依赖 T05/T06 已满足 |
-| T08 | IN_PROGRESS | R 流利材料生成与服务端评估 |
+| T08 | DONE | R 流利材料生成/评估契约；专项 11/11；HTTP、计时、UI、恢复留 T09/T13 |
 | T10 | IN_PROGRESS | P 流利材料生成与服务端评估 |
 | T09、T11–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
@@ -178,13 +178,13 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 两轴三档签发；When 用户使用提供的提示或无提示作答；Then 控件与 stage 一致，错误后展示讲解且下一次按新分数调度，不能反馈后修改覆盖首次成绩；P free 显示意思/意图但不泄词。
 - **验证/证据**：组件行为测试，六档操作请求；B/H 在 V02。**阻塞**：共用文本框掩盖 choice/cued/free 的正式语义差异。
 
-### T08 · S3 · R 流利材料与服务端评估（IN_PROGRESS）
+### T08 · S3 · R 流利材料与服务端评估（DONE）
 
 - **依赖**：T02、T03、T04、T06；D3/D5。**文件**：R material producer/evaluator、材料仓储与 service 接口。
 - **输入→输出**：目标义/水平 → 恰好 100 词/目标≥5 次的短文、两道题、私有答案/原文依据，R 检查结果与词数。
 - **范围/非目标**：复用 AI 与校验基础；支持无书源词；缓存/补充遵守共用作业规则。不用零碎细节题替换整段理解，不更新文中其他词。
 - **G/W/T**：Given 99/100/101 词、目标 4/5 次、错义或难度不合材料；When 生成后校验；Then 仅完全合格材料可签发；两题键在签发前固定。Given 有效计时；When 两题结果四组合；Then 交 T02 得出规定分支，整体失败不变分不等于 invalid。
-- **验证/证据**：U/I/H；计数黄金样本、真实 AI 有界生成记录与逐题依据审阅、key 脱敏检查。**阻塞**：生成成功直接等同 ready，或依赖书源才能产生 R FLUENCY。
+- **交付/验证**：`lib/new-algorithm-r-fluency.ts` 校验恰好 100 个空白分隔词、目标词形至少 5 次、两道公开题与两条冻结私有答案/依据；通过 T03 的 D5 两次/8 秒持久 job 封装；注入式 evaluator 保留 invalid/uncertain/service_error，valid 才映射 T02 规则。专项 Jest 11/11、执行者报告全 Jest 10 suites/109 tests、`git diff --check` 通过。未配置或声称生产 AI；HTTP/计时/UI/恢复仍归 T09/T13，provider fixture 不构成真实内容质量验收。
 
 ### T09 · S3 · R 阅读、回看与计时
 
@@ -344,7 +344,7 @@ flowchart TD
   T06["T06 S2 提取材料评估 DONE"]
   T07["T07 S2 提取交互 IN_PROGRESS"]
   V02["V02 双轴提取"]
-  T08["T08 S3 R材料评估 IN_PROGRESS"]
+  T08["T08 S3 R材料评估 DONE"]
   T09["T09 S3 R计时交互"]
   T10["T10 S3 P材料评估 IN_PROGRESS"]
   T11["T11 S3 P计时交互"]

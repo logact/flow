@@ -267,7 +267,7 @@
     {
       "id": "T08",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T02",
         "T03",
@@ -280,14 +280,18 @@
       ],
       "owner": "/root/t08_r_fluency",
       "contract_version": null,
-      "source_revision": "44e306c",
+      "source_revision": "1e7699f",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-r-fluency.ts",
+        "test/new-algorithm-r-fluency.jest.test.cjs",
+        "test-report/new-algorithm/T08/r-fluency.md"
+      ],
       "expected": "生成并严格校验 R 流利短文和两道理解题，安全评估两题结果并映射 T02 结算",
-      "actual": "T02/T03/T04/T06 prerequisites are complete; T08 starts as an isolated R fluency material/evaluator module.",
+      "actual": "Isolated R material/evaluator validates exactly 100 whitespace-delimited words, at least five target-form occurrences, two public prompts and two frozen private answer/evidence entries. T03 D5-bounded persistent generation rejects invalid drafts; injected evaluator preserves invalid/uncertain/service_error and maps valid grading through T02 fluency score. Focused Jest 11/11 and diff check pass; full Jest was 10 suites/109 tests when T08 owner verified. TypeScript reports only the two pre-existing unrelated errors. No production provider, HTTP/timing/UI/recovery lifecycle is claimed.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement bounded material generation, exact word/target occurrence validation, private answer keys and R fluency judgment fixtures."
+      "next_action": "T09 implements R timing/read-back interaction; T13 owns HTTP dispatch, lifecycle and recovery integration."
     },
     {
       "id": "T09",
