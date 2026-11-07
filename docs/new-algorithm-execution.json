@@ -89,7 +89,7 @@
     {
       "id": "T03",
       "phase": "S1",
-      "status": "STALE",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T01"
@@ -99,21 +99,19 @@
         "D3",
         "D5"
       ],
-      "owner": "Codex",
-      "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
-      "working_tree_diff_hash": "c56668fc3c3f2efe08cd34aca872c871d4d40e162338892b7a2acaa5edcab88b",
-      "evidence": [
-        "test-report/new-algorithm/T03/partial.md"
-      ],
+      "owner": "/root/t03_import_materials",
+      "contract_version": "0.3",
+      "source_revision": "528bc13",
+      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evidence": [],
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
-      "actual": "新库原子导入、直接目标/初分校验、词义版本失效；临时库新增 2 项测试通过，正式 API 和材料作业尚未实现；该结果仅属旧规范，当前不可计入新版验收",
+      "actual": null,
       "blockers": [
-        "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现"
+        "O1 daily-capacity input and same-day time feasibility. Implement import/material scope without setting hidden admission defaults."
       ],
       "repair_attempts": 0,
-      "next_action": "待 T00/T01 新契约后重验 0/20/40/60 初分与首题、容量，再继续材料/API 管线",
-      "stale_reason": "导入雏形仍按直接初分与必做连接；须对词汇量/排名初分、跳档、按轴学习到期和扩展 schema 重验；材料/API 仍未实现",
+      "next_action": "独立 subagent 实现 rank 初分、gloss/材料与 API 的确定性范围；O1 容量准入路径保留为 BLOCKED，不标 DONE",
+      "stale_reason": null,
       "open_dependencies": [
         "O1"
       ]
