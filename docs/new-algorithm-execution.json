@@ -195,23 +195,24 @@
     {
       "id": "T06",
       "phase": "S2",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T02",
         "T03",
         "T04"
       ],
       "decision_dependencies": [],
-      "owner": null,
+      "owner": "/root/t06_retrieval_evaluator",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "608430d",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": null,
-      "actual": null,
+      "actual": "T02 score/settlement and T04 connection/choice service are available; isolated R/P retrieval grading and validated material contracts are being implemented.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Add R evaluator adapter outcomes and exact P normalization/allow-list checks for choice/cued/free; test malformed material fail-closed behavior.",
+      "stale_reason": null
     },
     {
       "id": "T07",
