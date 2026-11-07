@@ -151,7 +151,7 @@
     {
       "id": "T05",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T00",
         "T04"
@@ -159,14 +159,19 @@
       "decision_dependencies": [],
       "owner": "/root/t05_isolated_ui",
       "contract_version": null,
-      "source_revision": "608430d",
+      "source_revision": "4bad49f",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "app/new-algorithm/page.tsx",
+        "components/new-algorithm-task-view.tsx",
+        "test/new-algorithm-task-view.jest.test.cjs",
+        "test-report/new-algorithm/T05/isolated-ui.md"
+      ],
       "expected": "正式页面一次词级连接、R/P choice 交互与反馈",
-      "actual": "T04 isolated ENCODE/choice API is available; T05 is implementing the separate /new-algorithm UI without changing the legacy homepage.",
+      "actual": "An isolated /new-algorithm page calls only the new-algorithm task API. It renders ENCODE and choice, submits without client scoring, displays server delta/tick plus replay/errors, and preserves completed task axis/type after submission. Source-contract Jest 2/2 passes; diff check passes. No manual visual/browser evidence is claimed.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement accessible connection/choice renderer and submit/error feedback using only /api/new-algorithm/task; add focused tests.",
+      "next_action": "V01/V08 perform manual visual, responsive, keyboard/focus and end-to-end acceptance; T07 extends retrieval interactions.",
       "stale_reason": null
     },
     {

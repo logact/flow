@@ -43,7 +43,7 @@
 | T02 | DONE | 纯分数/复习规则与 SQLite 原子结算；容量预约按冻结 ID 单次消费、轴级投影、跨本地日结算与目标重算；专项 34 项通过 |
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
-| T05 | IN_PROGRESS | 独立 `/new-algorithm` 页面连接/choice renderer 开发中，不改旧首页 |
+| T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
 | T06 | IN_PROGRESS | 独立 R/P retrieval evaluator 与六条材料契约开发中 |
 | T07–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
@@ -151,7 +151,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 可用连接和 choice；When 并发 GET、双 POST、判分与事务失败；Then 同词只有一次连接并同时写双轴，choice 按当前轴分数签发，重复结算仅一次，反馈不丢失，公开 DTO/snapshot 不泄私有答案。
 - **完成证据**：HTTP 请求响应、DB/事件、并发轨迹和答案扫描。
 
-### T05 · S1 · 教学与选择题原型交互
+### T05 · S1 · 教学与选择题原型交互（DONE）
 
 - **依赖**：T00、T04。**文件**：独立 `/new-algorithm` 页面与新算法 renderer；不覆盖旧首页，T15 再评估路由切换。
 - **输入→输出**：一次词级连接与 R/P choice 的 C3 → 学完确认/选择 response、反馈与继续。
@@ -336,7 +336,7 @@ flowchart TD
   T02["T02 S1 连接与复习结算 DONE"]
   T03["T03 S1 导入与基础材料 DONE"]
   T04["T04 S1 隔离实例服务 DONE"]
-  T05["T05 S1 基础交互 IN_PROGRESS"]
+  T05["T05 S1 基础交互 DONE"]
   V01["V01 最小闭环"]
   T06["T06 S2 提取材料评估 IN_PROGRESS"]
   T07["T07 S2 提取交互"]
