@@ -131,16 +131,16 @@
         "D6",
         "D7"
       ],
-      "owner": "/root/t04_isolated_task_service",
+      "owner": "/root/t04_isolated_task_service_v2",
       "contract_version": null,
       "source_revision": "3159446",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式连接/choice 实例服务、冻结答案、幂等结算与按 due_at_a/共享冷却选学习候选；容量任务冻结 snapshot_json.capacity_reservation_id",
-      "actual": "T04 starts on the isolated new-algorithm runtime DB. Legacy task API and flow.db remain out of scope; exact reservation ID must be frozen in each task snapshot.",
+      "actual": "Previous owner confirmed the isolated DB/API boundary but produced no code or test evidence; shared tree remains clean for T04. Reassigned to a fresh dedicated owner.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement isolated connection/choice issue and submission routes, with DB-backed transaction and Jest evidence.",
+      "next_action": "Implement the isolated new-algorithm issue/submit service and focused Jest tests; do not touch legacy routes or flow.db.",
       "stale_reason": null
     },
     {
