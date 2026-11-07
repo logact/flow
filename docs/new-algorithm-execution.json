@@ -14,23 +14,23 @@
     {
       "id": "T00",
       "phase": "S0",
-      "status": "STALE",
+      "status": "IN_PROGRESS",
       "depends_on": [],
       "decision_dependencies": [],
-      "owner": "Codex",
-      "contract_version": "0.2",
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
-      "working_tree_diff_hash": "72a9f76b9f6c55ca14800556bbd022a3b84747df2b648faebacd47837c4dc2a4",
+      "owner": "/root/t00_contract_freeze",
+      "contract_version": "0.3",
+      "source_revision": "94a9728",
+      "working_tree_diff_hash": "dd3dca40eba25726e5c7a0ef808377cf3dd2eff751b9518e77d515c774d5218a",
       "evidence": [
         "test-report/new-algorithm/T00/baseline.md"
       ],
       "expected": "按现行 due_at_R/P、容量、词汇量估计初分与跳档、按需连接、独立轴复习/毕业规范冻结 C1–C7、决策和测试迁移清单",
       "actual": "契约 v0.2、用户授权的 D1–D8 原型决策、24 节点 DAG 台账、旧测试迁移清单；旧 DAG 8/8；该结果仅属旧规范，当前不可计入新版验收",
       "blockers": [
-        "v0.3 草案已记录 R/P 独立排期；仍须逐条审计 C1–C7、D1–D8 和测试映射后冻结"
+        "T00 证据由协调者复核，尚未提交最终状态"
       ],
       "repair_attempts": 0,
-      "next_action": "复核 v0.3 草案中 R/P 独立排期、容量和旧参数，冻结新契约",
+      "next_action": "协调者复核契约、决策台账、测试迁移映射；通过后提交 T00 交付与 DONE 状态",
       "stale_reason": "v0.3 草案已记录 R/P 独立排期；仍须逐条审计 C1–C7、D1–D8 和测试映射后冻结"
     },
     {
@@ -563,5 +563,5 @@
     }
   ],
   "current_algorithm_sha256": "6bb076a7713d03e4b6790e0cec868a97ebb30e131e697ad0d2fdb052d5dc3fb0",
-  "contract_status": "STALE: v0.3 draft records independent R/P due_at and review levels; T00 must audit and freeze all contracts, decisions, and test mapping"
+  "contract_status": "IN_PROGRESS: T00 audit complete; coordinator review and task commit pending"
 }
