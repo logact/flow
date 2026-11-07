@@ -62,29 +62,25 @@
     {
       "id": "T02",
       "phase": "S1",
-      "status": "STALE",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T00",
         "T01"
       ],
       "decision_dependencies": [],
-      "owner": "Codex",
-      "contract_version": "0.2",
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
-      "working_tree_diff_hash": "70f190c9d113aa691946c3354a8d56acf492b36b10c83eade6e27e3405c37d48",
-      "evidence": [
-        "test-report/new-algorithm/T02/partial.md",
-        "test-report/new-algorithm/scenarios.md",
-        "test-report/new-algorithm/memory.md"
-      ],
+      "owner": "/root/t02_score_settlement",
+      "contract_version": "0.3",
+      "source_revision": "e53e0a6",
+      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "evidence": [],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
-      "actual": "纯计分 5/5、独立新库 13/13、新版计分状态转移 14/14 个场景、23 次转移；正式调度派题另由 T04/T12 验证；该结果仅属旧规范，当前不可计入新版验收",
+      "actual": null,
       "blockers": [
-        "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写"
+        "O2 conditional reservation and target-change policy; O3 post-review schedule date anchor. Implement confirmed score/connection scope only."
       ],
       "repair_attempts": 0,
-      "next_action": "按轴重写连接/FLUENCY 达标证据/1-3-7-30 复习与容量预约纯函数和原子结算测试",
-      "stale_reason": "旧结算将 ENCODE 只写单轴，仍增强 H；缺轴级学习完成、独立复习退级/毕业和 due_at_R/P/容量原子回写",
+      "next_action": "独立 subagent 实现纯计分和双轴连接结算；未决排期语义保持 BLOCKED，不标 DONE",
+      "stale_reason": null,
       "open_dependencies": [
         "O2",
         "O3"
