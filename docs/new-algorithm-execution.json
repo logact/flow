@@ -31,7 +31,7 @@
       "actual": "冻结现行规范明确的 C1–C7 与 D1–D8 适用状态；旧测试逐项映射为新版承接项或 STALE；O1–O3 明列未决边界、受影响节点和解锁条件。场景草稿明确为未整体确认且未执行。文档检查通过；未运行测试。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "T00 完成；T01 是当前唯一无未决实现边界门禁的 READY 节点",
+      "next_action": "O1–O3 原型默认值已由用户确认；后续节点按更新后的契约继续实现。",
       "stale_reason": null
     },
     {
@@ -81,17 +81,11 @@
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
       "actual": "当前确定性子范围已实现：新分档、R/P提取与FLUENCY公式、移除D2半衰期增强、双0词连接纯函数及settlement中axis=both双轴初始化/目标轴学习完成投影。协调者在集成树运行Jest 16/16通过。完整原子排期回写、DB settlement测试和due/review/预约更新未完成。npx tsc --noEmit 仍只报告既有 app/score-history/page.tsx:57 与 lib/manual-test-fixtures.ts:183 错误。",
       "blockers": [
-        "O2：条件预约与目标变更策略未决，不能完成相应原子回写验收",
-        "O3：有效未通过/逾期成功后的due日期锚点未决",
-        "当前 settlement 代码缺少 DB 状态回写测试；T02 不能 DONE"
+        "部分分数/连接核心已提交；剩余 schema v2 原子 settlement、复习级别/due/容量预约回写和 DB 状态测试尚未完成。"
       ],
       "repair_attempts": 0,
-      "next_action": "待 O2/O3 选择明确后，由新的独立 subagent 完成原子排期结算、schema v2 DB 前后快照与回滚测试，再复核集成链。",
-      "stale_reason": null,
-      "open_dependencies": [
-        "O2",
-        "O3"
-      ]
+      "next_action": "按已确认 O2/O3 由新的独立 subagent 完成原子复习结算与跨日/逾期/预约测试。",
+      "stale_reason": null
     },
     {
       "id": "T03",
@@ -119,16 +113,12 @@
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
       "actual": "V/rank初分映射、显式时区导入、缺省容量gate fail-closed、0/0未引入与due-now状态、gloss变更失效、D5有限材料生成helper已实现。独立T03 Jest 11/11通过；集成T01/T02/T03共32/32通过。npx tsc --noEmit 仅有既知 score-history/page.tsx:57 和 manual-test-fixtures.ts:183 错误，没有T03新增错误。",
       "blockers": [
-        "O1：每日容量输入与同日时间可行性策略未决，正式容量准入未实现",
-        "goals API/page未接入新导入",
-        "材料job尚无持久化worker与ready材料查询/签发链"
+        "正式 goals API/page 接入尚未完成。",
+        "材料 job 持久化 worker 与 ready-material 查询/签发链尚未完成。"
       ],
       "repair_attempts": 0,
-      "next_action": "O1明确后，由新的独立subagent完成容量准入；另补正式goals API/page和材料job持久化/ready查询，跑T03集成验收再标DONE。",
-      "stale_reason": null,
-      "open_dependencies": [
-        "O1"
-      ]
+      "next_action": "由新的独立 subagent 完成正式 goals API/page、持久化材料 job 与 ready 查询，再验收导入闭环。",
+      "stale_reason": null
     },
     {
       "id": "T04",
@@ -195,10 +185,7 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点",
-      "open_dependencies": [
-        "O1"
-      ]
+      "next_action": "核对依赖与产品决策后领取节点"
     },
     {
       "id": "T06",
@@ -422,12 +409,7 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点",
-      "open_dependencies": [
-        "O1",
-        "O2",
-        "O3"
-      ]
+      "next_action": "核对依赖与产品决策后领取节点"
     },
     {
       "id": "T13",
@@ -455,12 +437,7 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点",
-      "open_dependencies": [
-        "O1",
-        "O2",
-        "O3"
-      ]
+      "next_action": "核对依赖与产品决策后领取节点"
     },
     {
       "id": "V05",
@@ -482,12 +459,7 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点",
-      "open_dependencies": [
-        "O1",
-        "O2",
-        "O3"
-      ]
+      "next_action": "核对依赖与产品决策后领取节点"
     },
     {
       "id": "V06",
@@ -593,12 +565,9 @@
       "actual": null,
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点",
-      "open_dependencies": [
-        "O1"
-      ]
+      "next_action": "核对依赖与产品决策后领取节点"
     }
   ],
   "current_algorithm_sha256": "6bb076a7713d03e4b6790e0cec868a97ebb30e131e697ad0d2fdb052d5dc3fb0",
-  "contract_status": "FROZEN_FOR_CONFIRMED_RULES: v0.3; OPEN O1–O3 gate affected node scopes as listed"
+  "contract_status": "FROZEN_FOR_IMPLEMENTATION: v0.3; user-confirmed prototype defaults O1–O3 are recorded"
 }
