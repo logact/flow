@@ -102,7 +102,7 @@
       ],
       "owner": "/root/t03_goals_pipeline",
       "contract_version": "0.3",
-      "source_revision": "d8708c1",
+      "source_revision": "f6ddb31",
       "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "evidence": [
         "lib/new-algorithm-import.ts",
@@ -111,12 +111,10 @@
         "test-report/new-algorithm/T03/import-materials.md"
       ],
       "expected": "词汇量 V/可比排名 rank 估计初分、按需连接和对应首题材料、正式 API 作业链",
-      "actual": "V/rank初分映射、显式时区导入、缺省容量gate fail-closed、0/0未引入与due-now状态、gloss变更失效、D5有限材料生成helper已实现。独立T03 Jest 11/11通过；集成T01/T02/T03共32/32通过。npx tsc --noEmit 仅有既知 score-history/page.tsx:57 和 manual-test-fixtures.ts:183 错误，没有T03新增错误。",
-      "blockers": [
-        "T01 schema v3 扩展前，不能把 3/5/7/9 任务数原子预留到 daily capacity。"
-      ],
+      "actual": "Import, daily availability gate, goals API/page, isolated runtime DB and material-ready lookup are implemented in the shared worktree. Schema v3 is now available; atomic 3/5/7/9 task-count reservation is resumed.",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "新的独立 subagent 按用户确认 O1 接入容量/本地时间窗 gate、正式 goals API/page 和持久化材料 job/ready 查询。",
+      "next_action": "Complete transactional introduction admission with capacity accounting and rollback/concurrency tests; then coordinator reviews and commits T03.",
       "stale_reason": null
     },
     {
