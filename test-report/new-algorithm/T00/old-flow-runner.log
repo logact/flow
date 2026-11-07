@@ -1,0 +1,246 @@
+TAP version 13
+# Subtest: glossless imports remain blank; AI suggestion is not saved until explicitly confirmed
+ok 1 - glossless imports remain blank; AI suggestion is not saved until explicitly confirmed
+  ---
+  duration_ms: 51.635
+  type: 'test'
+  ...
+# Subtest: glossless new word receives P first, and stale/malformed R cannot pass with an empty expected gloss
+ok 2 - glossless new word receives P first, and stale/malformed R cannot pass with an empty expected gloss
+  ---
+  duration_ms: 9.001
+  type: 'test'
+  ...
+# Subtest: server accepts AI-confirmed R synonym and rejects a wrong meaning
+ok 3 - server accepts AI-confirmed R synonym and rejects a wrong meaning
+  ---
+  duration_ms: 33.665
+  type: 'test'
+  ...
+# Subtest: AI failure fails closed without committing the R attempt
+ok 4 - AI failure fails closed without committing the R attempt
+  ---
+  duration_ms: 9.2035
+  type: 'test'
+  ...
+# Subtest: malformed AI verdict fails closed and preserves the R instance
+ok 5 - malformed AI verdict fails closed and preserves the R instance
+  ---
+  duration_ms: 6.289917
+  type: 'test'
+  ...
+# Subtest: gloss editor clearly distinguishes uncommitted AI suggestions from saved meanings
+ok 6 - gloss editor clearly distinguishes uncommitted AI suggestions from saved meanings
+  ---
+  duration_ms: 0.596625
+  type: 'test'
+  ...
+# Subtest: P FLUENCY uses server AI for coherence, grammar, and meaning; client verdict is ignored
+ok 7 - P FLUENCY uses server AI for coherence, grammar, and meaning; client verdict is ignored
+  ---
+  duration_ms: 52.701625
+  type: 'test'
+  ...
+# Subtest: P INTEGRATE requires every target verdict and updates only integrated_p
+ok 8 - P INTEGRATE requires every target verdict and updates only integrated_p
+  ---
+  duration_ms: 9.533333
+  type: 'test'
+  ...
+# Subtest: incorrect grammar, semantics, missing targets, and irrelevant repetition cannot pass P FLUENCY
+    # Subtest: grammar
+    ok 1 - grammar
+      ---
+      duration_ms: 7.158375
+      type: 'test'
+      ...
+    # Subtest: coherence
+    ok 2 - coherence
+      ---
+      duration_ms: 10.683875
+      type: 'test'
+      ...
+    # Subtest: wrong target meaning
+    ok 3 - wrong target meaning
+      ---
+      duration_ms: 9.0335
+      type: 'test'
+      ...
+    # Subtest: missing target use
+    ok 4 - missing target use
+      ---
+      duration_ms: 3.4465
+      type: 'test'
+      ...
+    # Subtest: irrelevant repetition
+    ok 5 - irrelevant repetition
+      ---
+      duration_ms: 2.986167
+      type: 'test'
+      ...
+    1..5
+ok 9 - incorrect grammar, semantics, missing targets, and irrelevant repetition cannot pass P FLUENCY
+  ---
+  duration_ms: 33.964208
+  type: 'test'
+  ...
+# Subtest: 29 words are rejected without asking the model
+ok 10 - 29 words are rejected without asking the model
+  ---
+  duration_ms: 2.387875
+  type: 'test'
+  ...
+# Subtest: missing gloss blocks P continuous tasks but keeps P retrieval available and records the gap
+ok 11 - missing gloss blocks P continuous tasks but keeps P retrieval available and records the gap
+  ---
+  duration_ms: 1.436292
+  type: 'test'
+  ...
+# Subtest: provider failure or malformed verdict fails closed and leaves the P instance active
+    # Subtest: provider failure
+    ok 1 - provider failure
+      ---
+      duration_ms: 7.3985
+      type: 'test'
+      ...
+    # Subtest: schema mismatch
+    ok 2 - schema mismatch
+      ---
+      duration_ms: 5.696416
+      type: 'test'
+      ...
+    1..2
+ok 12 - provider failure or malformed verdict fails closed and leaves the P instance active
+  ---
+  duration_ms: 13.31125
+  type: 'test'
+  ...
+# Subtest: blank-gloss P batch cannot issue INTEGRATE and surfaces integrate gap
+ok 13 - blank-gloss P batch cannot issue INTEGRATE and surfaces integrate gap
+  ---
+  duration_ms: 5.754
+  type: 'test'
+  ...
+# Subtest: R FLUENCY issues an AI-keyed passage question and only the server key is persisted
+ok 14 - R FLUENCY issues an AI-keyed passage question and only the server key is persisted
+  ---
+  duration_ms: 56.074083
+  type: 'test'
+  ...
+# Subtest: wrong comprehension cannot certify R FLUENCY; P state stays isolated
+ok 15 - wrong comprehension cannot certify R FLUENCY; P state stays isolated
+  ---
+  duration_ms: 11.211833
+  type: 'test'
+  ...
+# Subtest: R INTEGRATE is scheduler-reachable with a same-source passage covering every target
+ok 16 - R INTEGRATE is scheduler-reachable with a same-source passage covering every target
+  ---
+  duration_ms: 15.839542
+  type: 'test'
+  ...
+# Subtest: missing batch target or gloss never unlocks R INTEGRATE
+ok 17 - missing batch target or gloss never unlocks R INTEGRATE
+  ---
+  duration_ms: 21.742083
+  type: 'test'
+  ...
+# Subtest: malformed AI question fails closed to R retrieval and records the missing-material gap
+ok 18 - malformed AI question fails closed to R retrieval and records the missing-material gap
+  ---
+  duration_ms: 4.789666
+  type: 'test'
+  ...
+# Subtest: concurrent GETs converge on one completely keyed issued instance
+ok 19 - concurrent GETs converge on one completely keyed issued instance
+  ---
+  duration_ms: 25.250375
+  type: 'test'
+  ...
+# Subtest: analytics groups evidence by task dimensions and reports rates/speed distribution
+ok 20 - analytics groups evidence by task dimensions and reports rates/speed distribution
+  ---
+  duration_ms: 24.827834
+  type: 'test'
+  ...
+# Subtest: page exit telemetry is idempotent, dimensioned, and contains no response text
+ok 21 - page exit telemetry is idempotent, dimensioned, and contains no response text
+  ---
+  duration_ms: 2.403416
+  type: 'test'
+  ...
+# Subtest: explicit skip is idempotent, terminal, lifecycle-exclusive, and leaves learning state unchanged
+ok 22 - explicit skip is idempotent, terminal, lifecycle-exclusive, and leaves learning state unchanged
+  ---
+  duration_ms: 8.86475
+  type: 'test'
+  ...
+# Subtest: submitted cannot skip, while an issued page-exit can later be explicitly skipped
+ok 23 - submitted cannot skip, while an issued page-exit can later be explicitly skipped
+  ---
+  duration_ms: 2.220709
+  type: 'test'
+  ...
+# Subtest: legacy task_instances CHECK constraint migrates without losing an issued row
+ok 24 - legacy task_instances CHECK constraint migrates without losing an issued row
+  ---
+  duration_ms: 8.051333
+  type: 'test'
+  ...
+# Subtest: import → first verified task → refresh resume → duplicate submit → review recheck
+ok 25 - import → first verified task → refresh resume → duplicate submit → review recheck
+  ---
+  duration_ms: 35.318084
+  type: 'test'
+  ...
+# Subtest: swipe before confirmed feedback is ignored; retry keeps the mounted answer
+ok 26 - swipe before confirmed feedback is ignored; retry keeps the mounted answer
+  ---
+  duration_ms: 1.085792
+  type: 'test'
+  ...
+# Subtest: responsive task flow keeps long reading material scrollable and readable
+ok 27 - responsive task flow keeps long reading material scrollable and readable
+  ---
+  duration_ms: 0.452125
+  type: 'test'
+  ...
+# Subtest: keyboard shortcuts distinguish short answers from multiline writing
+ok 28 - keyboard shortcuts distinguish short answers from multiline writing
+  ---
+  duration_ms: 0.111375
+  type: 'test'
+  ...
+# Subtest: book source topic is AI-tagged, persisted, and admits a matching passage in the scheduler flow
+ok 29 - book source topic is AI-tagged, persisted, and admits a matching passage in the scheduler flow
+  ---
+  duration_ms: 47.302792
+  type: 'test'
+  ...
+# Subtest: topic mismatch blocks R continuous issue but keeps ordinary R retrieval and records the gap
+ok 30 - topic mismatch blocks R continuous issue but keeps ordinary R retrieval and records the gap
+  ---
+  duration_ms: 18.552709
+  type: 'test'
+  ...
+# Subtest: topic recognition failure is an explicit gap and does not block R retrieval
+ok 31 - topic recognition failure is an explicit gap and does not block R retrieval
+  ---
+  duration_ms: 12.911625
+  type: 'test'
+  ...
+# Subtest: legacy source without topic terms is tagged once when a book goal is created
+ok 32 - legacy source without topic terms is tagged once when a book goal is created
+  ---
+  duration_ms: 8.490459
+  type: 'test'
+  ...
+1..32
+# tests 39
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 233.139167

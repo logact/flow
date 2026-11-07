@@ -1,0 +1,546 @@
+{
+  "schema_version": 1,
+  "algorithm_source": "docs/algorithm.md",
+  "contract_version": "0.2",
+  "nodes": [
+    {
+      "id": "T00",
+      "phase": "S0",
+      "status": "DONE",
+      "depends_on": [],
+      "decision_dependencies": [],
+      "owner": "Codex",
+      "contract_version": "0.2",
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": "72a9f76b9f6c55ca14800556bbd022a3b84747df2b648faebacd47837c4dc2a4",
+      "evidence": [
+        "test-report/new-algorithm/T00/baseline.md"
+      ],
+      "expected": "C1–C7、状态转移、D1–D8、旧测试迁移清单和可复现 runner",
+      "actual": "契约 v0.2、用户授权的 D1–D8 原型决策、24 节点 DAG 台账、旧测试迁移清单；旧 DAG 8/8",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "T01 新 schema 与测试工厂"
+    },
+    {
+      "id": "T01",
+      "phase": "S1",
+      "status": "DONE",
+      "depends_on": [
+        "T00"
+      ],
+      "decision_dependencies": [],
+      "owner": "Codex",
+      "contract_version": "0.2",
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": "6c1b2adb5fbc217511bb8c404628b1475e7129d156b25cd35b18c53d73b6b1be",
+      "evidence": [
+        "test-report/new-algorithm/T01/schema.md",
+        "test-report/new-algorithm/T01/schema.sql"
+      ],
+      "expected": "独立版本 schema、临时库夹具、初始化幂等、唯一约束与事务回滚",
+      "actual": "独立 schema v1 与可控夹具；新库测试 5/5，含版本拒绝、材料外键、单活跃实例、冻结作答、事件去重和回滚",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "T02 原子回写完整分支验证"
+    },
+    {
+      "id": "T02",
+      "phase": "S1",
+      "status": "DONE",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "decision_dependencies": [
+        "D2"
+      ],
+      "owner": "Codex",
+      "contract_version": "0.2",
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": "70f190c9d113aa691946c3354a8d56acf492b36b10c83eade6e27e3405c37d48",
+      "evidence": [
+        "test-report/new-algorithm/T02/partial.md"
+      ],
+      "expected": "唯一分档、全部分数表及 D2 单轴原子结算；失败回滚、无效不变和幂等",
+      "actual": "纯函数 5/5；临时库结算 7 项并随 DB runner 11/11；正式服务接入留给 T04",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "T03 材料与导入后由 T04 接入正式服务"
+    },
+    {
+      "id": "T03",
+      "phase": "S1",
+      "status": "IN_PROGRESS",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "decision_dependencies": [
+        "D1",
+        "D3",
+        "D5"
+      ],
+      "owner": "Codex",
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": "c56668fc3c3f2efe08cd34aca872c871d4d40e162338892b7a2acaa5edcab88b",
+      "evidence": [
+        "test-report/new-algorithm/T03/partial.md"
+      ],
+      "expected": "原子导入、已确认 gloss 和 ENCODE/choice 版本材料管线",
+      "actual": "新库原子导入、直接目标/初分校验、词义版本失效；临时库新增 2 项测试通过，正式 API 和材料作业尚未实现",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "实现 ENCODE/choice 材料仓储、生成校验与有界后台作业，再接 goals API/page"
+    },
+    {
+      "id": "T04",
+      "phase": "S1",
+      "status": "TODO",
+      "depends_on": [
+        "T01",
+        "T02",
+        "T03"
+      ],
+      "decision_dependencies": [
+        "D2",
+        "D6",
+        "D7"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T05",
+      "phase": "S1",
+      "status": "TODO",
+      "depends_on": [
+        "T00",
+        "T04"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V01",
+      "phase": "S1",
+      "status": "TODO",
+      "depends_on": [
+        "T01",
+        "T02",
+        "T03",
+        "T04",
+        "T05"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T06",
+      "phase": "S2",
+      "status": "TODO",
+      "depends_on": [
+        "T02",
+        "T03",
+        "T04"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T07",
+      "phase": "S2",
+      "status": "TODO",
+      "depends_on": [
+        "T05",
+        "T06"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V02",
+      "phase": "S2",
+      "status": "TODO",
+      "depends_on": [
+        "V01",
+        "T06",
+        "T07"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T08",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "T02",
+        "T03",
+        "T04",
+        "T06"
+      ],
+      "decision_dependencies": [
+        "D3",
+        "D5"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T09",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "T05",
+        "T08"
+      ],
+      "decision_dependencies": [
+        "D4"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T10",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "T02",
+        "T03",
+        "T04",
+        "T06"
+      ],
+      "decision_dependencies": [
+        "D3",
+        "D5",
+        "D8"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T11",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "T05",
+        "T10"
+      ],
+      "decision_dependencies": [
+        "D4"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V03",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "V02",
+        "T08",
+        "T09"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V04",
+      "phase": "S3",
+      "status": "TODO",
+      "depends_on": [
+        "V02",
+        "T10",
+        "T11"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T12",
+      "phase": "S4",
+      "status": "TODO",
+      "depends_on": [
+        "T02",
+        "T03",
+        "T04",
+        "T06"
+      ],
+      "decision_dependencies": [
+        "D5",
+        "D7"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T13",
+      "phase": "S4",
+      "status": "TODO",
+      "depends_on": [
+        "T04",
+        "T07",
+        "T09",
+        "T11",
+        "T12"
+      ],
+      "decision_dependencies": [
+        "D4",
+        "D5",
+        "D6",
+        "D8"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V05",
+      "phase": "S4",
+      "status": "TODO",
+      "depends_on": [
+        "V03",
+        "V04",
+        "T12",
+        "T13"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V06",
+      "phase": "S4",
+      "status": "TODO",
+      "depends_on": [
+        "V05",
+        "T13"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T14",
+      "phase": "S5",
+      "status": "TODO",
+      "depends_on": [
+        "T13",
+        "V05",
+        "V06"
+      ],
+      "decision_dependencies": [
+        "D8"
+      ],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V07",
+      "phase": "S5",
+      "status": "TODO",
+      "depends_on": [
+        "T14"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "T15",
+      "phase": "S5",
+      "status": "TODO",
+      "depends_on": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "V07"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    },
+    {
+      "id": "V08",
+      "phase": "S5",
+      "status": "TODO",
+      "depends_on": [
+        "T15"
+      ],
+      "decision_dependencies": [],
+      "owner": null,
+      "contract_version": null,
+      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": null,
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "核对依赖与产品决策后领取节点"
+    }
+  ]
+}
