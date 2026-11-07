@@ -62,7 +62,7 @@
     {
       "id": "T02",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "depends_on": [
         "T00",
         "T01"
@@ -71,15 +71,22 @@
       "owner": "/root/t02_score_settlement",
       "contract_version": "0.3",
       "source_revision": "e53e0a6",
-      "working_tree_diff_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "evidence": [],
+      "working_tree_diff_hash": "7b7265db1309fa4224f277e806aebb2efb7d235fd142be439c50ec2db501da73",
+      "evidence": [
+        "lib/new-algorithm-score.ts",
+        "lib/new-algorithm-settlement.ts",
+        "test/new-algorithm-score.jest.test.cjs",
+        "test-report/new-algorithm/T02/partial.md"
+      ],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
-      "actual": null,
+      "actual": "当前确定性子范围已实现：新分档、R/P提取与FLUENCY公式、移除D2半衰期增强、双0词连接纯函数及settlement中axis=both双轴初始化/目标轴学习完成投影。协调者在集成树运行Jest 16/16通过。完整原子排期回写、DB settlement测试和due/review/预约更新未完成。npx tsc --noEmit 仍只报告既有 app/score-history/page.tsx:57 与 lib/manual-test-fixtures.ts:183 错误。",
       "blockers": [
-        "O2 conditional reservation and target-change policy; O3 post-review schedule date anchor. Implement confirmed score/connection scope only."
+        "O2：条件预约与目标变更策略未决，不能完成相应原子回写验收",
+        "O3：有效未通过/逾期成功后的due日期锚点未决",
+        "当前 settlement 代码缺少 DB 状态回写测试；T02 不能 DONE"
       ],
       "repair_attempts": 0,
-      "next_action": "独立 subagent 实现纯计分和双轴连接结算；未决排期语义保持 BLOCKED，不标 DONE",
+      "next_action": "待 O2/O3 选择明确后，由新的独立 subagent 完成原子排期结算、schema v2 DB 前后快照与回滚测试，再复核集成链。",
       "stale_reason": null,
       "open_dependencies": [
         "O2",

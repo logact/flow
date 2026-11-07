@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
-import { enhancedHalfLife, fluencyScore, retrievalScore, type FluencyResult } from './new-algorithm-score';
+import { connectionScores, fluencyScore, retrievalScore, type FluencyResult } from './new-algorithm-score';
 
-type Instance = { instance_id:string; word_id:number; axis:'r'|'p'; type:'ENCODE'|'RETRIEVE'|'FLUENCY'; stage:'encode'|'choice'|'cued'|'free'|'fluency'; score_before:number; status:string; material_id:string; material_version:number };
+type Instance = { instance_id:string; word_id:number; axis:'r'|'p'|'both'; type:'ENCODE'|'RETRIEVE'|'FLUENCY'; stage:'encode'|'choice'|'cued'|'free'|'fluency'; score_before:number; status:string; material_id:string; material_version:number };
 type Attempt = { attempt_id:string; instance_id:string; status:string; exposure_json:string };
 export type Judgment = { kind:'encode' } | { kind:'retrieval'; passed:boolean } | { kind:'fluency'; result:FluencyResult };
 export type Settlement = { status:'completed'; scoreBefore:number; scoreAfter:number; tick:number; replay:boolean } | { status:'grading_retry'; replay:boolean };
@@ -23,9 +23,12 @@ export function settleNewAlgorithmAttempt(db: Database.Database, input: {instanc
     const exposure = JSON.parse(attempt.exposure_json) as {target_seen?:unknown};
     if (input.exposedBeforeFeedback && exposure.target_seen !== true) throw new Error('Target exposure lacks frozen evidence');
     let scoreAfter: number;
-    if (instance.type === 'ENCODE' && instance.stage === 'encode' && input.judgment.kind === 'encode') scoreAfter = 5;
+    let scoreBefore = instance.score_before;
+    let targetAxis: 'r'|'p'|'both' = instance.axis;
+    if (instance.type === 'ENCODE' && instance.stage === 'encode' && instance.axis === 'both' && input.judgment.kind === 'encode') scoreAfter = 5;
     else if (instance.type === 'RETRIEVE' && ['choice','cued','free'].includes(instance.stage) && input.judgment.kind === 'retrieval') scoreAfter = retrievalScore(instance.stage as 'choice'|'cued'|'free',input.judgment.passed);
     else if (instance.type === 'FLUENCY' && instance.stage === 'fluency' && input.judgment.kind === 'fluency') {
+      if (instance.axis === 'both') throw new Error('FLUENCY must target one axis');
       const outcome = fluencyScore(instance.axis,instance.score_before,input.judgment.result);
       if (input.judgment.result.kind !== 'valid') {
         db.prepare("UPDATE task_instances SET status='grading_retry' WHERE instance_id=?").run(input.instanceId);
@@ -36,34 +39,32 @@ export function settleNewAlgorithmAttempt(db: Database.Database, input: {instanc
       scoreAfter = outcome.score;
     } else throw new Error('Judgment does not match instance');
     const axis = instance.axis;
-    const word = db.prepare(`SELECT score_${axis} AS score,half_life_${axis} AS half_life FROM words WHERE id=?`).get(instance.word_id) as {score:number;half_life:number}|undefined;
-    if (!word || word.score !== instance.score_before) throw new Error('Score changed after issue');
+    let word: {score_r:number;score_p:number;target_r:number;target_p:number;introduced:number}|undefined;
+    if (axis === 'both') {
+      word = db.prepare('SELECT score_r,score_p,target_r,target_p,introduced FROM words WHERE id=?').get(instance.word_id) as typeof word;
+      if (!word || word.score_r !== 0 || word.score_p !== 0 || word.introduced !== 0) throw new Error('Connection is only valid for an unintroduced double-zero word');
+      scoreBefore = 0;
+    } else {
+      word = db.prepare(`SELECT score_${axis} AS score_r,score_p,target_r,target_p,introduced FROM words WHERE id=?`).get(instance.word_id) as typeof word;
+      if (!word || word[`score_${axis}`] !== instance.score_before) throw new Error('Score changed after issue');
+    }
     const global = db.prepare("SELECT value FROM meta WHERE key='global_tick'").get() as {value:string};
     const tick = Number(global.value) + 1;
     if (!Number.isSafeInteger(tick)) throw new Error('Invalid global tick');
-    db.prepare(`UPDATE words SET score_${axis}=?,observation_${axis}=CASE WHEN ?='ENCODE' THEN observation_${axis} ELSE 1 END,half_life_${axis}=?,last_ts_${axis}=?,last_ts_any=?,last_tick_any=?,introduced=1 WHERE id=?`).run(scoreAfter,instance.type,input.exposedBeforeFeedback ? enhancedHalfLife(word.half_life) : word.half_life,input.now,input.now,tick,instance.word_id);
+    if (axis === 'both') {
+      const connection = connectionScores(word!.score_r, word!.score_p, true);
+      db.prepare('UPDATE words SET score_r=?,score_p=?,introduced=1,last_ts_any=?,last_tick_any=? WHERE id=?').run(connection.scoreR,connection.scoreP,input.now,tick,instance.word_id);
+      scoreAfter = connection.scoreR;
+      targetAxis = 'both';
+    } else {
+      const fluencyPass = instance.type === 'FLUENCY' && input.judgment.kind === 'fluency' && input.judgment.result.kind === 'valid' && scoreAfter >= word![`target_${axis}`];
+      db.prepare(`UPDATE words SET score_${axis}=?,fluency_pass_${axis}=CASE WHEN ? THEN 1 WHEN ? < target_${axis} THEN 0 ELSE fluency_pass_${axis} END,learning_complete_${axis}=CASE WHEN ? >= target_${axis} AND (fluency_pass_${axis}=1 OR ?) THEN 1 ELSE 0 END,last_ts_any=?,last_tick_any=?,introduced=1 WHERE id=?`).run(scoreAfter,fluencyPass ? 1 : 0,scoreAfter,scoreAfter,fluencyPass ? 1 : 0,input.now,tick,instance.word_id);
+    }
     db.prepare("UPDATE meta SET value=? WHERE key='global_tick'").run(String(tick));
     db.prepare("UPDATE task_instances SET status='completed',terminal_at=? WHERE instance_id=?").run(input.now,input.instanceId);
     db.prepare("UPDATE attempts SET status='completed' WHERE attempt_id=?").run(input.attemptId);
-    const payload = {score_before:instance.score_before,score_after:scoreAfter,tick,exposed_before_feedback:input.exposedBeforeFeedback,material_id:instance.material_id,material_version:instance.material_version};
-    db.prepare('INSERT INTO events(event_id,dedupe_key,event_type,instance_id,attempt_id,word_id,axis,ts,payload_json) VALUES(?,?,?,?,?,?,?,?,?)').run(`completed:${input.instanceId}`,`completed:${input.instanceId}`,'completed',input.instanceId,input.attemptId,instance.word_id,axis,input.now,JSON.stringify(payload));
-    return {status:'completed',scoreBefore:instance.score_before,scoreAfter,tick,replay:false};
-  })();
-}
-
-/** Records the first visible feedback exposure for a completed task. Reopening is idempotent. */
-export function recordFeedbackExposure(db: Database.Database, input: {instanceId:string; now:number}): boolean {
-  return db.transaction(() => {
-    const instance = db.prepare('SELECT instance_id,word_id,axis,status FROM task_instances WHERE instance_id=?').get(input.instanceId) as Pick<Instance,'instance_id'|'word_id'|'axis'|'status'>|undefined;
-    if (!instance || instance.status !== 'completed') throw new Error('Only a completed instance can expose feedback');
-    const completed = db.prepare("SELECT payload_json FROM events WHERE dedupe_key=?").get(`completed:${input.instanceId}`) as {payload_json:string}|undefined;
-    if (!completed) throw new Error('Completed instance lacks event');
-    if (JSON.parse(completed.payload_json).exposed_before_feedback) return false;
-    if (db.prepare('SELECT 1 FROM events WHERE dedupe_key=?').get(`feedback_exposure:${input.instanceId}`)) return false;
-    const axis = instance.axis;
-    const word = db.prepare(`SELECT half_life_${axis} AS half_life FROM words WHERE id=?`).get(instance.word_id) as {half_life:number};
-    db.prepare(`UPDATE words SET half_life_${axis}=? WHERE id=?`).run(enhancedHalfLife(word.half_life),instance.word_id);
-    db.prepare('INSERT INTO events(event_id,dedupe_key,event_type,instance_id,word_id,axis,ts,payload_json) VALUES(?,?,?,?,?,?,?,?)').run(`feedback_exposure:${input.instanceId}`,`feedback_exposure:${input.instanceId}`,'feedback_exposure',input.instanceId,instance.word_id,axis,input.now,JSON.stringify({half_life_before:word.half_life,half_life_after:enhancedHalfLife(word.half_life)}));
-    return true;
+    const payload = {score_before:scoreBefore,score_after:scoreAfter,tick,material_id:instance.material_id,material_version:instance.material_version};
+    db.prepare('INSERT INTO events(event_id,dedupe_key,event_type,instance_id,attempt_id,word_id,axis,ts,payload_json) VALUES(?,?,?,?,?,?,?,?,?)').run(`completed:${input.instanceId}`,`completed:${input.instanceId}`,'completed',input.instanceId,input.attemptId,instance.word_id,targetAxis,input.now,JSON.stringify(payload));
+    return {status:'completed',scoreBefore,scoreAfter,tick,replay:false};
   })();
 }

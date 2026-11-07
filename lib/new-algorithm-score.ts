@@ -4,27 +4,37 @@ export type Stage = 'encode' | 'choice' | 'cued' | 'free' | 'fluency';
 
 export function stageForScore(score: number): Stage {
   if (!Number.isFinite(score) || score < 0 || score > 100) throw new RangeError('score must be in [0, 100]');
-  if (score === 0) return 'encode';
   if (score < 20) return 'choice';
   if (score < 40) return 'cued';
   if (score < 60) return 'free';
   return 'fluency';
 }
 
-export function encodeScore(completed: boolean): number {
-  return completed ? 5 : 0;
+export function needsConnection(scoreR: number, scoreP: number, introduced: boolean): boolean {
+  validateScore(scoreR);
+  validateScore(scoreP);
+  return !introduced && scoreR === 0 && scoreP === 0;
+}
+
+function validateScore(score: number): void {
+  if (!Number.isFinite(score) || score < 0 || score > 100) throw new RangeError('score must be in [0, 100]');
+}
+
+export type ConnectionOutcome = { scoreR: number; scoreP: number; tickDelta: 0 | 1 };
+
+/** The one word-level connection initializes a double-zero word once. */
+export function connectionScores(scoreR: number, scoreP: number, completed: boolean): ConnectionOutcome {
+  validateScore(scoreR);
+  validateScore(scoreP);
+  if (!completed) return { scoreR, scoreP, tickDelta: 0 };
+  if (scoreR !== 0 || scoreP !== 0) throw new Error('Connection is valid only before a double-zero word is introduced');
+  return { scoreR: Math.max(scoreR, 5), scoreP: Math.max(scoreP, 5), tickDelta: 1 };
 }
 
 export function retrievalScore(stage: 'choice' | 'cued' | 'free', passed: boolean): number {
   if (stage === 'choice') return passed ? 20 : 5;
   if (stage === 'cued') return passed ? 40 : 5;
   return passed ? 60 : 20;
-}
-
-/** D2 prototype parameter. Call only for a completed, evidenced target-word exposure. */
-export function enhancedHalfLife(beforeMs: number): number {
-  if (!Number.isFinite(beforeMs) || beforeMs <= 0) throw new RangeError('half-life must be positive');
-  return beforeMs * 1.5;
 }
 
 export type FluencyResult =
