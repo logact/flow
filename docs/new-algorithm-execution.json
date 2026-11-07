@@ -121,7 +121,7 @@
     {
       "id": "T04",
       "phase": "S1",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T01",
         "T02",
@@ -131,16 +131,21 @@
         "D6",
         "D7"
       ],
-      "owner": "/root (coordinator after two dedicated workers produced no code)",
+      "owner": "/root (coordinator after two dedicated worker attempts produced no code)",
       "contract_version": null,
-      "source_revision": "3159446",
+      "source_revision": "5b585dc",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-task-service.ts",
+        "app/api/new-algorithm/task/route.ts",
+        "test/new-algorithm-task-service.jest.test.cjs",
+        "test-report/new-algorithm/T04/isolated-task-service.md"
+      ],
       "expected": "正式连接/choice 实例服务、冻结答案、幂等结算与按 due_at_a/共享冷却选学习候选；容量任务冻结 snapshot_json.capacity_reservation_id",
-      "actual": "Two dedicated workers confirmed the isolation contract but returned without code or tests; shared tree has no T04 diff. Coordinator is taking over the node to keep DAG progress moving.",
+      "actual": "Isolated /api/new-algorithm/task GET/POST uses only getNewAlgorithmDb. Issues double-zero ENCODE and ready target-axis choice; reuses one live task; freezes exact capacity_reservation_id; claims ready material once; strips private answer fields; first complete response is immutable, exact replay returns prior settlement and conflict returns 409. T02 settlement updates scores and consumes reservations atomically. Configured local window/capacity/cooldown respected. T04 Jest 7/7, full Jest 70/70, diff check passes; tsc has only known unrelated errors. flow.db and legacy task routes untouched.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement isolated new-algorithm connection/choice GET/POST routes with reservation snapshot linkage, focused Jest tests, then coordinator review and node commit.",
+      "next_action": "T05 builds isolated new-algorithm task UI; T06 adds cued/free materials and evaluators; T12 provides full review-first/41-day priority and capacity projection.",
       "stale_reason": null
     },
     {

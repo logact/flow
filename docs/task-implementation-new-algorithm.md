@@ -42,7 +42,7 @@
 | T01 | DONE | schema v3、容量 task_count/预约类型约束、拒绝旧库与事务测试；7/7 Jest 通过，未触碰 `flow.db` |
 | T02 | DONE | 纯分数/复习规则与 SQLite 原子结算；容量预约按冻结 ID 单次消费、轴级投影、跨本地日结算与目标重算；专项 34 项通过 |
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
-| T04 | IN_PROGRESS | 使用独立数据库/API实现连接与 choice 签发/提交，并冻结容量预约 ID；旧 task 路由保持不动 |
+| T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。
@@ -140,11 +140,12 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：词汇量 V 与可比词频排名 rank 按规范映射到 R/P 初分；仅双轴 0 分先连接，否则按分数直接签发首题；估计初分不设置 FLUENCY 通过证据。未确认 gloss 不产生正式判分材料；版本变更使旧材料不可再签发。有限重试耗尽记录原因；已有导入代码须按新 schema 重验。
 - **完成证据**：导入 HTTP、临时库与材料/job 快照、合格内容的脱敏样本与人工检查。
 
-### T04 · S1 · 实例服务与最小可用调度链（IN_PROGRESS；隔离原型 API）
+### T04 · S1 · 实例服务与最小可用调度链（DONE；隔离原型 API）
 
 - **依赖**：T01、T02、T03。**文件**：隔离的新算法 task service 与 `app/api/new-algorithm/task/*` routes。T15 前不得接触旧 `/api/task`、`lib/db.ts` 或 `flow.db`。
 - **输入→输出**：新 C1/C2 + next/submit → 词级连接、基础 choice 的正式 C3/C4/C5/C7 链。
-- **范围**：单活跃实例、答案冻结、首次作答持久化后判定、事务幂等和下一任务；按目标轴 `due_at_a` 选当天/逾期学习候选，按共享冷却等待。每个容量计数任务必须将准确 `capacity_reservation_id` 冻结到 `snapshot_json`，供 T02 结算消费。完整复习/容量/毕业排序留 T12，但不能调用旧 L/H 急救路径。
+- **交付**：隔离 `GET/POST /api/new-algorithm/task` 与独立服务，仅连接新算法 runtime DB；仅覆盖连接和 choice。测试 7/7，完整 Jest 70/70。
+- **范围**：单活跃实例、答案冻结、首次作答持久化后判定、事务幂等和下一任务；按目标轴 due_at 选支持的当天学习候选，检查本地训练窗、容量和共享冷却。每个容量计数任务将准确 `capacity_reservation_id` 冻结到 `snapshot_json` 供 T02 结算。完整复习优先级、41天容量投影与更多题档留 T06/T12；不调用旧 L/H 急救路径。
 - **G/W/T**：Given 可用连接和 choice；When 并发 GET、双 POST、判分与事务失败；Then 同词只有一次连接并同时写双轴，choice 按当前轴分数签发，重复结算仅一次，反馈不丢失，公开 DTO/snapshot 不泄私有答案。
 - **完成证据**：HTTP 请求响应、DB/事件、并发轨迹和答案扫描。
 
@@ -332,7 +333,7 @@ flowchart TD
   T01["T01 S1 排期数据 DONE"]
   T02["T02 S1 连接与复习结算 DONE"]
   T03["T03 S1 导入与基础材料 DONE"]
-  T04["T04 S1 隔离实例服务 IN_PROGRESS"]
+  T04["T04 S1 隔离实例服务 DONE"]
   T05["T05 S1 基础交互"]
   V01["V01 最小闭环"]
   T06["T06 S2 提取材料评估"]
