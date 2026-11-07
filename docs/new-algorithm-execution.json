@@ -131,16 +131,16 @@
         "D6",
         "D7"
       ],
-      "owner": "/root/t04_isolated_task_service_v2",
+      "owner": "/root (coordinator after two dedicated workers produced no code)",
       "contract_version": null,
       "source_revision": "3159446",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式连接/choice 实例服务、冻结答案、幂等结算与按 due_at_a/共享冷却选学习候选；容量任务冻结 snapshot_json.capacity_reservation_id",
-      "actual": "Previous owner confirmed the isolated DB/API boundary but produced no code or test evidence; shared tree remains clean for T04. Reassigned to a fresh dedicated owner.",
+      "actual": "Two dedicated workers confirmed the isolation contract but returned without code or tests; shared tree has no T04 diff. Coordinator is taking over the node to keep DAG progress moving.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement the isolated new-algorithm issue/submit service and focused Jest tests; do not touch legacy routes or flow.db.",
+      "next_action": "Implement isolated new-algorithm connection/choice GET/POST routes with reservation snapshot linkage, focused Jest tests, then coordinator review and node commit.",
       "stale_reason": null
     },
     {
