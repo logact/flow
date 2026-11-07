@@ -200,7 +200,7 @@
     {
       "id": "T06",
       "phase": "S2",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T02",
         "T03",
@@ -209,14 +209,18 @@
       "decision_dependencies": [],
       "owner": "/root/t06_retrieval_evaluator",
       "contract_version": null,
-      "source_revision": "608430d",
+      "source_revision": "76e9d9f",
       "working_tree_diff_hash": null,
-      "evidence": [],
-      "expected": null,
-      "actual": "T02 score/settlement and T04 connection/choice service are available; isolated R/P retrieval grading and validated material contracts are being implemented.",
+      "evidence": [
+        "lib/new-algorithm-retrieval-evaluator.ts",
+        "test/new-algorithm-retrieval-evaluator.jest.test.cjs",
+        "test-report/new-algorithm/T06/retrieval-evaluator.md"
+      ],
+      "expected": "R/P choice/cued/free materials validated and graded; non-final judgments safely retried and final judgments mapped to T02 settlement",
+      "actual": "Six R/P retrieval material contracts are validated; choice, injected R semantic judgment, and exact P matching are implemented. T03 bounded material jobs are wrapped with validation. A DB orchestration helper freezes final judgments into T02 settlement and persists uncertain/service_error retry state without score/tick/capacity changes; D5 stops before a third evaluator call. Focused Jest 26/26, full Jest 9 suites/98 tests, diff check pass. No production provider or T04 HTTP submission integration is claimed; those remain downstream T13 work.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Add R evaluator adapter outcomes and exact P normalization/allow-list checks for choice/cued/free; test malformed material fail-closed behavior.",
+      "next_action": "T07 implements retrieval interaction; T13 wires production provider dispatch, HTTP lifecycle, concurrency, retry and recovery. No end-to-end retrieval flow claim until those gates pass.",
       "stale_reason": null
     },
     {

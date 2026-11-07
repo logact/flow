@@ -44,7 +44,7 @@
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
-| T06 | IN_PROGRESS | 独立 R/P retrieval evaluator 与六条材料契约开发中 |
+| T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 HTTP/UI 接线及生产 provider 留给 T07/T13 |
 | T07–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。
@@ -159,13 +159,13 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 服务端签发连接/选择；When 确认学完、选择错项、重复点击、反馈后继续；Then 展示连接两轴各至少 5、choice 20/5，首次答案不可覆盖，反馈讲解不另发计分任务或增加 tick，未提交上滑无动作。
 - **验证/证据**：组件行为 I、B/H 由 V01 汇总；本包保留点击请求与状态输出。**阻塞**：本地判题冒充服务端结果、只能在 demo 操作。
 
-### T06 · S2 · 三档双轴提取材料与评估
+### T06 · S2 · 三档双轴提取材料与评估（DONE）
 
-- **依赖**：T02、T03、T04。**文件**：材料 producer/evaluator 新模块、`lib/material.ts`、service 适配；避免直接扩大旧 service 单体。
+- **依赖**：T02、T03、T04。**文件**：隔离的 `lib/new-algorithm-retrieval-evaluator.ts`；provider 注入，不改旧 `lib/material.ts` 或 T04 路由。
 - **输入→输出**：word/sense/axis/stage → R/P choice/cued/free 的材料与判定结果/依据。
 - **范围/非目标**：扩展全部六条提取路径；R 释义按目标义 AI 判定同义表达，P 仅忽略大小写和首尾空格、预允许词形；规定提示合法。无测速或先验判断。
 - **G/W/T**：Given R 同义/近义但错义、P 大小写/额外内部字符/许可与非许可词形；When 同档提交；Then 按规范成功或失败；uncertain/service_error 不改状态且持久化待重试；每档都有生产材料，free 不带选项/字母答案。
-- **验证/证据**：U/I/H；六档样本、provider fixture、服务端依据、公开 DTO。**阻塞**：任一档无有效答案键，P 过度标点规范化使错误答案通过。
+- **交付/验证**：六档材料校验、choice/R 语义/P 精确判分、T03 有界材料 job wrapper、T02 结算映射，以及可在事务中持久化 uncertain/service_error 并遵守两次判分上限的 helper。Jest 专项 26/26、全套 9 suites / 98 tests、`git diff --check` 通过。材料与判分均通过注入 provider；没有配置生产 AI provider。T06 helper 尚未接入 HTTP 提交/并发生命周期：T07 负责提取 UI，T13 负责正式异步派发、重试和恢复接线；不得把本节点表述为端到端提取闭环。
 
 ### T07 · S2 · 双轴提取交互与反馈
 
@@ -338,7 +338,7 @@ flowchart TD
   T04["T04 S1 隔离实例服务 DONE"]
   T05["T05 S1 基础交互 DONE"]
   V01["V01 最小闭环"]
-  T06["T06 S2 提取材料评估 IN_PROGRESS"]
+  T06["T06 S2 提取材料评估 DONE"]
   T07["T07 S2 提取交互"]
   V02["V02 双轴提取"]
   T08["T08 S3 R材料评估"]
