@@ -438,16 +438,16 @@
         "D5",
         "D7"
       ],
-      "owner": "/root/t12_timezone_introduction",
+      "owner": "/root/t12_scheduler_core",
       "contract_version": null,
       "source_revision": "22c346a",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "按新版规范实现双轴逾期/学习/新词优先级、共享冷却和41天确定/条件容量投影",
-      "actual": "Pure deterministic helpers and temporary DB loader/projection/axis reservation reconciliation exist. Full review remains pending: UTC-sliced due dates and missing unintroduced ENCODE candidates are assigned for repair; new-word ranking, different predicted R/P dates from learning completion, remaining-time and material fallback admission remain incomplete.",
+      "actual": "Pure ordering/cooldown/42-day projection, per-axis task-count helper, schema-backed due candidate loading (using each word timezone), unintroduced reserved ENCODE loading, idempotent axis-specific reservation reconciliation and temp-DB projection tests are implemented. Focused 8/8, full Jest 15 suites/157 tests and diff-check pass; only two known unrelated TypeScript errors remain. New-word ranking/admission recalculation, time/material fallbacks and T04 dispatch integration remain incomplete.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Fix per-word timezone due-date conversion and include only capacity-reserved unintroduced ENCODE candidates; continue the remaining new-word admission/forecast requirements before marking T12 DONE."
+      "next_action": "Continue T12 by implementing comparable-frequency new-word order/admission from 42-day DB projection, precise EMPTY/availability reasons and same-stage material fallback policy; leave route lifecycle wiring to T13 if needed."
     },
     {
       "id": "T13",
