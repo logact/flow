@@ -438,16 +438,16 @@
         "D5",
         "D7"
       ],
-      "owner": "/root/t12_capacity_db",
+      "owner": "/root/t12_timezone_introduction",
       "contract_version": null,
       "source_revision": "22c346a",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "按新版规范实现双轴逾期/学习/新词优先级、共享冷却和41天确定/条件容量投影",
-      "actual": "Pure deterministic ordering, cooldown and 42-date capacity helper exists with core Jest. SQLite projection/reservation recalculation, per-axis score-derived introduction tasks and T04 dispatch integration remain unfinished; node reassigned to complete DB portion.",
+      "actual": "Pure deterministic helpers and temporary DB loader/projection/axis reservation reconciliation exist. Full review remains pending: UTC-sliced due dates and missing unintroduced ENCODE candidates are assigned for repair; new-word ranking, different predicted R/P dates from learning completion, remaining-time and material fallback admission remain incomplete.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Use existing schema and import/settlement helpers to derive axis schedules, project active reservations and add isolated SQLite idempotent reservation recalculation tests; preserve T13 dispatch boundary."
+      "next_action": "Fix per-word timezone due-date conversion and include only capacity-reserved unintroduced ENCODE candidates; continue the remaining new-word admission/forecast requirements before marking T12 DONE."
     },
     {
       "id": "T13",
