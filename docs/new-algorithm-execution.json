@@ -448,7 +448,7 @@
       ],
       "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "1cd28cf",
+      "source_revision": "6101022",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decision composes due candidates, current-version material state, cooldown, training window, 42-day capacity and active candidate reservation. It skips unavailable candidates, returns EMPTY reasons, supplies next training-window start when computable, and only reports future due timestamps for non-graduated, material-ready, reserved axes. Cooldown ETA is null when seven-tick release cannot be predicted. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; tsc retains only the two known unrelated errors. Formal API issuance is not connected.",
+      "actual": "DB-driven schedule decision composes due candidates, current-version material state, cooldown, training window, 42-day capacity and active candidate reservations. It rejects user/word timezone mismatch, skips unreserved zero-score words as capacity-insufficient, and computes next training-window start across a DST boundary. Cooldown ETA remains null when seven-tick release cannot be predicted. Focused Jest 15/15, full Jest 15 suites/164 tests, diff-check pass; tsc retains only two known unrelated errors. flow.db deletion was executed separately; only in-memory/temp DB tests were run afterward and the path remains absent.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Complete timezone-change/reservation handling, accurate next_available_at for capacity/material states, derive rather than accept new-word session feasibility and R/P completion dates, verify atomic reservation consumption under concurrent issuance, and add target/failure/DST/rollback tests. Keep T12 IN_PROGRESS until the scheduler is usable through the formal service and its acceptance matrix is complete."
+      "next_action": "Finish deriving admission time feasibility and independent R/P completion forecasts instead of trusting caller inputs; complete capacity/material EMPTY availability semantics; integrate the chooser with atomic formal issuance/settlement so reservations cannot be double-consumed; add target-change, review-failure, multi-timezone policy and transaction rollback cases. T12 remains IN_PROGRESS."
     },
     {
       "id": "T13",
