@@ -442,12 +442,16 @@
       "contract_version": null,
       "source_revision": "22c346a",
       "working_tree_diff_hash": null,
-      "evidence": [],
-      "expected": "按新版规范实现双轴逾期/学习/新词优先级、共享冷却和41天确定/条件容量投影",
-      "actual": "Pure ordering/cooldown/42-day projection, per-axis task-count helper, schema-backed due candidate loading (using each word timezone), unintroduced reserved ENCODE loading, idempotent axis-specific reservation reconciliation and temp-DB projection tests are implemented. Focused 8/8, full Jest 15 suites/157 tests and diff-check pass; only two known unrelated TypeScript errors remain. New-word ranking/admission recalculation, time/material fallbacks and T04 dispatch integration remain incomplete.",
+      "evidence": [
+        "lib/new-algorithm-scheduler.ts",
+        "test/new-algorithm-scheduler.jest.test.cjs",
+        "test-report/new-algorithm/T12/scheduler.md"
+      ],
+      "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
+      "actual": "Pure ordering/cooldown/42-day projection, per-axis task-count helper, schema-backed due candidate loading using each word timezone, unintroduced reserved ENCODE loading, idempotent axis-specific reservation reconciliation and temporary DB projection tests. Focused Jest 8/8, full Jest 15 suites/157 tests and diff check pass. TypeScript reports only the two known unrelated errors. Still incomplete: comparable-frequency new-word ranking/admission transaction, remaining-session-time feasibility, same-stage material fallback, EMPTY reason/availability and connection to formal T04 dispatch.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Continue T12 by implementing comparable-frequency new-word order/admission from 42-day DB projection, precise EMPTY/availability reasons and same-stage material fallback policy; leave route lifecycle wiring to T13 if needed."
+      "next_action": "Complete T12 remaining admission/projection and EMPTY/material readiness requirements; wire formal dispatch at T13 boundary where needed. Keep IN_PROGRESS until all planned scenarios have evidence."
     },
     {
       "id": "T13",
