@@ -472,13 +472,34 @@
       "next_action": "准备可运行的 R FLUENCY 真材料场景，再完成真人内容/页面验收及记录。"
     },
     {
-      "id": "V04",
+      "id": "FIX-V04-01",
       "phase": "S3",
       "status": "IN_PROGRESS",
       "depends_on": [
+        "T11",
+        "T13"
+      ],
+      "decision_dependencies": [],
+      "owner": "Codex",
+      "contract_version": "0.3",
+      "source_revision": "25579cd",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": "P FLUENCY 写作计时由服务端记录开始、显式中断/重启与提交时间；不信任客户端 elapsed_seconds",
+      "actual": "发现 submitNewAlgorithmFluencyAnswer 对 P 直接读取客户端 elapsed_seconds；可伪造速度并影响流利度分数。",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "增加服务端 start/interrupt 操作和实例计时快照；UI 写作按钮调用 start、隐藏时中断；提交只用服务端时长；验证冻结重试不重计时。"
+    },
+    {
+      "id": "V04",
+      "phase": "S3",
+      "status": "BLOCKED",
+      "depends_on": [
         "V02",
         "T10",
-        "T11"
+        "T11",
+        "FIX-V04-01"
       ],
       "decision_dependencies": [],
       "owner": "Codex",
@@ -487,10 +508,12 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
-      "actual": "依赖核对完成；正在补正式 scheduler→P FLUENCY→服务端计时/判分重试→结算场景，尚未声明通过。",
-      "blockers": [],
+      "actual": "发现 P FLUENCY 也直接信任客户端 elapsed_seconds；登记 FIX-V04-01 前暂停 V04 验收。",
+      "blockers": [
+        "P 写作时长由客户端提供，可伪造 WPM；T13 需随修复复验。"
+      ],
       "repair_attempts": 0,
-      "next_action": "运行分数/速度边界、目标/整体失败与判分重试轨迹；记录真人场景审阅门禁。"
+      "next_action": "等待 FIX-V04-01 服务端开始/中断/提交时间记录完成，再跑自动 P 场景并准备人工内容验收。"
     },
     {
       "id": "T12",
@@ -524,7 +547,7 @@
     {
       "id": "T13",
       "phase": "S4",
-      "status": "DONE",
+      "status": "STALE",
       "depends_on": [
         "T04",
         "T07",
