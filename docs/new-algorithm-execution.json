@@ -446,9 +446,9 @@
         "D5",
         "D7"
       ],
-      "owner": "/root (coordinator integration after T12 audit)",
+      "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "15aa0fe",
+      "source_revision": "a4756cc",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "Added D7 ordering in algorithm.md order, current-meaning-version ready-material lookup, transactional new-word admission/reservations, and a candidate/EMPTY decision helper with cooldown/capacity inputs. Scheduler Jest 12/12 and integrated Jest 15 suites/161 tests pass; diff-check passes; TypeScript check still has only the two previously recorded unrelated errors. This is helper-level evidence, not a completed DB/API scheduling path.",
+      "actual": "DB-driven schedule decision now composes local-date due candidates, current meaning-version material state, per-word cooldown, training window, 42-day projection and candidate reservation capacity. It skips unavailable candidates and returns candidate or EMPTY reason, and reports the earliest future due timestamp for today_complete. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; TypeScript still has only the two previously recorded unrelated errors. Formal service dispatch and complete recovery-time calculations are not implemented.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Integrate DB candidate loading, cooldown anchors, capacity and material states into one decision/next_available_at path; preserve blocked material candidates for same-stage fallback; derive remaining-time and independent R/P completion forecasts from target/window state; validate post-settlement reservation recalculation and boundary matrix before marking T12 DONE."
+      "next_action": "Wire scheduler decision into the formal task service/route after T12 boundary audit; implement usable next_available_at for window/cooldown/capacity cases, derive remaining-session-time and independent R/P completion forecasts, validate settlement-driven reservation recalculation and failure/goal-change/DST/rollback matrix; keep T12 IN_PROGRESS until evidence is complete."
     },
     {
       "id": "T13",
