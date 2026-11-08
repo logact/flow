@@ -420,13 +420,31 @@
       "next_action": "T13 wires P fluency task issuance, server timing and answer persistence/retry; V04 runs human/content acceptance."
     },
     {
-      "id": "V03",
+      "id": "FIX-V03-01",
       "phase": "S3",
       "status": "IN_PROGRESS",
+      "depends_on": ["T09", "T13"],
+      "decision_dependencies": [],
+      "owner": "Codex",
+      "contract_version": "0.3",
+      "source_revision": "33c791f",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": "R FLUENCY 服务端重放冻结的阅读/回看事件，并由服务端计算有效阅读时长与 WPM 后再评分",
+      "actual": "发现 submitNewAlgorithmFluencyAnswer 直接信任客户端 timing_valid、reading_seconds、wpm；伪造时钟可影响正式 R 分数。",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "服务端回放事件、只持久化计算所得计时；覆盖合法回看、伪造字段、乱序/中断与分数边界，再复验 T13。"
+    },
+    {
+      "id": "V03",
+      "phase": "S3",
+      "status": "BLOCKED",
       "depends_on": [
         "V02",
         "T08",
-        "T09"
+        "T09",
+        "FIX-V03-01"
       ],
       "decision_dependencies": [],
       "owner": "Codex",
@@ -435,10 +453,10 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": "核对依赖完成；正在补正式服务的 R 阅读/回看评分轨迹与可复现验收材料，尚未声明通过。",
-      "blockers": [],
+      "actual": "V03 自动轨迹未开始；FIX-V03-01 修复并复验 T13 后继续。",
+      "blockers": ["R FLUENCY 服务端目前信任客户端计时字段；见 FIX-V03-01。"],
       "repair_attempts": 0,
-      "next_action": "执行 R 阅读/回看与速度边界 I/E；整理正式页面真人操作与材料审阅步骤。"
+      "next_action": "等待 FIX-V03-01 完成后运行自动轨迹并准备人工验收。"
     },
     {
       "id": "V04",
@@ -493,7 +511,7 @@
     {
       "id": "T13",
       "phase": "S4",
-      "status": "DONE",
+      "status": "STALE",
       "depends_on": [
         "T04",
         "T07",
