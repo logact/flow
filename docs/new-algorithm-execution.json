@@ -422,23 +422,23 @@
     {
       "id": "V03",
       "phase": "S3",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "V02",
         "T08",
         "T09"
       ],
       "decision_dependencies": [],
-      "owner": null,
+      "owner": "Codex",
       "contract_version": null,
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": null,
+      "actual": "核对依赖完成；正在补正式服务的 R 阅读/回看评分轨迹与可复现验收材料，尚未声明通过。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "执行 R 阅读/回看与速度边界 I/E；整理正式页面真人操作与材料审阅步骤。"
     },
     {
       "id": "V04",

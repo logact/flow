@@ -54,7 +54,8 @@
 | V01 | DONE | 用户于 2026-11-08 明确批准按通过记录；详细操作观察与截图未提供，见 `test-report/new-algorithm/V01/acceptance.md` |
 | FIX-V02-01 | DONE | 新版 goals 目标 API/页面与隔离人工场景库已准备；目标/API 专项与全 Jest 186 项通过；见修复报告 |
 | V02 | DONE | 用户于 2026-11-08 明确确认验收通过；详细操作记录与截图未提供，见 `test-report/new-algorithm/V02/acceptance.md` |
-| T14–T15、V03–V08 | TODO | 依赖前序纵向/人工验收节点，按 DAG 继续推进 |
+| V03 | IN_PROGRESS | R 阅读/回看纵向轨迹与验收准备；人工页面/材料验收尚待完成 |
+| T14–T15、V04–V08 | TODO | 依赖前序纵向/人工验收节点，按 DAG 继续推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。V01 和 V02 按用户于 2026-11-08 的明确批准记录为 DONE；详细操作观察与截图未提供，分别见验收记录。V03–V08 在其依赖技术节点完成后准备。源码/自动化检查不能替代人工验收。
 
