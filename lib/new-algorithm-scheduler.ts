@@ -66,6 +66,7 @@ export function getScheduleDecision(db:Database.Database,input:{now:number;today
  const decision=chooseScheduleCandidate(candidates,{tick:Number(tickRow?.value??0),now:input.now,capacityAvailable:remaining>0||candidates.length>0,scopeHasWords:scopedWords.length>0,trainingWindowOpen:trainingWindowOpen(db,input.now,input.timezone)});
  if(decision.kind==='candidate')return decision;
  if(decision.reason==='training_window_closed')return {...decision,nextAvailableAt:trainingWindowNextAt(db,input.now,input.timezone)};
+ if(decision.reason==='capacity_insufficient')return {...decision,nextAvailableAt:nextCapacityAvailability(db,input)};
  if(decision.reason==='today_complete'){
   const unreservedNew=scopedWords.some(w=>!w.introduced&&w.score_r===0&&w.score_p===0&&!db.prepare("SELECT 1 FROM capacity_reservations WHERE word_id=? AND axis='both' AND timezone=? AND reservation_kind='introduction' AND status='active' LIMIT 1").get(w.id,input.timezone));
   if(unreservedNew)return {...decision,reason:'capacity_insufficient',nextAvailableAt:null};
@@ -83,6 +84,28 @@ export function getScheduleDecision(db:Database.Database,input:{now:number;today
   if(future.length)return {...decision,nextAvailableAt:Math.min(...future)};
  }
  return decision;
+}
+function nextCapacityAvailability(db:Database.Database,input:{now:number;today:string;timezone:string;currentBookSource?:string|null;wordIds?:number[]}):number|null {
+ const start=db.prepare('SELECT value FROM meta WHERE key=?').get(`training_window_start:${input.timezone}`) as {value:string}|undefined;
+ if(!start)return null;
+ const projection=readCapacityProjection(db,input.today,input.timezone);
+ const allWords=db.prepare('SELECT id,local_timezone FROM words').all() as Array<{id:number;local_timezone:string}>;
+ const ids=new Set((input.wordIds?allWords.filter(w=>input.wordIds!.includes(w.id)):allWords).map(w=>w.id));
+ for(let offset=1;offset<projection.length;offset++) {
+  const day=projection[offset];
+  const candidates=loadScheduleCandidates(db,day.date,input.currentBookSource).filter(c=>ids.has(c.wordId));
+  for(const candidate of candidates) {
+   const ownReservation=activeCandidateReservationCount(db,candidate,day.date,input.timezone);
+   if(day.remaining<=0&&ownReservation<=0)continue;
+   const windowStart=zonedTimestamp(day.date,start.value,input.timezone);
+   if(windowStart===null)continue;
+   const dueRow=candidate.kind!=='new'&&candidate.dueDate===day.date?db.prepare(`SELECT due_at_${candidate.axis==='p'?'p':'r'} AS due FROM words WHERE id=?`).get(candidate.wordId) as {due:string|null}|undefined:undefined;
+   const due=dueRow?.due?Date.parse(dueRow.due):windowStart;
+   if(!Number.isFinite(due))continue;
+   return Math.max(windowStart,due);
+  }
+ }
+ return null;
 }
 function activeCandidateReservationCount(db:Database.Database,candidate:Candidate,date:string,timezone:string):number { const row=db.prepare("SELECT COALESCE(SUM(task_count),0) n FROM capacity_reservations WHERE word_id=? AND axis=? AND local_date=? AND timezone=? AND status='active' AND ((axis='both' AND reservation_kind='introduction') OR (axis IN ('r','p') AND reservation_kind IN ('determined','conditional')))").get(candidate.wordId,candidate.axis,date,timezone) as {n:number}; return row.n; }
 /** Replaces only the selected axis's active forecasts; reservation IDs remain stable for identical projections. */

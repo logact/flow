@@ -9,14 +9,15 @@
 
 ## 验证
 
-- `npx jest --runInBand test/new-algorithm-scheduler.jest.test.cjs`：16/16 通过。
-- `npx jest --runInBand`：15 suites / 165 tests 通过。
+- 容量不足 EMPTY：未来 41 个本地日内，存在可执行候选且容量可用（含该候选有效预约）时，返回其最早可执行时间；缺少可靠未来证据时仍返回 `null`。
+- `npx jest --runInBand test/new-algorithm-scheduler.jest.test.cjs`：17/17 通过。
+- `npx jest --runInBand`：15 suites / 166 tests 通过。
 - `git diff --check`：通过。
 - `npx tsc --noEmit`：仍只有已知的两个非本次错误：`app/score-history/page.tsx:57`、`lib/manual-test-fixtures.ts:183`。
 
 ## 未完成，不得标 DONE
 
-- 选择器尚未接正式 API/派题；冷却的 7-tick ETA 不可预测时返回 null；训练窗口关闭时可计算下一窗口开始时间，容量短缺可用日期还不能可靠预测。时区输入必须与导入词条/预约时区一致，否则明确拒绝调度。
+- 选择器尚未接正式 API/派题；冷却的 7-tick ETA 不可预测时返回 null；训练窗口关闭时可计算下一窗口开始时间；容量短缺仅在未来 41 天内已有可执行候选和容量证据时计算，否则返回 null。时区输入必须与导入词条/预约时区一致，否则明确拒绝调度。
 - DB 决策已保留材料失败/待生成状态供同档候选切换，但材料补充作业和正式签发竞争处理仍未接入。
 - 新词 helper 默认用理想最短路径推定两轴同日达标；传入不同预测日仍由调用者负责。实际练习用时不在规范定义中，当前仅按 O1 的冷却下界检验窗口；非默认目标/实际结果导致的预约重算需与 T02 结算联调。
 - 已验证预约写入异常会回滚旧预约取消；仍需补齐日容量/时间窗完整边界、目标变更/复习失败、材料故障恢复及 EMPTY next availability 的临时库矩阵；V05 人工验收仍未进行。
