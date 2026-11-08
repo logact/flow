@@ -5,8 +5,6 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "dev:manual-test": "FLOW_MANUAL_TEST_MODE=1 next dev --hostname 0.0.0.0 -p 3101",
-    "test:new-algorithm-scenarios": "jest --runInBand test/new-algorithm-scenarios.jest.test.cjs",
-    "test:new-algorithm-memory": "jest --runInBand test/new-algorithm-memory.jest.test.cjs",
     "build": "next build",
     "start": "next start"
   },
