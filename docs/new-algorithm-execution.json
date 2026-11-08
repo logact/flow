@@ -474,7 +474,7 @@
     {
       "id": "FIX-V04-01",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T11",
         "T13"
@@ -482,19 +482,28 @@
       "decision_dependencies": [],
       "owner": "Codex",
       "contract_version": "0.3",
-      "source_revision": "25579cd",
+      "source_revision": "9ea8115",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-task-service.ts",
+        "app/api/new-algorithm/task/route.ts",
+        "components/new-algorithm-p-fluency-renderer.tsx",
+        "components/new-algorithm-task-view.tsx",
+        "test/new-algorithm-p-fluency-service.jest.test.cjs",
+        "test/new-algorithm-task-service.jest.test.cjs",
+        "test-report/new-algorithm/FIX-V04-01/server-timing.md",
+        "test-report/new-algorithm/T13/lifecycle.md"
+      ],
       "expected": "P FLUENCY 写作计时由服务端记录开始、显式中断/重启与提交时间；不信任客户端 elapsed_seconds",
-      "actual": "发现 submitNewAlgorithmFluencyAnswer 对 P 直接读取客户端 elapsed_seconds；可伪造速度并影响流利度分数。",
+      "actual": "P start/interruption/restart/submit use server timestamps; client elapsed_seconds is ignored and retry reuses first frozen timing. P 24/25/42.5/60 WPM, target/overall failures, interruption exclusion and retry traces pass. Full Jest 17 suites/201 tests. TypeScript retains only two unrelated baseline errors.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "增加服务端 start/interrupt 操作和实例计时快照；UI 写作按钮调用 start、隐藏时中断；提交只用服务端时长；验证冻结重试不重计时。"
+      "next_action": null
     },
     {
       "id": "V04",
       "phase": "S3",
-      "status": "BLOCKED",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "V02",
         "T10",
@@ -508,12 +517,10 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
-      "actual": "发现 P FLUENCY 也直接信任客户端 elapsed_seconds；登记 FIX-V04-01 前暂停 V04 验收。",
-      "blockers": [
-        "P 写作时长由客户端提供，可伪造 WPM；T13 需随修复复验。"
-      ],
+      "actual": "FIX-V04-01 已完成；正式 scheduler→P FLUENCY→服务端计时/判分/重试→settlement 自动场景正在整理为验收报告。真实场景语义与真人页面验收未声明。",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "等待 FIX-V04-01 服务端开始/中断/提交时间记录完成，再跑自动 P 场景并准备人工内容验收。"
+      "next_action": "记录分数变化、复核 V04 自动证据；准备真人审阅真实中文场景和正式写作页面。"
     },
     {
       "id": "T12",
@@ -547,7 +554,7 @@
     {
       "id": "T13",
       "phase": "S4",
-      "status": "STALE",
+      "status": "DONE",
       "depends_on": [
         "T04",
         "T07",
@@ -563,7 +570,7 @@
       ],
       "owner": "/root",
       "contract_version": "0.3",
-      "source_revision": "d494c43",
+      "source_revision": "9ea8115",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-task-service.ts",
@@ -574,7 +581,7 @@
         "test-report/new-algorithm/T13/lifecycle.md"
       ],
       "expected": "可恢复的实例与冻结作答；服务端重试不重复结算；skip/exit/submit 互斥；choice/cued/free/fluency 连续派发与手动恢复",
-      "actual": "原生命周期与恢复实现已复验，并补齐 R FLUENCY 服务端 timing protocol 回放，客户端不能伪报阅读速度；全 Jest 15 suites/187 tests、diff-check 通过。TS 仍仅有既有 score-history/page.tsx:57 与 manual-test-fixtures.ts:183 错误。真实 provider 和人工页面交互不在自动证据内。",
+      "actual": "完整生命周期已复验：R 事件轨迹和 P 服务端写作开始/中断/提交时间均权威派生；答案/计时冻结，重试不重复计分，skip/exit/submit 终态互斥。全 Jest 17 suites/201 tests、diff-check 通过。TypeScript 仍只有两个既有无关错误。",
       "blockers": [],
       "repair_attempts": 0,
       "next_action": null
