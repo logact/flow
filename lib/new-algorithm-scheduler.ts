@@ -15,7 +15,7 @@ export function chooseScheduleCandidate(candidates:Candidate[],input:{tick:numbe
  if(input.trainingWindowOpen===false&&ordered.length>0)return {kind:'empty',reason:'training_window_closed',nextAvailableAt:null,skippedWordIds};
  if(ordered.length>0){
   const waiting=ordered.filter(c=>!cooldownReady({tick:input.tick,lastTick:c.lastTick??null,now:input.now,lastAt:c.lastAt??null}));
-  if(waiting.length){const nextAvailableAt=Math.min(...waiting.map(c=>c.lastAt===null||c.lastAt===undefined?input.now:c.lastAt+20*60*1000));return {kind:'empty',reason:'cooldown_wait',nextAvailableAt,skippedWordIds};}
+  if(waiting.length)return {kind:'empty',reason:'cooldown_wait',nextAvailableAt:null,skippedWordIds};
  }
  if(input.materialPending||candidates.some(c=>!c.materialReady&&c.materialStatus!=='failed'))return {kind:'empty',reason:'material_pending',nextAvailableAt:null,skippedWordIds};
  if(input.materialFailed||candidates.some(c=>!c.materialReady&&c.materialStatus==='failed'))return {kind:'empty',reason:'material_failed',nextAvailableAt:null,skippedWordIds};
@@ -62,7 +62,17 @@ export function getScheduleDecision(db:Database.Database,input:{now:number;today
  const decision=chooseScheduleCandidate(candidates,{tick:Number(tickRow?.value??0),now:input.now,capacityAvailable:remaining>0||candidates.length>0,scopeHasWords:scopedWords.length>0,trainingWindowOpen:trainingWindowOpen(db,input.now,input.timezone)});
  if(decision.kind==='candidate')return decision;
  if(decision.reason==='today_complete'){
-  const future=scopedWords.flatMap(w=>['r','p'].map(a=>w[`due_at_${a}`] as string|null)).map(x=>x?Date.parse(x):NaN).filter(x=>Number.isFinite(x)&&x>input.now);
+  const future=scopedWords.flatMap(w=>['r','p'].flatMap(axis=>{
+   if(w[`graduated_${axis}`])return [];
+   const due=w[`due_at_${axis}`] as string|null;
+   if(!due||!Number.isFinite(Date.parse(due))||Date.parse(due)<=input.now)return [];
+   const timezone=String(w.local_timezone), localDue=localCalendarDate(Date.parse(due),timezone);
+   const review=Boolean(w[`learning_complete_${axis}`]&&w[`review_level_${axis}`]!==null);
+   if(materialStatus(db,w.id,axis,review?'fluency':stageFor(w[`score_${axis}`]))!=='ready')return [];
+   const reservation=db.prepare("SELECT 1 FROM capacity_reservations WHERE word_id=? AND axis=? AND local_date=? AND timezone=? AND status='active' AND reservation_kind IN ('determined','conditional') LIMIT 1").get(w.id,axis,localDue,timezone);
+   if(!reservation)return [];
+   return [Date.parse(due)];
+  })).filter(x=>Number.isFinite(x));
   if(future.length)return {...decision,nextAvailableAt:Math.min(...future)};
  }
  return decision;
