@@ -438,7 +438,7 @@
         "D5",
         "D7"
       ],
-      "owner": "/root/t12_scheduler_core",
+      "owner": "/root/t12_scheduler_finish",
       "contract_version": null,
       "source_revision": "22c346a",
       "working_tree_diff_hash": null,
@@ -448,10 +448,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "Pure ordering/cooldown/42-day projection, per-axis task-count helper, schema-backed due candidate loading using each word timezone, unintroduced reserved ENCODE loading, idempotent axis-specific reservation reconciliation and temporary DB projection tests. Focused Jest 8/8, full Jest 15 suites/157 tests and diff check pass. TypeScript reports only the two known unrelated errors. Still incomplete: comparable-frequency new-word ranking/admission transaction, remaining-session-time feasibility, same-stage material fallback, EMPTY reason/availability and connection to formal T04 dispatch.",
+      "actual": "Scheduler now has per-axis DB candidates/reservation reconciliation and new-word D7/forecast helpers. Last attempted admission test run failed because the out-of-range test fixture had insufficient daily capacity; D7 sorter also has not been integrated into candidate loading. Continue audit/fix before any task completion claim.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Complete T12 remaining admission/projection and EMPTY/material readiness requirements; wire formal dispatch at T13 boundary where needed. Keep IN_PROGRESS until all planned scenarios have evidence."
+      "next_action": "Fix T12 scheduler tests and D7 candidate integration, verify all capacity checks run atomically/idempotently, then rerun focused/full Jest, diff-check and TypeScript audit."
     },
     {
       "id": "T13",
