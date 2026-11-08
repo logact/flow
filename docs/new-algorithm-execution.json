@@ -447,7 +447,7 @@
     {
       "id": "FIX-V03-02",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T03",
         "T08",
@@ -457,14 +457,22 @@
       "decision_dependencies": [],
       "owner": "Codex",
       "contract_version": "0.3",
-      "source_revision": "6ebc256",
+      "source_revision": "471e067",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "app/api/new-algorithm/materials/route.ts",
+        "app/new-algorithm/goals/page.tsx",
+        "lib/new-algorithm-material-jobs.ts",
+        "test/new-algorithm-materials-api.jest.test.cjs",
+        "test/new-algorithm-goals-material-ui.jest.test.cjs",
+        "scripts/prepare-new-algorithm-v03-v04-demo.cjs",
+        "test-report/new-algorithm/FIX-V03-02/material-entry.md"
+      ],
       "expected": "新版目标页可触发 R/P FLUENCY 真实材料生成，使用有界 provider 与既有校验并显示可用/失败结果",
-      "actual": "发现 R/P fluency producer 仅有注入式库函数；新版没有材料生成 API/UI，V03/V04 无法准备真实 provider 材料。",
+      "actual": "Added isolated R/P FLUENCY material API and goals-page controls using existing bounded generation/validation. Meaning and meaning_version are rechecked around provider calls; failed attempts report the actual count. Focused Jest 5 suites/65 tests and full Jest 19 suites/208 tests pass; isolated demo DB script initializes a fresh path and refuses overwrite. TypeScript still reports only two existing unrelated errors. No live provider or human UI/content acceptance is claimed.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "新增隔离材料 API 与目标页 R/P fluency 生成按钮；使用已有 2 次/8 秒策略，测试 schema 校验、当前 meaning_version 和失败安全。"
+      "next_action": null
     },
     {
       "id": "V03",
@@ -487,13 +495,13 @@
         "test-report/new-algorithm/V03/automated-r-score.md"
       ],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": "算法自动轨迹已具备；等待 FIX-V03-02 提供真实 R/P 材料入口，之后还需真人内容与正式页面验收。",
+      "actual": "算法自动轨迹与真实材料生成入口已具备；尚无 live provider 生成物、真人内容审阅和正式页面交互验收。",
       "blockers": [
-        "新版没有 R/P FLUENCY 材料生成 API/UI，无法按计划准备真实 provider 材料。",
-        "真人内容语义和正式页面交互尚未验收。"
+        "尚未用真实 provider 生成并审阅 R/P 材料，内容正确性/泄漏检查缺人工证据。",
+        "桌面与窄屏正式页面交互尚未由人工验收。"
       ],
       "repair_attempts": 0,
-      "next_action": "等待 FIX-V03-02 完成后生成真实材料，继续人工内容/页面验收。"
+      "next_action": "用隔离 demo 库生成真实材料，记录 provider 输出、内容审阅和桌面/窄屏操作结果后更新验收状态。"
     },
     {
       "id": "FIX-V04-01",
@@ -542,13 +550,13 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
-      "actual": "算法自动轨迹已具备；等待 FIX-V03-02 提供真实 R/P 材料入口，之后还需真人内容与正式页面验收。",
+      "actual": "算法自动轨迹与真实材料生成入口已具备；尚无 live provider 生成物、真人内容审阅和正式页面交互验收。",
       "blockers": [
-        "新版没有 R/P FLUENCY 材料生成 API/UI，无法按计划准备真实 provider 材料。",
-        "真人内容语义和正式页面交互尚未验收。"
+        "尚未用真实 provider 生成并审阅 R/P 材料，内容正确性/泄漏检查缺人工证据。",
+        "桌面与窄屏正式页面交互尚未由人工验收。"
       ],
       "repair_attempts": 0,
-      "next_action": "等待 FIX-V03-02 完成后生成真实材料，继续人工内容/页面验收。"
+      "next_action": "用隔离 demo 库生成真实材料，记录 provider 输出、内容审阅和桌面/窄屏操作结果后更新验收状态。"
     },
     {
       "id": "T12",
