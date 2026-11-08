@@ -448,7 +448,7 @@
       ],
       "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "a4756cc",
+      "source_revision": "02520a8",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decision now composes local-date due candidates, current meaning-version material state, per-word cooldown, training window, 42-day projection and candidate reservation capacity. It skips unavailable candidates and returns candidate or EMPTY reason, and reports the earliest future due timestamp for today_complete. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; TypeScript still has only the two previously recorded unrelated errors. Formal service dispatch and complete recovery-time calculations are not implemented.",
+      "actual": "DB-driven schedule decision composes per-word due/material/cooldown, training window, 42-day capacity projection and active candidate reservations. It tries later ready candidates when higher-priority material is unavailable; cooldown nextAvailableAt is null when the seven-tick route has no predictable ETA, and today_complete timestamps are limited to viable reserved, material-ready, non-graduated axes. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; TypeScript still has the two previously recorded unrelated errors. Formal API issuance is not connected.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Wire scheduler decision into the formal task service/route after T12 boundary audit; implement usable next_available_at for window/cooldown/capacity cases, derive remaining-session-time and independent R/P completion forecasts, validate settlement-driven reservation recalculation and failure/goal-change/DST/rollback matrix; keep T12 IN_PROGRESS until evidence is complete."
+      "next_action": "Resolve timezone consistency between per-word due conversion and user capacity projection, finish usable EMPTY next_available_at for window/capacity/material states, derive intro time feasibility and independent R/P completion forecasts, verify reservation claim/settlement interaction under concurrent issuance, and cover target/failure/DST/rollback cases before completion."
     },
     {
       "id": "T13",
