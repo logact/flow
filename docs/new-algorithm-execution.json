@@ -260,24 +260,30 @@
     {
       "id": "FIX-V02-01",
       "phase": "S2",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": ["T02", "T03"],
       "decision_dependencies": [],
       "owner": "/root",
       "contract_version": "0.3",
-      "source_revision": "f253803",
+      "source_revision": "777a61b",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "app/api/new-algorithm/goals/route.ts",
+        "app/new-algorithm/goals/page.tsx",
+        "scripts/prepare-new-algorithm-v02-demo.cjs",
+        "test/new-algorithm-goals-api.jest.test.cjs",
+        "test-report/new-algorithm/FIX-V02-01/target-controls.md"
+      ],
       "expected": "新版隔离 goals API 和目标设置页可查看/更新双轴目标，并使用 T02 原子资格与容量重算",
-      "actual": null,
+      "actual": "New isolated goals API returns and updates axis targets through T02 atomic recalculation. The target page links to the task view and reports requeue/capacity outcomes. A no-overwrite seed script prepares six R/P choice/cued/free paths plus a one-axis requeue word. Target API/settlement tests 19/19; full Jest 15 suites/186 tests and diff-check pass. TypeScript reports only known unrelated errors. Manual V02 evidence is not claimed.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "添加新版目标更新 API 与页面；验证成功、无效值、活动实例冲突、单轴保持和容量阻塞"
+      "next_action": null
     },
     {
       "id": "V02",
       "phase": "S2",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "V01",
         "T06",
@@ -285,16 +291,16 @@
         "FIX-V02-01"
       ],
       "decision_dependencies": [],
-      "owner": null,
-      "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "owner": "/root (manual acceptance prepared)",
+      "contract_version": "0.3",
+      "source_revision": "777a61b",
       "working_tree_diff_hash": null,
-      "evidence": [],
-      "expected": "正式六档提取升降分、目标变化后学习完成与排期资格重算",
-      "actual": null,
-      "blockers": [],
+      "evidence": ["test-report/new-algorithm/FIX-V02-01/target-controls.md"],
+      "expected": "正式六档提取升降分、目标变化后学习完成与排期资格重算，并由人工确认控件/提示可理解",
+      "actual": "Isolated fixture DB, six-path run instructions, and new target page are prepared. Human operation and observations are still pending. An existing Next dev server owns the repository .next lock, so the isolated port-3102 server was not started to avoid stopping an unknown user process.",
+      "blockers": ["The existing dev server must be stopped from its owning terminal before launching the isolated V02 server on port 3102."],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Stop the existing dev server from its terminal, run the command in test-report/new-algorithm/FIX-V02-01/target-controls.md, then complete the six tasks and one-axis target update and report observations."
     },
     {
       "id": "T08",
