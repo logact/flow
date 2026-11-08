@@ -141,7 +141,7 @@ describe('isolated new algorithm task service',()=>{
     db.close();
   });
 
-  test('R fluency uses frozen timing and answer data for its server-side score',async()=>{
+  test('R fluency replays timing on the server and ignores forged client timing fields',async()=>{
     const db=createNewAlgorithmDb();seed(db,{introduced:1,scoreR:60,scoreP:20,taskCount:3});
     db.prepare("UPDATE capacity_reservations SET status='cancelled' WHERE reservation_id='intro:1'").run();
     db.prepare("UPDATE words SET learning_complete_r=1,review_level_r=1,due_at_r='2026-11-07T00:00:00.000Z' WHERE id=1").run();
@@ -149,9 +149,28 @@ describe('isolated new algorithm task service',()=>{
     const passage=Array(100).fill('word').join(' ');
     db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('r-fluency-grade',1,'r','fluency',1,1,'ready',?,'{\"questions\":[{\"answer\":\"a\",\"evidence\":\"e\"},{\"answer\":\"b\",\"evidence\":\"e\"}]}','{\"targetMeaning\":\"gloss\",\"targetForms\":[\"word\"]}','{}','{}',1)").run(JSON.stringify({passage,questions:[{prompt:'q1'},{prompt:'q2'}]}));
     const task=getOrIssueNewAlgorithmTask(db,NOW);
-    const result=await submitNewAlgorithmFluencyAnswer(db,{instanceId:task.instanceId,response:{answers:['first','second'],timing_protocol:[{event:'read'}],timing_valid:true,reading_seconds:20,wpm:180},now:NOW+100,rEvaluator:()=>({kind:'valid',targetPassed:true,overallPassed:true})});
-    expect(result).toMatchObject({action:'settled',settlement:{scoreBefore:60,scoreAfter:68}});
-    expect(JSON.parse(db.prepare('SELECT timing_json FROM attempts').get().timing_json)).toEqual({protocol:[{event:'read'}],reading_seconds:20,wpm:180});
+    const result=await submitNewAlgorithmFluencyAnswer(db,{instanceId:task.instanceId,response:{answers:['first','second'],timing_protocol:[
+      {type:'read_start',at:NOW+1},{type:'read_end',at:NOW+20_001},{type:'answer_start',at:NOW+20_001},{type:'answer_submit',at:NOW+60_000},
+    ],timing_valid:false,reading_seconds:0.01,wpm:1},now:NOW+60_000,rEvaluator:()=>({kind:'valid',targetPassed:true,overallPassed:true})});
+    expect(result).toMatchObject({action:'settled',settlement:{scoreBefore:60,scoreAfter:100}});
+    expect(JSON.parse(db.prepare('SELECT timing_json FROM attempts').get().timing_json)).toEqual({protocol:[
+      {type:'read_start',at:NOW+1,segment:1},{type:'read_end',at:NOW+20_001,segment:1},{type:'answer_start',at:NOW+20_001},{type:'answer_submit',at:NOW+60_000},
+    ],reading_seconds:20,wpm:300,valid:true});
+    db.close();
+  });
+
+  test('an interrupted R timing trace cannot score even when the client claims valid and fast reading',async()=>{
+    const db=createNewAlgorithmDb();seed(db,{introduced:1,scoreR:60,scoreP:20,taskCount:3});
+    db.prepare("UPDATE capacity_reservations SET status='cancelled' WHERE reservation_id='intro:1'").run();
+    db.prepare("INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status) VALUES('review-r-interrupted',1,'r','2026-11-07','Asia/Shanghai','determined',1,'active')").run();
+    db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('r-fluency-interrupted',1,'r','fluency',1,1,'ready',?,'{\"questions\":[{\"answer\":\"a\",\"evidence\":\"e\"},{\"answer\":\"b\",\"evidence\":\"e\"}]}','{\"targetMeaning\":\"gloss\",\"targetForms\":[\"word\"]}','{}','{}',1)").run(JSON.stringify({passage:Array(100).fill('word').join(' '),questions:[{prompt:'q1'},{prompt:'q2'}]}));
+    const task=getOrIssueNewAlgorithmTask(db,NOW);
+    const result=await submitNewAlgorithmFluencyAnswer(db,{instanceId:task.instanceId,response:{answers:['first','second'],timing_protocol:[
+      {type:'read_start',at:NOW+1},{type:'interruption',at:NOW+10_001},{type:'answer_submit',at:NOW+20_000},
+    ],timing_valid:true,reading_seconds:1,wpm:6000},now:NOW+20_000,rEvaluator:()=>({kind:'valid',targetPassed:true,overallPassed:true})});
+    expect(result).toMatchObject({action:'retry',grade:{kind:'invalid',reasons:['interrupted']}});
+    expect(db.prepare('SELECT score_r,last_tick_any FROM words WHERE id=1').get()).toEqual({score_r:60,last_tick_any:null});
+    expect(JSON.parse(db.prepare('SELECT timing_json FROM attempts').get().timing_json)).toMatchObject({valid:false,reason:'interrupted',wpm:null});
     db.close();
   });
 

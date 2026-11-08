@@ -6,6 +6,8 @@ import { getScheduleDecision, orderCandidates } from './new-algorithm-scheduler'
 import { gradeAndSettleFrozenRetrievalAttempt, type SemanticEvaluator } from './new-algorithm-retrieval-evaluator';
 import { gradeRFluency, type RFluencyEvaluator, type RFluencyGrade } from './new-algorithm-r-fluency';
 import { evaluatePFluency, type PFluencyEvaluator } from './new-algorithm-p-fluency';
+import { countRWords } from './new-algorithm-r-fluency';
+import { rTimingProtocol, type RTimingEvent, type RTimingResult } from './new-algorithm-r-timing';
 
 type Axis='r'|'p'|'both';
 type Reservation={reservation_id:string;task_count:number;local_date:string;timezone:string;axis:Axis;reservation_kind:string};
@@ -38,6 +40,23 @@ function canonical(value:unknown):string {
   if(Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if(value&&typeof value==='object') return `{${Object.entries(value as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
   return JSON.stringify(value);
+}
+
+function replayRTaskTiming(events:unknown,wordCount:number,issuedAt:number,submittedAt:number):RTimingResult {
+  const invalid=(reason:string):RTimingResult=>({valid:false,readingSeconds:0,wpm:null,reason,events:[]});
+  if(!Array.isArray(events)||events.length===0)return invalid('timing_events_missing');
+  const allowed=new Set(['read_start','read_end','review_start','review_end','answer_start','answer_submit','interruption']);
+  let priorAt=issuedAt;
+  for(const value of events){
+    if(!value||typeof value!=='object')return invalid('timing_event_invalid');
+    const event=value as Record<string,unknown>;
+    if(typeof event.type!=='string'||!allowed.has(event.type)||!Number.isSafeInteger(event.at))return invalid('timing_event_invalid');
+    if((event.at as number)<issuedAt||(event.at as number)>submittedAt||(event.at as number)<priorAt)return invalid('timing_event_out_of_range');
+    priorAt=event.at as number;
+  }
+  if((events[events.length-1] as Record<string,unknown>).type!=='answer_submit')return invalid('timing_submission_missing');
+  try{return rTimingProtocol(events as RTimingEvent[],wordCount);}
+  catch{return invalid('timing_protocol_invalid');}
 }
 
 function publicPayload(value:unknown):unknown {
@@ -276,21 +295,28 @@ export async function submitNewAlgorithmFluencyAnswer(db:Database.Database,input
     if(prior){
       const saved=JSON.parse(prior.response_json) as {response:unknown;judgment?:Judgment};
       if(canonical(saved.response)!==canonical(input.response))throw new NewAlgorithmTaskError('INSTANCE_CONFLICT',409);
-      if(instance.status==='completed'&&prior.status==='completed'&&saved.judgment)return {instance,attemptId:prior.attempt_id,replay:true,response:input.response,judgment:saved.judgment};
+      if(instance.status==='completed'&&prior.status==='completed'&&saved.judgment)return {instance,attemptId:prior.attempt_id,replay:true,response:input.response,judgment:saved.judgment,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown}};
       if(!['grading','grading_retry'].includes(instance.status)||!['frozen','grading_retry'].includes(prior.status))throw new NewAlgorithmTaskError('Task is not retryable',409);
-      return {instance,attemptId:prior.attempt_id,replay:false,response:input.response,judgment:undefined};
+      return {instance,attemptId:prior.attempt_id,replay:false,response:input.response,judgment:undefined,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown}};
     }
     const wellFormed=instance.axis==='r'
-      ?Array.isArray(response?.answers)&&response!.answers.length===2&&response!.answers.every(answer=>typeof answer==='string'&&answer.trim())&&typeof response?.reading_seconds==='number'&&typeof response?.wpm==='number'
+      ?Array.isArray(response?.answers)&&response!.answers.length===2&&response!.answers.every(answer=>typeof answer==='string'&&answer.trim())&&Array.isArray(response?.timing_protocol)
       :typeof response?.text==='string'&&typeof response?.elapsed_seconds==='number';
     if(!wellFormed)throw new NewAlgorithmTaskError('Fluency response is incomplete',400);
     if(instance.status!=='issued')throw new NewAlgorithmTaskError('Task instance is not accepting a response',409);
     const attemptId=randomUUID();
-    const timing=instance.axis==='r'?{protocol:response!.timing_protocol,reading_seconds:response!.reading_seconds,wpm:response!.wpm}:{elapsed_seconds:response!.elapsed_seconds};
+    let timing:{protocol?:unknown;reading_seconds?:number;wpm?:number|null;valid?:boolean;reason?:string;elapsed_seconds?:number};
+    if(instance.axis==='r'){
+      const material=db.prepare('SELECT public_payload FROM materials WHERE id=? AND version=?').get(instance.material_id,instance.material_version) as {public_payload:string}|undefined;
+      if(!material)throw new NewAlgorithmTaskError('Frozen fluency material is unavailable',409);
+      const passage=JSON.parse(material.public_payload).passage;
+      const replayed=replayRTaskTiming(response!.timing_protocol,countRWords(typeof passage==='string'?passage:''),instance.issued_at,input.now);
+      timing={protocol:replayed.events,reading_seconds:replayed.readingSeconds,wpm:replayed.wpm,valid:replayed.valid,...(!replayed.valid?{reason:replayed.reason}:{})};
+    }else timing={elapsed_seconds:Number(response!.elapsed_seconds)};
     db.prepare('INSERT INTO attempts(attempt_id,instance_id,response_json,timing_json,exposure_json,status,created_at) VALUES(?,?,?,?,?,\'frozen\',?)')
       .run(attemptId,instance.instance_id,JSON.stringify({response:input.response}),JSON.stringify(timing),'{}',input.now);
     db.prepare("UPDATE task_instances SET status='grading' WHERE instance_id=? AND status='issued'").run(instance.instance_id);
-    return {instance,attemptId,replay:false,response:input.response,judgment:undefined};
+    return {instance,attemptId,replay:false,response:input.response,judgment:undefined,timing};
   })();
   let judgment:Judgment;
   if(frozen.judgment)judgment=frozen.judgment;
@@ -313,7 +339,7 @@ export async function submitNewAlgorithmFluencyAnswer(db:Database.Database,input
       },
       });
     });
-    const grade=response!.timing_valid===true?await gradeRFluency({material:{publicPayload:saved,answerKey:key,gradingRequirements:requirements,timingProtocol:{}},response:(response!.answers as [string,string]),wpm:Number(response!.wpm),evaluator}):{kind:'invalid' as const,reasons:['READING_TIMING_INVALID']};
+    const grade=frozen.timing?.valid===true&&typeof frozen.timing.wpm==='number'?await gradeRFluency({material:{publicPayload:saved,answerKey:key,gradingRequirements:requirements,timingProtocol:{}},response:(response!.answers as [string,string]),wpm:frozen.timing.wpm,evaluator}):{kind:'invalid' as const,reasons:[frozen.timing?.reason??'READING_TIMING_INVALID']};
     judgment={kind:'fluency',result:grade};
   }else{
     const material=db.prepare('SELECT answer_key,grading_requirements FROM materials WHERE id=? AND version=?').get(frozen.instance.material_id,frozen.instance.material_version) as {answer_key:string;grading_requirements:string}|undefined;
