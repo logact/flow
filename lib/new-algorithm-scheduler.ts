@@ -94,7 +94,7 @@ export function reconcileAxisReservations(db:Database.Database,input:{wordId:num
  })();
 }
 export function readCapacityProjection(db:Database.Database,today:string,timezone:string) { const rows=db.prepare("SELECT local_date,capacity,completed FROM daily_capacity WHERE timezone=? AND local_date BETWEEN ? AND ?").all(timezone,today,localDatePlus(today,41)) as Array<{local_date:string;capacity:number;completed:number}>; const res=db.prepare("SELECT local_date,task_count,reservation_kind,word_id,axis FROM capacity_reservations WHERE timezone=? AND local_date BETWEEN ? AND ? AND status='active'").all(timezone,today,localDatePlus(today,41)) as Array<{local_date:string;task_count:number;reservation_kind:Reservation['kind'];word_id:number;axis:ScheduleAxis|'both'}>; const cap=new Map(rows.map(x=>[x.local_date,x])); return projectCapacity({today,capacity:d=>cap.get(d)?.capacity??0,completed:Object.fromEntries(rows.map(x=>[x.local_date,x.completed])),reservations:res.map(x=>({date:x.local_date,count:x.task_count,kind:x.reservation_kind,wordId:x.word_id,axis:x.axis}))}); }
-export function admitReservedNewWord(db:Database.Database,input:{wordId:number;today:string;timezone:string;scoreR:number;scoreP:number;requiresConnection:boolean;completionDateR:string;completionDateP:string;remainingMinutes:Record<string,number>;minutesRequired:number}):{ok:boolean;reason?:string;requiredTasks:number}{
+export function admitReservedNewWord(db:Database.Database,input:{wordId:number;today:string;timezone:string;scoreR:number;scoreP:number;requiresConnection:boolean;completionDateR?:string;completionDateP?:string;remainingMinutes:Record<string,number>;minutesRequired:number}):{ok:boolean;reason?:string;requiredTasks:number}{
  const requiredTasks=minimumIntroductionTasks(input.scoreR,input.scoreP,input.requiresConnection);
  return db.transaction(()=>{
   const word=db.prepare('SELECT introduced,score_r,score_p FROM words WHERE id=?').get(input.wordId) as {introduced:number;score_r:number;score_p:number}|undefined;
@@ -108,7 +108,7 @@ export function admitReservedNewWord(db:Database.Database,input:{wordId:number;t
   if(!projection[0]||projection[0].remaining<requiredTasks)return {ok:false,reason:'capacity_today',requiredTasks};
   if((input.remainingMinutes[input.today]??0)<Math.max(needMinutes,input.minutesRequired))return {ok:false,reason:'time_remaining',requiredTasks};
   if(projection.some(day=>day.remaining<0))return {ok:false,reason:'capacity_future',requiredTasks};
-  const forecasts=[{axis:'r' as const,start:input.completionDateR},{axis:'p' as const,start:input.completionDateP}].flatMap(x=>localReviewDates(x.start).map(date=>({axis:x.axis,date,count:1,kind:'conditional' as const})));
+  const forecasts=[{axis:'r' as const,start:input.completionDateR??input.today},{axis:'p' as const,start:input.completionDateP??input.today}].flatMap(x=>localReviewDates(x.start).map(date=>({axis:x.axis,date,count:1,kind:'conditional' as const})));
   const projected=projection.map(d=>({...d,remaining:d.remaining-forecasts.filter(x=>x.date===d.date).length}));
   if(projected.some(d=>d.remaining<0))return {ok:false,reason:'capacity_future',requiredTasks};
   // Only reservations inside today's rolling 42-date view participate in this admission check.

@@ -51,10 +51,10 @@
 | T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
 | T11 | DONE | P 写作 renderer、计时/短答保留；专项 3/3、全 Jest 154/154；正式 API/持久重试待 T13，内容验收待 V04 |
 | T12 | IN_PROGRESS | 新词排序、事务准入/预约、DB 驱动的候选/EMPTY 决策、冷却/窗口/预约容量与当前版本材料检查及 42 日轴级投影已有；正式服务接线、冷却/窗口/容量的 next availability、材料作业恢复和边界矩阵仍待实现 |
-| V01 | BLOCKED | 预备 runbook 已记录；T04/T13 尚未签发全部初始档位，且缺人工桌面/窄屏 B/H |
+| V01 | DONE | 用户于 2026-11-08 明确批准按通过记录；详细操作观察与截图未提供，见 `test-report/new-algorithm/V01/acceptance.md` |
 | T13–T15、V02–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
-此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01 依赖技术接线但缺人工 B/H，已按计划标 BLOCKED 并准备独立库操作手册；V02–V08 在其依赖技术节点完成后再准备。V01–V08 的源码检查不能替代人工验收，V08 检查预览和正式页。
+此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01 按用户于 2026-11-08 的明确批准记录为 DONE；详细操作观察与截图未提供，见验收记录。V02–V08 在其依赖技术节点完成后再准备。V01–V08 的源码检查不能替代人工验收，V08 检查预览和正式页。
 
 开发约束：Next/React、strict TS、better-sqlite3 的 Node runtime。现有 `npm run test:new-algorithm-scenarios` 和 `npm run test:new-algorithm-memory` 是旧语义轨迹；重写前不得当作本版通过率。`npx tsc --noEmit` 仍有 `app/score-history/page.tsx:57` 与 `lib/manual-test-fixtures.ts:183` 的既有错误。测试注入 clock、用户时区、ID、provider 与容量，禁止真实等待 20 分钟或 41 天。
 
@@ -220,7 +220,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **输入→输出**：scope、当地日期、`due_at_R/P`、`review_level_R/P`、容量/预约、共享冷却、材料 → 复习→学习→新词的正式候选或有原因的 EMPTY。
 - **范围**：未来 41 天的已确定排期与按轴条件预约分列；新词按估计初分对应的当日最少 3/5/7/9 个任务及 R/P 各自预计达标后的第 1/4/11/41 天容量检查，还要校验剩余时间和材料。每次有效结算按冻结的 `capacity_reservation_id` 消费一项；T02 重算目标轴确定/条件预约。T12 撤销受影响轴过时条件预约并重算总容量；超容量停止准入新词并报告短缺。签发的每个容量任务都要冻结 reservation ID。逾期 `due_at_a` 不静默后移。材料失败改比其他候选，不降档。
 - **G/W/T**：Given 同时有已到期的 R 复习、同词 P 逾期学习、新词；When 调度；Then 按组别与对应 `due_at_a`、词 ID、同词 R→P 稳定选取，已毕业轴不派发。Given 7 tick 或 20 分钟；Then 冷却解除，skip/invalid 不计。Given 容量刚好/不足、单轴复习失败、目标变化、跨日/夏令时、材料失败；Then 另一轴排期不被改写，预约和 EMPTY 原因/next_available_at 可复算，没有零延迟循环或无限重试。
-- **当前部分交付**：新词排序、DB 驱动的冷却/窗口/预约容量感知候选决策与 EMPTY 分类、当前 `meaning_version` ready 材料检查、schema-backed due candidates（按每词 IANA 时区）、事务式 41 天准入预测和 R/P 轴独立预约已有。专项 16/16、全 Jest 15 suites / 165 tests、`git diff --check` 通过；tsc 仍仅有已知两处无关错误。**仍未完成，禁止标 DONE**：DB/API 正式派题尚未接 scheduler；冷却（7 tick 可能早于 20 分钟）、容量短缺的完整 EMPTY `next_available_at` 尚未计算；材料补充作业未接入；准入 helper 的剩余时间和两轴预计达标日期由调用方传入，尚未按实际训练窗口/目标推导；非默认目标与结算后预约需联调；正式派题和 V05 人工双轴验收缺失。
+- **当前部分交付**：新词排序、DB 驱动的冷却/窗口/预约容量感知候选决策与 EMPTY 分类、当前 `meaning_version` ready 材料检查、schema-backed due candidates（按每词 IANA 时区）、事务式 41 天准入预测和 R/P 轴独立预约已有。专项 16/16、全 Jest 15 suites / 165 tests、`git diff --check` 通过；tsc 仍仅有已知两处无关错误。**仍未完成，禁止标 DONE**：DB/API 正式派题尚未接 scheduler；冷却（7 tick 可能早于 20 分钟）、容量短缺的完整 EMPTY `next_available_at` 尚未计算；材料补充作业未接入；准入 helper 仍依赖调用方提供剩余时长；不同于理想最短路径的 R/P 预计达标日期也由调用方提供；非默认目标与结算后预约需联调；正式派题和 V05 人工双轴验收缺失。
 
 ### T13 · S4 · 生命周期恢复与连续流整合
 
