@@ -359,7 +359,7 @@
     {
       "id": "T11",
       "phase": "S3",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "T05",
         "T10"
@@ -367,16 +367,16 @@
       "decision_dependencies": [
         "D4"
       ],
-      "owner": null,
+      "owner": "/root/t11_p_writing",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "a2f0bb6",
       "working_tree_diff_hash": null,
       "evidence": [],
-      "expected": null,
-      "actual": null,
+      "expected": "实现 P fluent 中文写作阶段、目标私密、最终有效词数和完整用时提交",
+      "actual": "T05 base UI and T10 P fluency contracts/evaluator are complete; T11 starts the isolated P writing renderer and timing interaction.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "Implement ready/start/drafting/submission UX, preserve draft across short retry, count only final submitted text, send complete elapsed duration and server-evaluated response without client scoring."
     },
     {
       "id": "V03",

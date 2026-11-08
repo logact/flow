@@ -49,7 +49,7 @@
 | T08 | DONE | R 流利材料生成/评估契约；专项 11/11；R UI/计时由 T09、HTTP/恢复由 T13 |
 | T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；专项 29/29、全 Jest 150/150；UI/持久重试待 T11/T13、内容验收待 V04 |
 | T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
-| T11–T12 | IN_PROGRESS（T12）/ TODO（T11） | P fluency renderer 与排程/容量节点按 DAG 并行推进 |
+| T11–T12 | IN_PROGRESS | P 写作/计时 renderer 与排程/容量节点按 DAG 并行推进 |
 | T13–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。
@@ -204,7 +204,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 29 词、30 词无意义重复、目标词缺失、非目标小错、AI uncertain；When 提交；Then 分别继续完成/不算有效凑数/有效条件下退40/按质量判定通过/不改状态待重试。Given ≤5s 且缺目标词；Then 先判无效不扣分；>5s 有效 30 词 72s→25wpm→60。
 - **交付/验证**：`lib/new-algorithm-p-fluency.ts` 公共 payload 限定为中文情境/指令，且校验不得含私有目标词形；目标词形及答案键只存私有 grading/answer-key 字段，临时库断言公共 JSON 无泄漏。T03 D5 两次/8 秒材料 job 封装；注入 evaluator 分别返回目标词和整体复述判定/依据，malformed 结果转 uncertain；服务异常/uncertain/无效不推进分数。有效词数和 WPM 按规范映射 T02；≤5 秒仅在目标词缺失时先判无效。专项 Jest 29/29、全 Jest 14 suites / 150 tests、`git diff --check` 通过。生产 provider 与 HTTP/原答案重试持久化未实现，由 T13 接线；真实内容质量证据留 V04。
 
-### T11 · S3 · P 连贯写作交互
+### T11 · S3 · P 连贯写作交互（IN_PROGRESS）
 
 - **依赖**：T05、T10；D4。**文件**：P fluency renderer、共用 timing 客户端；只在本轴模块改动。
 - **输入→输出**：中文情境 → 主动开始、最终文本、包含构思停顿修改的完整用时。
