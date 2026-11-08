@@ -258,13 +258,31 @@
       "next_action": "T13 wires cued/free service issuance and HTTP lifecycle; V02 performs manual six-path end-to-end acceptance."
     },
     {
+      "id": "FIX-V02-01",
+      "phase": "S2",
+      "status": "IN_PROGRESS",
+      "depends_on": ["T02", "T03"],
+      "decision_dependencies": [],
+      "owner": "/root",
+      "contract_version": "0.3",
+      "source_revision": "f253803",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": "新版隔离 goals API 和目标设置页可查看/更新双轴目标，并使用 T02 原子资格与容量重算",
+      "actual": null,
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "添加新版目标更新 API 与页面；验证成功、无效值、活动实例冲突、单轴保持和容量阻塞"
+    },
+    {
       "id": "V02",
       "phase": "S2",
       "status": "TODO",
       "depends_on": [
         "V01",
         "T06",
-        "T07"
+        "T07",
+        "FIX-V02-01"
       ],
       "decision_dependencies": [],
       "owner": null,
