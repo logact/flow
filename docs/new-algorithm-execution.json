@@ -457,11 +457,14 @@
       "decision_dependencies": [],
       "owner": "Codex",
       "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "source_revision": "20895a7",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "test/new-algorithm-r-fluency-service.jest.test.cjs",
+        "test-report/new-algorithm/V03/automated-r-score.md"
+      ],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": "FIX-V03-01 已修复并复验 T13；V03 的自动计分基础具备，但真实材料内容与正式页面人工验收尚未进行。",
+      "actual": "正式 scheduler→R FLUENCY answer→服务端计时回放→evaluator→settlement 自动轨迹已通过：149/150/200/225/300 WPM 对应 R 80→40/60/73.333/79.999/100，P 保持35；达标场景仅 R 开始第1级复习。确定性夹具不代表真实内容质量。",
       "blockers": [
         "还没有真实 provider 生成的 R 材料供内容审阅；尚无真人在正式页面完成初读/回看及窄屏交互记录。"
       ],
