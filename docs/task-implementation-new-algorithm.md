@@ -51,9 +51,10 @@
 | T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
 | T11 | DONE | P 写作 renderer、计时/短答保留；专项 3/3、全 Jest 154/154；正式 API/持久重试待 T13，内容验收待 V04 |
 | T12 | IN_PROGRESS | 候选优先级、42日投影、分轴预约读写及临时库验证已有；词频准入、时长/材料保底和正式派题仍待实现 |
-| T13–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
+| V01 | BLOCKED | 预备 runbook 已记录；T04/T13 尚未签发全部初始档位，且缺人工桌面/窄屏 B/H |
+| T13–T15、V02–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
-此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01–V08 分别记录人工 UI 验收，V08 检查预览和正式页；源码检查不能替代人工验收。
+此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01 依赖技术接线但缺人工 B/H，已按计划标 BLOCKED 并准备独立库操作手册；V02–V08 在其依赖技术节点完成后再准备。V01–V08 的源码检查不能替代人工验收，V08 检查预览和正式页。
 
 开发约束：Next/React、strict TS、better-sqlite3 的 Node runtime。现有 `npm run test:new-algorithm-scenarios` 和 `npm run test:new-algorithm-memory` 是旧语义轨迹；重写前不得当作本版通过率。`npx tsc --noEmit` 仍有 `app/score-history/page.tsx:57` 与 `lib/manual-test-fixtures.ts:183` 的既有错误。测试注入 clock、用户时区、ID、provider 与容量，禁止真实等待 20 分钟或 41 天。
 
