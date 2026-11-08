@@ -329,7 +329,7 @@
     {
       "id": "T10",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T02",
         "T03",
@@ -343,14 +343,18 @@
       ],
       "owner": "/root/t10_p_fluency",
       "contract_version": null,
-      "source_revision": "1e7699f",
+      "source_revision": "956cb8d",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-p-fluency.ts",
+        "test/new-algorithm-p-fluency.jest.test.cjs",
+        "test-report/new-algorithm/T10/p-fluency.md"
+      ],
       "expected": "生成不泄漏英文目标的中文 P 流利材料，并独立校验有效词数、目标表达和整体复述质量",
-      "actual": "T02/T03/T04/T06 prerequisites are complete; T10 starts as a separate P fluency material/evaluator module, independent from R fluency content.",
+      "actual": "T03 D5-bounded producer validates exact public Chinese schema, target-form absence, private requirements and non-empty answer key; DB tests prove public_payload contains only scene/instructions while target/key remain private. Injected evaluator checks target use and overall recall independently with evidence, rejects malformed verdicts as uncertain and maps invalid/uncertain/service_error safely to T02. Meaningful count filters common words/repetition; <=5s only missing target is invalid; invalid time cannot score. Focused 29/29, full Jest 14 suites/150 tests, diff check pass. No production provider or HTTP/original-answer retry lifecycle is claimed; quality B/H remains V04.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement Chinese-scene generation and English-leak validation, meaningful word count, two-part injected evaluator outcomes and T02 settlement mapping."
+      "next_action": "T11 implements P writing/timing UI; T13 wires persistence/retry and production request lifecycle; V04 verifies real quality fixtures."
     },
     {
       "id": "T11",

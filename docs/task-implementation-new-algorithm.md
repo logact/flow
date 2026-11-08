@@ -47,7 +47,7 @@
 | T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 retrieval HTTP 接线及生产 provider 留给 T13 |
 | T07 | DONE | 六档 renderer 与输入载荷已实现；专项 4/4、全 Jest 116/116；API 生命周期待 T13，人工验收待 V02 |
 | T08 | DONE | R 流利材料生成/评估契约；专项 11/11；R UI/计时由 T09、HTTP/恢复由 T13 |
-| T10 | IN_PROGRESS | P 流利材料生成与服务端评估 |
+| T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；专项 29/29、全 Jest 150/150；UI/持久重试待 T11/T13、内容验收待 V04 |
 | T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
 | T11–T12 | IN_PROGRESS（T12）/ TODO（T11） | P fluency renderer 与排程/容量节点按 DAG 并行推进 |
 | T13–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
@@ -196,13 +196,13 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 初读 20s、回看 10s、答题 40s；When 两题均对提交；Then reading_seconds=30、wpm=200，F≈73.333 未舍入；题文按阶段互斥。中断、缺片段、重复片段或计时无效时不更新任何学习字段，重新开始不能接旧时间。
 - **交付/验证**：`components/new-algorithm-r-fluency-renderer.tsx` 在 ready 阶段不展示短文，点击开始后才显示并计时；初读/各次回看分别累计，答题阶段只展示问题且不计时；interruption 使实例无效，重启使用新时钟。`lib/new-algorithm-r-timing.ts` 用确定性事件轨迹检查回看状态、段数和零秒无效。专项 Jest 6/6、全 Jest 13 suites / 127 tests、diff-check 通过。计时事件的正式 HTTP 验证/结算由 T13 接线，浏览器与中断人工验收留 V03。
 
-### T10 · S3 · P 流利材料与服务端评估（IN_PROGRESS）
+### T10 · S3 · P 流利材料与服务端评估（DONE）
 
 - **依赖**：T02、T03、T04、T06；D3/D5/D8。**文件**：P material producer/evaluator、共用词数/timing 校验、service 接线。
 - **输入→输出**：词义/水平/目标词形 → 无英文泄漏的中文场景/判定要求；最终文本与用时 → 两项判定、原文依据、有效词数。
 - **范围/非目标**：检查目标词用法与整体复述分离；小错不影响理解可通过；无意义重复不能凑数。保留原答用于重试，不要求重新表达。
 - **G/W/T**：Given 29 词、30 词无意义重复、目标词缺失、非目标小错、AI uncertain；When 提交；Then 分别继续完成/不算有效凑数/有效条件下退40/按质量判定通过/不改状态待重试。Given ≤5s 且缺目标词；Then 先判无效不扣分；>5s 有效 30 词 72s→25wpm→60。
-- **验证/证据**：U/I/H；有意义计数/质量样本、双项依据、真实 AI 评估记录和失败持久化快照。**阻塞**：将所有语法错都失败、目标英文从 payload 或 snapshot 泄漏。
+- **交付/验证**：`lib/new-algorithm-p-fluency.ts` 公共 payload 限定为中文情境/指令，且校验不得含私有目标词形；目标词形及答案键只存私有 grading/answer-key 字段，临时库断言公共 JSON 无泄漏。T03 D5 两次/8 秒材料 job 封装；注入 evaluator 分别返回目标词和整体复述判定/依据，malformed 结果转 uncertain；服务异常/uncertain/无效不推进分数。有效词数和 WPM 按规范映射 T02；≤5 秒仅在目标词缺失时先判无效。专项 Jest 29/29、全 Jest 14 suites / 150 tests、`git diff --check` 通过。生产 provider 与 HTTP/原答案重试持久化未实现，由 T13 接线；真实内容质量证据留 V04。
 
 ### T11 · S3 · P 连贯写作交互
 
@@ -348,7 +348,7 @@ flowchart TD
   V02["V02 双轴提取"]
   T08["T08 S3 R材料评估 DONE"]
   T09["T09 S3 R计时交互 DONE"]
-  T10["T10 S3 P材料评估 IN_PROGRESS"]
+  T10["T10 S3 P材料评估 DONE"]
   T11["T11 S3 P计时交互"]
   V03["V03 R流利闭环"]
   V04["V04 P流利闭环"]
