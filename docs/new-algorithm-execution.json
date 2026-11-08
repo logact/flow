@@ -283,7 +283,7 @@
     {
       "id": "V02",
       "phase": "S2",
-      "status": "BLOCKED",
+      "status": "DONE",
       "depends_on": [
         "V01",
         "T06",
@@ -291,16 +291,21 @@
         "FIX-V02-01"
       ],
       "decision_dependencies": [],
-      "owner": "/root (manual acceptance prepared)",
+      "owner": "/root (user-approved acceptance)",
       "contract_version": "0.3",
       "source_revision": "777a61b",
       "working_tree_diff_hash": null,
-      "evidence": ["test-report/new-algorithm/FIX-V02-01/target-controls.md"],
+      "evidence": [
+        "test-report/new-algorithm/V02/acceptance.md",
+        "test-report/new-algorithm/FIX-V02-01/target-controls.md",
+        "test/new-algorithm-task-service.jest.test.cjs",
+        "test/new-algorithm-goals-api.jest.test.cjs"
+      ],
       "expected": "正式六档提取升降分、目标变化后学习完成与排期资格重算，并由人工确认控件/提示可理解",
-      "actual": "Isolated fixture DB, six-path run instructions, and new target page are prepared. Human operation and observations are still pending. An existing Next dev server owns the repository .next lock, so the isolated port-3102 server was not started to avoid stopping an unknown user process.",
-      "blockers": ["The existing dev server must be stopped from its owning terminal before launching the isolated V02 server on port 3102."],
+      "actual": "The user explicitly approved V02 as PASS on 2026-11-08. The acceptance record notes that detailed operation observations and screenshots were not supplied; no additional manual evidence is claimed.",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Stop the existing dev server from its terminal, run the command in test-report/new-algorithm/FIX-V02-01/target-controls.md, then complete the six tasks and one-axis target update and report observations."
+      "next_action": null
     },
     {
       "id": "T08",
