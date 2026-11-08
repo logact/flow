@@ -70,7 +70,7 @@
       "decision_dependencies": [],
       "owner": "/root (coordinator integration after assigned workers produced no code)",
       "contract_version": "0.3",
-      "source_revision": "0545f19",
+      "source_revision": "97d1955",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-score.ts",
@@ -82,7 +82,7 @@
         "test/new-algorithm-settlement.jest.test.cjs"
       ],
       "expected": "新版词级连接双轴初始化、独立计分、各轴 FLUENCY 达标证据、独立 1/3/7/30 复习退级/毕业、due_at_R/P 与容量预约原子结算",
-      "actual": "Pure scoring and independent review transitions are integrated with SQLite settlement. Connection writes both axes once; valid FLUENCY starts axis review; review pass/failure updates due dates, demotion, graduation and R/P-specific determined/conditional reservations atomically. Exact capacity reservation ID is read from frozen snapshot_json, validated and consumed once; completion is counted on the actual local day including midnight crossing. Target updates cancel only the affected axis review reservations and return it to today when it loses eligibility; changes are rejected while the affected task is live. Jest settlement 9/9, score/review/settlement combined 34/34, full Jest 63/63; only two known pre-existing TypeScript errors remain. flow.db untouched.",
+      "actual": "Pure scoring and independent review transitions are integrated with SQLite settlement. Connection writes both axes once; valid FLUENCY starts axis review; review pass/failure updates due dates, demotion, graduation and R/P-specific determined/conditional reservations atomically. Exact capacity reservation ID is read from frozen snapshot_json, validated and consumed once; completion is counted on the actual local day including midnight crossing. Target updates cancel only the affected axis review reservations and return it to today when it loses eligibility; if capacity allows, they atomically create a deterministic same-day task reservation, otherwise report the blocked axis without overbooking. The other axis schedule is preserved, and changes are rejected while the affected task is live. T12 DB chooser tests confirm target-requeued and review-demoted axes are schedulable on their reserved local dates. Jest settlement 10/10, score/review/settlement combined 35/35, full Jest 15 suites/170 tests; only two known pre-existing TypeScript errors remain. flow.db untouched.",
       "blockers": [],
       "repair_attempts": 0,
       "next_action": "T04/T12 task issuers must freeze capacity_reservation_id in snapshot_json; verify the linked end-to-end dispatch/settlement path in downstream nodes.",
