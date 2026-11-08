@@ -1,5 +1,6 @@
 const {createNewAlgorithmDb}=require('../lib/new-algorithm-db');
 const {settleNewAlgorithmAttempt,updateNewAlgorithmTargets}=require('../lib/new-algorithm-settlement');
+const {getScheduleDecision}=require('../lib/new-algorithm-scheduler');
 
 function fixture({axis='both',type='ENCODE',stage='encode',purpose='introduce',score=0,scoreR=0,scoreP=0,targetR=80,targetP=80,reviewR=null,reviewP=null,dueR=null,dueP=null,taskCount=9,reservationKind='introduction',reservationAxis='both',snapshotId='reservation-1'}={}) {
   const db=createNewAlgorithmDb();
@@ -74,6 +75,9 @@ describe('database-backed new algorithm settlement',()=>{
       {axis:'r',local_date:'2026-11-19',reservation_kind:'conditional',status:'active'},
       {axis:'r',local_date:'2026-12-19',reservation_kind:'conditional',status:'active'},
     ]);
+    db.prepare("INSERT INTO daily_capacity(local_date,timezone,capacity,completed) VALUES('2026-11-09','Asia/Shanghai',20,0)").run();
+    db.prepare("INSERT INTO meta(key,value) VALUES('training_window_start:Asia/Shanghai','00:00'),('training_window_end:Asia/Shanghai','23:59')").run();
+    expect(getScheduleDecision(db,{now:Date.parse('2026-11-09T02:00:00Z'),today:'2026-11-09',timezone:'Asia/Shanghai'})).toMatchObject({kind:'candidate',candidate:{wordId:1,axis:'r',kind:'review',dueDate:'2026-11-09'}});
     db.close();
   });
 
@@ -90,9 +94,24 @@ describe('database-backed new algorithm settlement',()=>{
     db.prepare("INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status) VALUES('review-p',1,'p','2026-11-14','Asia/Shanghai','determined',1,'active')").run();
     db.prepare("UPDATE task_instances SET status='completed' WHERE instance_id='instance'").run();
     db.prepare("UPDATE attempts SET status='completed' WHERE attempt_id='attempt'").run();
-    updateNewAlgorithmTargets(db,{wordId:1,targetR:95,targetP:80,now:Date.parse('2026-11-08T02:00:00Z')});
+    const changed=updateNewAlgorithmTargets(db,{wordId:1,targetR:95,targetP:80,now:Date.parse('2026-11-08T02:00:00Z')});
+    expect(changed).toEqual({requeuedAxes:['r'],capacityBlockedAxes:[]});
     expect(db.prepare('SELECT target_r,fluency_pass_r,learning_complete_r,review_level_r,graduated_r,due_at_r,review_level_p,due_at_p FROM words WHERE id=1').get()).toEqual({target_r:95,fluency_pass_r:0,learning_complete_r:0,review_level_r:null,graduated_r:0,due_at_r:'2026-11-07T16:00:00.000Z',review_level_p:7,due_at_p:'2026-11-14T16:00:00.000Z'});
-    expect(db.prepare('SELECT reservation_id,status FROM capacity_reservations ORDER BY reservation_id').all()).toEqual([{reservation_id:'conditional-r',status:'cancelled'},{reservation_id:'reservation-1',status:'cancelled'},{reservation_id:'review-p',status:'active'}]);
+    expect(db.prepare('SELECT reservation_id,status FROM capacity_reservations ORDER BY reservation_id').all()).toEqual([{reservation_id:'conditional-r',status:'cancelled'},{reservation_id:'review-p',status:'active'},{reservation_id:'target-change:1:r:2026-11-08',status:'active'}]);
+    db.prepare("INSERT INTO meta(key,value) VALUES('training_window_start:Asia/Shanghai','00:00'),('training_window_end:Asia/Shanghai','23:59')").run();
+    expect(getScheduleDecision(db,{now:Date.parse('2026-11-08T02:00:00Z'),today:'2026-11-08',timezone:'Asia/Shanghai'})).toMatchObject({kind:'candidate',candidate:{wordId:1,axis:'r',dueDate:'2026-11-08'}});
+    db.close();
+  });
+
+  test('target increase reports when another axis occupies all remaining daily capacity',()=>{
+    const db=fixture({axis:'r',type:'FLUENCY',stage:'fluency',score:90,scoreR:90,scoreP:85,targetR:90,targetP:80,reviewR:3,reviewP:7,dueR:'2026-11-10T16:00:00.000Z',dueP:'2026-11-14T16:00:00.000Z',taskCount:1,reservationKind:'determined',reservationAxis:'r'});
+    db.prepare("UPDATE daily_capacity SET capacity=1").run();
+    db.prepare("INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status) VALUES('other-axis-p',1,'p','2026-11-08','Asia/Shanghai','determined',1,'active')").run();
+    db.prepare("UPDATE task_instances SET status='completed' WHERE instance_id='instance'").run();
+    db.prepare("UPDATE attempts SET status='completed' WHERE attempt_id='attempt'").run();
+    const changed=updateNewAlgorithmTargets(db,{wordId:1,targetR:95,targetP:80,now:Date.parse('2026-11-08T02:00:00Z')});
+    expect(changed).toEqual({requeuedAxes:[],capacityBlockedAxes:['r']});
+    expect(db.prepare('SELECT reservation_id,status FROM capacity_reservations ORDER BY reservation_id').all()).toEqual([{reservation_id:'other-axis-p',status:'active'},{reservation_id:'reservation-1',status:'cancelled'}]);
     db.close();
   });
 

@@ -8,11 +8,13 @@ export type Judgment = { kind:'encode' } | { kind:'retrieval'; passed:boolean } 
 export type Settlement = { status:'completed'; scoreBefore:number; scoreAfter:number; tick:number; replay:boolean } | { status:'grading_retry'; replay:boolean };
 
 /** Update one or both targets and return any no-longer-eligible axis to today's learning queue. */
-export function updateNewAlgorithmTargets(db:Database.Database,input:{wordId:number;targetR:number;targetP:number;now:number}):void {
+export function updateNewAlgorithmTargets(db:Database.Database,input:{wordId:number;targetR:number;targetP:number;now:number}):{requeuedAxes:('r'|'p')[];capacityBlockedAxes:('r'|'p')[]} {
   if (![input.targetR,input.targetP].every(value=>Number.isFinite(value)&&value>=60&&value<=100) || !Number.isSafeInteger(input.now) || input.now<0) throw new RangeError('Invalid target update');
-  db.transaction(()=>{
+  return db.transaction(()=>{
     const word=getWordState(db,input.wordId);
     if(!word) throw new Error('Unknown word');
+    const requeuedAxes:('r'|'p')[]=[];
+    const capacityBlockedAxes:('r'|'p')[]=[];
     const targetChanged=(input.targetR!==word.target_r)||(input.targetP!==word.target_p);
     if(targetChanged) {
       const live=db.prepare("SELECT axis FROM task_instances WHERE word_id=? AND status IN ('issued','grading','grading_retry')").all(input.wordId) as {axis:'r'|'p'|'both'}[];
@@ -30,12 +32,15 @@ export function updateNewAlgorithmTargets(db:Database.Database,input:{wordId:num
           .run(target,localDayStart(input.now,word.local_timezone),input.wordId);
         db.prepare(`UPDATE capacity_reservations SET status='cancelled' WHERE word_id=? AND axis=?
           AND reservation_kind IN ('determined','conditional') AND status='active'`).run(input.wordId,axis);
+        if(reserveImmediateLearningTask(db,input.wordId,axis,word.local_timezone,input.now))requeuedAxes.push(axis);
+        else capacityBlockedAxes.push(axis);
       } else {
         db.prepare(`UPDATE words SET target_${axis}=?,learning_complete_${axis}=CASE WHEN score_${axis}>=? AND fluency_pass_${axis}=1 THEN 1 ELSE 0 END WHERE id=?`)
           .run(target,target,input.wordId);
       }
     }
     db.prepare('UPDATE words SET graduated=CASE WHEN graduated_r=1 AND graduated_p=1 THEN 1 ELSE 0 END WHERE id=?').run(input.wordId);
+    return {requeuedAxes,capacityBlockedAxes};
   })();
 }
 
@@ -65,6 +70,22 @@ function syncReviewReservations(db:Database.Database,wordId:number,axis:'r'|'p',
       DO UPDATE SET task_count=1,status='active'`)
       .run(reservationId,wordId,axis,date,timeZone,kind);
   });
+}
+
+function reserveImmediateLearningTask(db:Database.Database,wordId:number,axis:'r'|'p',timeZone:string,now:number):boolean {
+  const date=localCalendarDate(now,timeZone);
+  const existing=db.prepare(`SELECT 1 FROM capacity_reservations WHERE word_id=? AND local_date=? AND timezone=? AND status='active'
+    AND ((axis=? AND reservation_kind IN ('determined','conditional')) OR (axis='both' AND reservation_kind='introduction')) LIMIT 1`).get(wordId,date,timeZone,axis);
+  if(existing)return true;
+  const capacity=db.prepare('SELECT capacity,completed FROM daily_capacity WHERE local_date=? AND timezone=?').get(date,timeZone) as {capacity:number;completed:number}|undefined;
+  if(!capacity)return false;
+  const reserved=(db.prepare("SELECT COALESCE(SUM(task_count),0) n FROM capacity_reservations WHERE local_date=? AND timezone=? AND status='active'").get(date,timeZone) as {n:number}).n;
+  if(capacity.completed+reserved>=capacity.capacity)return false;
+  db.prepare(`INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status)
+    VALUES(?,?,?,?,?,'determined',1,'active')
+    ON CONFLICT(word_id,axis,local_date,timezone,reservation_kind) DO UPDATE SET reservation_id=excluded.reservation_id,task_count=1,status='active'`)
+    .run(`target-change:${wordId}:${axis}:${date}`,wordId,axis,date,timeZone);
+  return true;
 }
 
 function consumeCapacity(db:Database.Database, instance:Instance, now:number):void {

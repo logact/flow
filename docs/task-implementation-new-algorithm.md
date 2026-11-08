@@ -40,7 +40,7 @@
 |---|---|---|
 | T00 | DONE | v0.3 冻结 C1–C7；用户已确认 O1–O3 的可调整原型默认值 |
 | T01 | DONE | schema v3、容量 task_count/预约类型约束、拒绝旧库与事务测试；7/7 Jest 通过，未触碰 `flow.db` |
-| T02 | DONE | 纯分数/复习规则与 SQLite 原子结算；容量预约按冻结 ID 单次消费、轴级投影、跨本地日结算与目标重算；专项 34 项通过 |
+| T02 | DONE | 纯分数/复习规则与 SQLite 原子结算；容量预约按冻结 ID 单次消费、轴级投影、跨本地日结算与目标重算；目标上调后按可用容量创建当天轴任务预约并显式报告容量阻塞；专项 35 项通过 |
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
@@ -136,7 +136,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 ### T02 · S1 · 纯计分、连接与原子排期回写核（DONE）
 
 - **依赖**：T00、T01。**文件**：`lib/new-algorithm-score.ts`、`lib/new-algorithm-settlement.ts`、新版复习/排期纯函数。
-- **交付**：提取和 R/P FLUENCY 公式、双轴连接、轴级独立 review helper、SQLite 原子回写与预约投影；Jest 16 计分、9 复习规则、9 DB settlement；完整配置 Jest 63/63。报告见 `test-report/new-algorithm/T02/partial.md`。旧 H 增强不进入本版回写。
+- **交付**：提取和 R/P FLUENCY 公式、双轴连接、轴级独立 review helper、SQLite 原子回写与预约投影；Jest 16 计分、9 复习规则、10 DB settlement；当前全套 15 suites / 170 tests。目标上调使轴重新学习时，若当天还有容量则写入单任务确定预约并由 T12 scheduler 选中；满容量则返回明确 blocked axis，不超额预约。报告见 `test-report/new-algorithm/T02/partial.md`。旧 H 增强不进入本版回写。
 - **新输入→输出**：冻结实例+服务端判定+本地日/容量状态 → 原子更新 F、连接/目标轴 FLUENCY 证据、`learning_complete_a`、`review_level_a`、`due_at_a`、轴级/词级毕业、预约、tick 和事件。
 - **G/W/T**：仅双轴 0 分词的一次连接使两轴各到 5 且只加一个 tick；R/P 三档与 FLUENCY 继续用规范绝对计分，保留未舍入值。各轴有达标有效 FLUENCY 即独立开始 1 天复习；该轴有效通过即独立推进 1→3→7→30→轴毕业，两轴都毕业才词毕业；失败按 1→1、3→1、7→3、30→7，降分轴清除通过证据并按当天补练，未降分但未通过不推进。结算一轴不得改另一轴排期；无效/不确定/服务失败不改排期；重复提交不重复预约或 tick。
 - **完成证据**：新版 Jest 数值/状态轨迹、临时库字段前后与事件、跨本地日容量、时区、目标变更、重复提交与回滚。`snapshot_json.capacity_reservation_id` 是结算消费预约的必需冻结字段；T04/T12 签发实例时必须写入准确预约 ID。
