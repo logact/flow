@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { stageForScore, type FluencyResult } from './new-algorithm-score';
 import { settleNewAlgorithmAttempt, type Judgment } from './new-algorithm-settlement';
-import { orderCandidates } from './new-algorithm-scheduler';
+import { getScheduleDecision, orderCandidates } from './new-algorithm-scheduler';
 
 type Axis='r'|'p'|'both';
 type Reservation={reservation_id:string;task_count:number;local_date:string;timezone:string;axis:Axis;reservation_kind:string};
@@ -98,6 +98,22 @@ export function getOrIssueNewAlgorithmTask(db:Database.Database,now:number):Publ
     const live=liveInstance(db);if(live)return live;
     const words=db.prepare(`SELECT id,term,meaning_version,local_timezone,introduced,score_r,score_p,target_r,target_p,due_at_r,due_at_p,
       learning_complete_r,learning_complete_p,graduated_r,graduated_p,last_ts_any,last_tick_any FROM words ORDER BY id`).all() as Parameters<typeof makeCandidate>[1][];
+    if(!words.length)return {type:'EMPTY' as const,reason:'scope_empty',nextAvailableAt:null};
+    const decisions=[...new Set(words.map(word=>word.local_timezone))].map(timezone=>{
+      const wordIds=words.filter(word=>word.local_timezone===timezone).map(word=>word.id);
+      return getScheduleDecision(db,{now,today:localDate(now,timezone),timezone,wordIds});
+    });
+    const scheduled=decisions.flatMap(decision=>decision.kind==='candidate'?[decision.candidate]:[]);
+    if(!scheduled.length){
+      const empty=decisions.filter((decision):decision is Extract<typeof decision,{kind:'empty'}>=>decision.kind==='empty');
+      const selected=empty.find(x=>x.reason==='cooldown_wait')??empty.find(x=>x.reason==='training_window_closed')??empty.find(x=>x.reason==='capacity_insufficient')??empty.find(x=>x.reason==='material_failed')??empty.find(x=>x.reason==='material_pending')??empty[0];
+      return {type:'EMPTY' as const,reason:selected?.reason??'scope_empty',nextAvailableAt:selected?.nextAvailableAt??null};
+    }
+    const scheduledOrder=orderCandidates(scheduled);
+    const chosen=scheduledOrder[0];
+    const chosenWord=words.find(word=>word.id===chosen.wordId)!;
+    if(chosen.axis!=='both'&&stageForScore(chosen.axis==='r'?chosenWord.score_r:chosenWord.score_p)!=='choice')
+      return {type:'EMPTY' as const,reason:'task_stage_unavailable',nextAvailableAt:null};
     const candidates:{word:typeof words[number];axis:Axis;due:string|null}[]=[];
     for(const word of words){
       if(!word.introduced&&word.score_r===0&&word.score_p===0){candidates.push({word,axis:'both',due:word.due_at_r});continue;}
@@ -107,6 +123,7 @@ export function getOrIssueNewAlgorithmTask(db:Database.Database,now:number):Publ
         if(stageForScore(word[`score_${axis}`])==='choice')candidates.push({word,axis,due});
       }
     }
+    for(let i=candidates.length-1;i>=0;i--)if(candidates[i].word.id!==chosen.wordId||candidates[i].axis!==chosen.axis)candidates.splice(i,1);
     const priority=orderCandidates(candidates.map(({word,axis,due})=>({
       wordId:word.id,axis,dueDate:due?localDate(Date.parse(due),word.local_timezone):localDate(now,word.local_timezone),
       review:Boolean(axis!=='both'&&word[`learning_complete_${axis}`]),graduated:false,materialReady:true,

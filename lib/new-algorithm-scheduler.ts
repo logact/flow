@@ -2,7 +2,7 @@ export type ScheduleAxis='r'|'p'|'both';
 export type Candidate={wordId:number;axis:ScheduleAxis;dueDate:string|null;review:boolean;graduated:boolean;materialReady:boolean;materialStatus?:'ready'|'pending'|'failed';kind:'review'|'learning'|'new';taskCount?:number;targetR?:number;targetP?:number;scoreR?:number;scoreP?:number;freq?:number|null;freqSource?:string|null;lastTick?:number|null;lastAt?:number|null};
 const dayMs=86400000;
 export function localDatePlus(date:string,days:number):string { const [y,m,d]=date.split('-').map(Number); const t=new Date(Date.UTC(y,m-1,d+days)); return `${t.getUTCFullYear()}-${String(t.getUTCMonth()+1).padStart(2,'0')}-${String(t.getUTCDate()).padStart(2,'0')}`; }
-export function orderCandidates(candidates:Candidate[],currentBookSource:string|null=null):Candidate[] { const rank={review:0,learning:1,new:2} as const; const axisOrder:Record<ScheduleAxis,number>={r:0,p:1,both:-1}; return candidates.filter(c=>!c.graduated&&c.materialReady).slice().sort((a,b)=>{const g=rank[a.kind]-rank[b.kind];if(g)return g;if(a.kind==='new'&&b.kind==='new'){const ordered=orderNewWordCandidates([a as NewWordCandidate,b as NewWordCandidate],currentBookSource);if(ordered[0].wordId!==ordered[1].wordId)return ordered[0].wordId===a.wordId?-1:1;}return (a.dueDate??'9999').localeCompare(b.dueDate??'9999')||a.wordId-b.wordId||axisOrder[a.axis]-axisOrder[b.axis];}); }
+export function orderCandidates(candidates:Candidate[],currentBookSource:string|null=null,includeMaterialBlocked=false):Candidate[] { const rank={review:0,learning:1,new:2} as const; const axisOrder:Record<ScheduleAxis,number>={r:0,p:1,both:-1}; return candidates.filter(c=>!c.graduated&&(includeMaterialBlocked||c.materialReady)).slice().sort((a,b)=>{const g=rank[a.kind]-rank[b.kind];if(g)return g;if(a.kind==='new'&&b.kind==='new'){const ordered=orderNewWordCandidates([a as NewWordCandidate,b as NewWordCandidate],currentBookSource);if(ordered[0].wordId!==ordered[1].wordId)return ordered[0].wordId===a.wordId?-1:1;}return (a.dueDate??'9999').localeCompare(b.dueDate??'9999')||a.wordId-b.wordId||axisOrder[a.axis]-axisOrder[b.axis];}); }
 export function cooldownReady(input:{tick:number;lastTick:number|null;now:number;lastAt:number|null}):boolean { return input.lastTick===null||input.lastAt===null||input.tick-input.lastTick>=7||input.now-input.lastAt>=20*60*1000; }
 export type EmptyReason='today_complete'|'capacity_insufficient'|'cooldown_wait'|'material_pending'|'material_failed'|'scope_empty'|'training_window_closed';
 export type ScheduleDecision={kind:'candidate';candidate:Candidate;skippedWordIds:number[]}|{kind:'empty';reason:EmptyReason;nextAvailableAt:number|null;skippedWordIds:number[]};
@@ -42,10 +42,11 @@ export function loadScheduleCandidates(db:Database.Database, today:string, curre
   const review=Boolean(w[`learning_complete_${axis}`]&&w[`review_level_${axis}`]!==null);
   const due=w[`due_at_${axis}`] as string|null;
   const localDue=due?localCalendarDate(Date.parse(due),w.local_timezone):null;
-  if(due&&localDue&&localDue<=today) { const status=materialStatus(db,w.id,axis,review?'fluency':stageFor(w[`score_${axis}`])); out.push({wordId:w.id,axis,dueDate:localDue,review,graduated:false,materialReady:status==='ready',materialStatus:status,kind:review?'review':'learning',lastTick:w.last_tick_any,lastAt:w.last_ts_any}); }
+  if(due&&localDue&&localDue<=today&&hasActiveTaskReservation(db,w.id,axis,today,w.local_timezone)) { const status=materialStatus(db,w.id,axis,review?'fluency':stageFor(w[`score_${axis}`])); out.push({wordId:w.id,axis,dueDate:localDue,review,graduated:false,materialReady:status==='ready',materialStatus:status,kind:review?'review':'learning',lastTick:w.last_tick_any,lastAt:w.last_ts_any}); }
  }
- return orderCandidates(out.filter(c=>c.materialReady),currentBookSource).concat(orderCandidates(out.filter(c=>!c.materialReady),currentBookSource));
+ return orderCandidates(out,currentBookSource,true);
 }
+function hasActiveTaskReservation(db:Database.Database,wordId:number,axis:'r'|'p',date:string,timezone:string):boolean { return Boolean(db.prepare(`SELECT 1 FROM capacity_reservations WHERE word_id=? AND local_date=? AND timezone=? AND status='active' AND ((axis=? AND reservation_kind IN ('determined','conditional')) OR (axis='both' AND reservation_kind='introduction')) LIMIT 1`).get(wordId,date,timezone,axis)); }
 function stageFor(score:number):'choice'|'cued'|'free'|'fluency' { return score<20?'choice':score<40?'cued':score<60?'free':'fluency'; }
 function materialStatus(db:Database.Database,wordId:number,axis:ScheduleAxis,stage:string):'ready'|'pending'|'failed' { const rows=db.prepare("SELECT m.status,m.usage_count FROM materials m JOIN words w ON w.id=m.word_id WHERE m.word_id=? AND m.axis=? AND m.stage=? AND m.meaning_version=w.meaning_version ORDER BY m.version DESC").all(wordId,axis,stage) as Array<{status:string;usage_count:number}>; if(rows.some(x=>x.status==='ready'&&x.usage_count===0))return 'ready'; if(rows.some(x=>x.status==='preparing'))return 'pending'; if(rows.length&&rows.every(x=>x.status==='failed'))return 'failed'; return 'pending'; }
 function trainingWindowOpen(db:Database.Database,now:number,timezone:string):boolean { const start=db.prepare('SELECT value FROM meta WHERE key=?').get(`training_window_start:${timezone}`) as {value:string}|undefined; const end=db.prepare('SELECT value FROM meta WHERE key=?').get(`training_window_end:${timezone}`) as {value:string}|undefined; if(!start||!end)return false; const parts=new Intl.DateTimeFormat('en-US',{timeZone:timezone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now); const val=(name:string)=>Number(parts.find(x=>x.type===name)?.value); const minute=val('hour')*60+val('minute'),to=(value:string)=>Number(value.slice(0,2))*60+Number(value.slice(3,5)); return minute>=to(start.value)&&minute<to(end.value); }
@@ -68,6 +69,13 @@ export function getScheduleDecision(db:Database.Database,input:{now:number;today
  if(decision.reason==='training_window_closed')return {...decision,nextAvailableAt:trainingWindowNextAt(db,input.now,input.timezone)};
  if(decision.reason==='capacity_insufficient')return {...decision,nextAvailableAt:nextCapacityAvailability(db,input)};
  if(decision.reason==='today_complete'){
+  const unreservedDue=scopedWords.some(w=>(['r','p'] as const).some(axis=>{
+   const due=w[`due_at_${axis}`] as string|null;
+   if(w[`graduated_${axis}`]||!due||!Number.isFinite(Date.parse(due)))return false;
+   const localDue=localCalendarDate(Date.parse(due),w.local_timezone);
+   return localDue<=input.today&&!hasActiveTaskReservation(db,w.id,axis,input.today,w.local_timezone);
+  }));
+  if(unreservedDue)return {...decision,reason:'capacity_insufficient',nextAvailableAt:nextCapacityAvailability(db,input)};
   const unreservedNew=scopedWords.some(w=>!w.introduced&&w.score_r===0&&w.score_p===0&&!db.prepare("SELECT 1 FROM capacity_reservations WHERE word_id=? AND axis='both' AND timezone=? AND reservation_kind='introduction' AND status='active' LIMIT 1").get(w.id,input.timezone));
   if(unreservedNew)return {...decision,reason:'capacity_insufficient',nextAvailableAt:null};
   const future=scopedWords.flatMap(w=>(['r','p'] as const).flatMap(axis=>{

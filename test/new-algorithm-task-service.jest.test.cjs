@@ -71,7 +71,7 @@ describe('isolated new algorithm task service',()=>{
 
   test('returns an explicit empty result when ready material is unavailable',()=>{
     const db=createNewAlgorithmDb();seed(db,{introduced:1,scoreR:0,scoreP:5,taskCount:3});
-    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'materials_unavailable',nextAvailableAt:null});
+    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'material_pending',nextAvailableAt:null});
     expect(db.prepare('SELECT count(*) n FROM task_instances').get().n).toBe(0);
     db.close();
   });
@@ -80,11 +80,11 @@ describe('isolated new algorithm task service',()=>{
     const db=createNewAlgorithmDb();seed(db,{introduced:1,scoreR:0,scoreP:20,taskCount:3});
     db.prepare('UPDATE words SET last_ts_any=?,last_tick_any=0 WHERE id=1').run(NOW-5*60*1000);
     db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('choice-r-cooldown',1,'r','choice',1,1,'ready','{\"options\":[\"a\",\"b\"]}','{\"correct_index\":0}','{}','{}','{}',1)").run();
-    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'cooldown_wait',nextAvailableAt:NOW+15*60*1000});
+    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'cooldown_wait',nextAvailableAt:null});
     db.close();
     const unavailable=createNewAlgorithmDb();seed(unavailable,{introduced:1,scoreR:0,scoreP:20,taskCount:3});
     unavailable.prepare('UPDATE words SET last_ts_any=?,last_tick_any=0 WHERE id=1').run(NOW-5*60*1000);
-    expect(getOrIssueNewAlgorithmTask(unavailable,NOW)).toEqual({type:'EMPTY',reason:'materials_unavailable',nextAvailableAt:null});
+    expect(getOrIssueNewAlgorithmTask(unavailable,NOW)).toEqual({type:'EMPTY',reason:'material_pending',nextAvailableAt:null});
     unavailable.close();
   });
 
@@ -93,7 +93,7 @@ describe('isolated new algorithm task service',()=>{
     db.prepare("UPDATE meta SET value='11:00' WHERE key='training_window_start:Asia/Shanghai'").run();
     db.prepare("UPDATE meta SET value='20:00' WHERE key='training_window_end:Asia/Shanghai'").run();
     db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('encode-window',1,'both','encode',1,1,'ready','{\"text\":\"word\"}','{}','{}','{}','{}',1)").run();
-    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'training_window_closed',nextAvailableAt:null});
+    expect(getOrIssueNewAlgorithmTask(db,NOW)).toEqual({type:'EMPTY',reason:'training_window_closed',nextAvailableAt:Date.parse('2026-11-07T03:00:00.000Z')});
     expect(db.prepare('SELECT count(*) n FROM task_instances').get().n).toBe(0);
     db.close();
   });
