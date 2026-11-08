@@ -448,7 +448,7 @@
       ],
       "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "02520a8",
+      "source_revision": "1cd28cf",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decision composes per-word due/material/cooldown, training window, 42-day capacity projection and active candidate reservations. It tries later ready candidates when higher-priority material is unavailable; cooldown nextAvailableAt is null when the seven-tick route has no predictable ETA, and today_complete timestamps are limited to viable reserved, material-ready, non-graduated axes. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; TypeScript still has the two previously recorded unrelated errors. Formal API issuance is not connected.",
+      "actual": "DB-driven schedule decision composes due candidates, current-version material state, cooldown, training window, 42-day capacity and active candidate reservation. It skips unavailable candidates, returns EMPTY reasons, supplies next training-window start when computable, and only reports future due timestamps for non-graduated, material-ready, reserved axes. Cooldown ETA is null when seven-tick release cannot be predicted. Focused Jest 13/13, full Jest 15 suites/162 tests, diff-check pass; tsc retains only the two known unrelated errors. Formal API issuance is not connected.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Resolve timezone consistency between per-word due conversion and user capacity projection, finish usable EMPTY next_available_at for window/capacity/material states, derive intro time feasibility and independent R/P completion forecasts, verify reservation claim/settlement interaction under concurrent issuance, and cover target/failure/DST/rollback cases before completion."
+      "next_action": "Complete timezone-change/reservation handling, accurate next_available_at for capacity/material states, derive rather than accept new-word session feasibility and R/P completion dates, verify atomic reservation consumption under concurrent issuance, and add target/failure/DST/rollback tests. Keep T12 IN_PROGRESS until the scheduler is usable through the formal service and its acceptance matrix is complete."
     },
     {
       "id": "T13",
