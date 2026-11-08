@@ -464,7 +464,7 @@
     {
       "id": "T13",
       "phase": "S4",
-      "status": "TODO",
+      "status": "DONE",
       "depends_on": [
         "T04",
         "T07",
@@ -478,16 +478,23 @@
         "D6",
         "D8"
       ],
-      "owner": null,
-      "contract_version": null,
-      "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
+      "owner": "/root",
+      "contract_version": "0.3",
+      "source_revision": "b26b2ae",
       "working_tree_diff_hash": null,
-      "evidence": [],
-      "expected": null,
-      "actual": null,
+      "evidence": [
+        "lib/new-algorithm-task-service.ts",
+        "app/api/new-algorithm/task/route.ts",
+        "components/new-algorithm-task-view.tsx",
+        "test/new-algorithm-task-service.jest.test.cjs",
+        "test/new-algorithm-task-view.jest.test.cjs",
+        "test-report/new-algorithm/T13/lifecycle.md"
+      ],
+      "expected": "可恢复的实例与冻结作答；服务端重试不重复结算；skip/exit/submit 互斥；choice/cued/free/fluency 连续派发与手动恢复",
+      "actual": "Task API dispatches scheduler-selected retrieval and axis-specific fluency stages. Submitted answers and timing are frozen before async grading; exact instance GET/replay restores lost responses, conflicting answers are rejected, and grading retries reuse the frozen response. Skip/exit have separate idempotent terminal events, capacity/material handling, and retry-attempt exit. UI retains pending answers across refresh, keeps feedback separate from next issuance, offers explicit retry without polling, and uses the R/P fluency renderers. Full Jest 15 suites/181 tests and diff-check pass. TypeScript still reports only the two known unrelated errors. Live provider and human browser evidence are explicitly deferred to V06.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": null
     },
     {
       "id": "V05",
