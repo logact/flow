@@ -474,23 +474,23 @@
     {
       "id": "V04",
       "phase": "S3",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "V02",
         "T10",
         "T11"
       ],
       "decision_dependencies": [],
-      "owner": null,
+      "owner": "Codex",
       "contract_version": null,
       "source_revision": "577522c0a82f2cbdd04c5a89aaccbcdca89a4634",
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
-      "actual": null,
+      "actual": "依赖核对完成；正在补正式 scheduler→P FLUENCY→服务端计时/判分重试→结算场景，尚未声明通过。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "核对依赖与产品决策后领取节点"
+      "next_action": "运行分数/速度边界、目标/整体失败与判分重试轨迹；记录真人场景审阅门禁。"
     },
     {
       "id": "T12",
