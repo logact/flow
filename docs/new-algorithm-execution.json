@@ -435,7 +435,7 @@
     {
       "id": "T12",
       "phase": "S4",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T02",
         "T03",
@@ -448,7 +448,7 @@
       ],
       "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "462d383",
+      "source_revision": "97d1955",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decisions handle due candidates, current-meaning material state, cooldown, training window, 42-day capacity and own active reservations. EMPTY availability handles reliable window starts and filtered future due timestamps; unknown 7-tick ETA remains null. New-word admission derives the conservative cooldown lower bound from the DB training window and now, rejects insufficient time/capacity/material, writes forecasts transactionally, rolls back on forced failure, and defaults ideal R/P completion dates to today while allowing different estimates. Capacity EMPTY now reports the earliest future local execution time when a due, material-ready candidate has capacity or its own active reservation within the 41-day horizon. The formal task service calls the DB chooser per word timezone inside its issuance transaction, returns the chooser EMPTY reason/next availability, and issues only the selected supported connection/choice candidate after a second transactional check. Due learning beats new introduction; due work requires an active reservation on the execution day, while overdue due_at remains unchanged. Material pending, cooldown, closed-window, and unsupported-stage responses are explicit. Focused scheduler/service Jest 27/27, full Jest 15 suites/169 tests, diff-check pass; tsc retains two unrelated errors. flow.db was deleted and remains absent.",
+      "actual": "DB-driven schedule decisions handle due candidates, current-meaning material state, cooldown, training window, 42-day capacity and own active reservations. EMPTY availability handles reliable window starts and filtered future due timestamps; unknown 7-tick ETA remains null. New-word admission derives the conservative cooldown lower bound from the DB training window and now, rejects insufficient time/capacity/material, writes forecasts transactionally, rolls back on forced failure, and defaults ideal R/P completion dates to today while allowing different estimates. Capacity EMPTY now reports the earliest future local execution time when a due, material-ready candidate has capacity or its own active reservation within the 41-day horizon. The formal task service calls the DB chooser per word timezone inside its issuance transaction, returns the chooser EMPTY reason/next availability, and issues only the selected supported connection/choice candidate after a second transactional check. Due learning beats new introduction; due work requires an active reservation on the execution day, while overdue due_at remains unchanged. Material pending, cooldown, closed-window, and unsupported-stage responses are explicit. Target-updated axes receive a same-day one-task reservation when capacity allows and return explicit blocked-axis results when full; scheduler integration confirms the changed axis is selected. Review failure re-enters scheduler on the demoted axis date while preserving the other axis. Focused scheduler/service Jest 27/27 and settlement Jest 10/10; full Jest 15 suites/170 tests, diff-check pass; tsc retains two unrelated errors. flow.db was deleted and remains absent.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Verify multi-process exact-once issuance/settlement; connect material recovery; finish target-change/review-failure and daily-capacity/window edge matrix. Current task service dispatches connection/choice; cued/free/FLUENCY lifecycle stages remain for downstream integration. T12 remains IN_PROGRESS."
+      "next_action": null
     },
     {
       "id": "T13",
