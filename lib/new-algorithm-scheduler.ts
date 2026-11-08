@@ -66,6 +66,8 @@ export function getScheduleDecision(db:Database.Database,input:{now:number;today
  if(decision.kind==='candidate')return decision;
  if(decision.reason==='training_window_closed')return {...decision,nextAvailableAt:trainingWindowNextAt(db,input.now,input.timezone)};
  if(decision.reason==='today_complete'){
+  const unreservedNew=scopedWords.some(w=>!w.introduced&&w.score_r===0&&w.score_p===0&&!db.prepare("SELECT 1 FROM capacity_reservations WHERE word_id=? AND axis='both' AND timezone=? AND reservation_kind='introduction' AND status='active' LIMIT 1").get(w.id,input.timezone));
+  if(unreservedNew)return {...decision,reason:'capacity_insufficient',nextAvailableAt:null};
   const future=scopedWords.flatMap(w=>(['r','p'] as const).flatMap(axis=>{
    if(w[`graduated_${axis}`])return [];
    const due=w[`due_at_${axis}`] as string|null;
