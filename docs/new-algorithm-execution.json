@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decisions handle due candidates, current-meaning material state, cooldown, training window, 42-day capacity and own active reservations. EMPTY availability handles reliable window starts, filtered future due timestamps, scope-empty and missing new-word reservations; 7-tick ETA stays null when unknown. Temp DB tests cover DST, material fallback, exact capacity, insufficient capacity/time, idempotent admission and rollback after forced write failure. Focused Jest 16/16, full Jest 15 suites/165 tests, diff-check pass; tsc retains two known unrelated errors. flow.db is absent after deletion and remains ignored/untracked state is preserved.",
+      "actual": "DB-driven schedule decisions handle due candidates, current-meaning material state, cooldown, training window, 42-day capacity and own active reservations. EMPTY availability handles reliable window starts, filtered future due timestamps, scope-empty and missing new-word reservations; 7-tick ETA stays null when unknown. Admission validates material/time/capacity, rolls back failed reservation writes, is replay-idempotent, and defaults ideal R/P completion dates to today while allowing separate estimates. Focused Jest 16/16, full Jest 15 suites/165 tests, diff-check pass; tsc retains two known unrelated errors. flow.db was deleted and remains absent.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Finish deriving admission time feasibility and independent R/P completion forecasts instead of trusting caller inputs; complete material/capacity next_available_at semantics; integrate chooser with formal task issuance and verify settlement consumes reservations exactly once under concurrency; add target-change, review-failure and full capacity/time-window boundary cases. T12 remains IN_PROGRESS."
+      "next_action": "Derive remaining session time and independent R/P completion forecasts from target/window state rather than accepting caller assertions; complete material/capacity next_available_at semantics; integrate chooser with formal task issuance and verify exact-once reservation settlement under concurrency; add target-change/review-failure boundaries. T12 remains IN_PROGRESS."
     },
     {
       "id": "T13",
