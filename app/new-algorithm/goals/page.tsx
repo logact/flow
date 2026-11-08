@@ -8,7 +8,7 @@ type Draft={targetR:number;targetP:number};
 
 export default function NewAlgorithmGoalsPage(){
   const [words,setWords]=useState<Word[]>([]);const [drafts,setDrafts]=useState<Record<number,Draft>>({});
-  const [error,setError]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState<number|null>(null);
+  const [error,setError]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState<number|null>(null);const [materialBusy,setMaterialBusy]=useState<string|null>(null);
   const timezone=typeof window==='undefined'?'UTC':Intl.DateTimeFormat().resolvedOptions().timeZone;
   const load=useCallback(async()=>{
     setError('');
@@ -23,6 +23,10 @@ export default function NewAlgorithmGoalsPage(){
       setMessage(`${word.term}：目标已保存。${axes.join('；')}`);await load();
     }catch(e){setError((e as Error).message);}finally{setBusy(null);}
   }
+  async function generateFluency(word:Word,axis:'r'|'p'){const key=`${word.id}:${axis}`;setMaterialBusy(key);setError('');setMessage('');
+    try{const response=await fetch('/api/new-algorithm/materials',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wordId:word.id,axis})});const data=await response.json();if(!response.ok)throw new Error(data.error||'材料生成未通过校验');
+      setMessage(`${word.term}：${axis.toUpperCase()} 流利材料已生成并通过校验（${data.attempts} 次尝试）。`);
+    }catch(e){setError((e as Error).message);}finally{setMaterialBusy(null);}}
   return <main style={{maxWidth:900,margin:'32px auto',padding:24,fontFamily:'system-ui,sans-serif',color:'#18212f'}}>
     <header><Link href="/new-algorithm">← 返回练习</Link><h1>新算法目标设置</h1><p>R 阅读和 P 写作目标分别设置；目标变化会重新检查该轴的学习资格和容量。</p></header>
     {error&&<p role="alert" style={{color:'#a32020'}}>{error}</p>}{message&&<p role="status">{message}</p>}
@@ -33,6 +37,10 @@ export default function NewAlgorithmGoalsPage(){
         <label>P 写作目标（60–100）<input aria-label={`${word.term} P 写作目标`} type="number" min={60} max={100} step={1} value={draft.targetP} onChange={e=>setDrafts(value=>({...value,[word.id]:{...draft,targetP:Number(e.target.value)}}))}/></label>
       </div>
       <button type="button" disabled={busy===word.id} onClick={()=>void save(word)}>{busy===word.id?'保存中…':'保存目标'}</button>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}}>
+        <button type="button" disabled={materialBusy===`${word.id}:r`} onClick={()=>void generateFluency(word,'r')}>{materialBusy===`${word.id}:r`?'正在生成 R 阅读材料…':'生成 R 阅读流利材料'}</button>
+        <button type="button" disabled={materialBusy===`${word.id}:p`} onClick={()=>void generateFluency(word,'p')}>{materialBusy===`${word.id}:p`?'正在生成 P 写作场景…':'生成 P 写作流利材料'}</button>
+      </div>
     </section>;})}</div>}
     <button type="button" onClick={()=>void load()}>刷新目标</button>
   </main>;

@@ -57,9 +57,15 @@ export async function generateNewAlgorithmMaterial(
   db.prepare(`INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,generation_attempts,created_at)
     VALUES(?,?,?,?,?,?,'preparing','','','','','{}',0,?)`).run(id,input.wordId,input.axis,input.stage,input.version,input.meaningVersion,input.now);
   let lastReason = 'GENERATION_FAILED';
+  let attemptsMade = 0;
   for (let attempt = 1; attempt <= BATCH_ATTEMPTS; attempt++) {
+    attemptsMade=attempt;
     try {
+      const beforeCall=db.prepare('SELECT meaning,meaning_version FROM words WHERE id=?').get(input.wordId) as {meaning:string;meaning_version:number}|undefined;
+      if(!beforeCall||beforeCall.meaning_version!==input.meaningVersion||beforeCall.meaning!==word.meaning){lastReason='MEANING_VERSION_CHANGED';break;}
       const draft = await withTimeout(provider(input, word.meaning), PROVIDER_TIMEOUT_MS);
+      const afterCall=db.prepare('SELECT meaning,meaning_version FROM words WHERE id=?').get(input.wordId) as {meaning:string;meaning_version:number}|undefined;
+      if(!afterCall||afterCall.meaning_version!==input.meaningVersion||afterCall.meaning!==word.meaning){lastReason='MEANING_VERSION_CHANGED';break;}
       const result = validate(input, draft);
       if (!result.valid) {
         lastReason = result.reason ?? 'VALIDATION_FAILED';
@@ -75,6 +81,6 @@ export async function generateNewAlgorithmMaterial(
     }
   }
   db.prepare("UPDATE materials SET status='failed',generation_attempts=?,validation_json=? WHERE id=?")
-    .run(BATCH_ATTEMPTS,JSON.stringify({reason:lastReason}),id);
-  return {id,status:'failed',attempts:BATCH_ATTEMPTS,reason:lastReason};
+    .run(attemptsMade,JSON.stringify({reason:lastReason}),id);
+  return {id,status:'failed',attempts:attemptsMade,reason:lastReason};
 }
