@@ -49,6 +49,17 @@ describe('isolated new algorithm task service',()=>{
     db.close();
   });
 
+  test('formal task issuance uses scheduler priority: due learning precedes a new-word introduction',()=>{
+    const db=createNewAlgorithmDb();seed(db);
+    db.prepare("UPDATE daily_capacity SET capacity=10").run();
+    db.prepare("INSERT INTO words(id,term,meaning,target_r,target_p,score_r,score_p,introduced,due_at_r,due_at_p,local_timezone,created_at) VALUES(2,'due','due meaning',80,80,0,20,1,'2026-11-07T00:00:00.000Z','2026-11-07T00:00:00.000Z','Asia/Shanghai',2)").run();
+    db.prepare("INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status) VALUES('due-r',2,'r','2026-11-07','Asia/Shanghai','determined',1,'active')").run();
+    db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('encode-first',1,'both','encode',1,1,'ready','{}','{}','{}','{}','{}',1),('choice-due',2,'r','choice',1,1,'ready','{\"options\":[\"a\",\"b\"]}','{\"correct_index\":0}','{}','{}','{}',1)").run();
+    const task=getOrIssueNewAlgorithmTask(db,NOW);
+    expect(task).toMatchObject({wordId:2,axis:'r',stage:'choice'});
+    db.close();
+  });
+
   test('a wrong choice lowers only the issued axis to the normative failure score',()=>{
     const db=createNewAlgorithmDb();seed(db,{introduced:1,scoreR:0,scoreP:20,taskCount:3});
     db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('choice-r-wrong',1,'r','choice',1,1,'ready','{\"options\":[\"a\",\"b\",\"c\"]}','{\"correct_index\":2}','{}','{}','{}',1)").run();

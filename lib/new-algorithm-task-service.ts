@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { stageForScore, type FluencyResult } from './new-algorithm-score';
 import { settleNewAlgorithmAttempt, type Judgment } from './new-algorithm-settlement';
+import { orderCandidates } from './new-algorithm-scheduler';
 
 type Axis='r'|'p'|'both';
 type Reservation={reservation_id:string;task_count:number;local_date:string;timezone:string;axis:Axis;reservation_kind:string};
@@ -106,7 +107,15 @@ export function getOrIssueNewAlgorithmTask(db:Database.Database,now:number):Publ
         if(stageForScore(word[`score_${axis}`])==='choice')candidates.push({word,axis,due});
       }
     }
-    candidates.sort((a,b)=>(Date.parse(a.due??'')-Date.parse(b.due??''))||a.word.id-b.word.id||(a.axis==='r'?-1:a.axis==='both'?-2:1)-(b.axis==='r'?-1:b.axis==='both'?-2:1));
+    const priority=orderCandidates(candidates.map(({word,axis,due})=>({
+      wordId:word.id,axis,dueDate:due?localDate(Date.parse(due),word.local_timezone):localDate(now,word.local_timezone),
+      review:Boolean(axis!=='both'&&word[`learning_complete_${axis}`]),graduated:false,materialReady:true,
+      kind:axis==='both'?'new' as const:'learning' as const,targetR:word.target_r,targetP:word.target_p,
+      scoreR:word.score_r,scoreP:word.score_p,freq:null,freqSource:null,
+      lastTick:word.last_tick_any,lastAt:word.last_ts_any,
+    })));
+    const rank=new Map(priority.map((candidate,index)=>[`${candidate.wordId}:${candidate.axis}`,index]));
+    candidates.sort((a,b)=>(rank.get(`${a.word.id}:${a.axis}`)??Number.MAX_SAFE_INTEGER)-(rank.get(`${b.word.id}:${b.axis}`)??Number.MAX_SAFE_INTEGER));
     let earliestCooldown:number|null=null;
     let windowBlocked=false;
     for(const candidate of candidates){
