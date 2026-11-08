@@ -422,19 +422,27 @@
     {
       "id": "FIX-V03-01",
       "phase": "S3",
-      "status": "IN_PROGRESS",
-      "depends_on": ["T09", "T13"],
+      "status": "DONE",
+      "depends_on": [
+        "T09",
+        "T13"
+      ],
       "decision_dependencies": [],
       "owner": "Codex",
       "contract_version": "0.3",
-      "source_revision": "33c791f",
+      "source_revision": "d494c43",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-task-service.ts",
+        "test/new-algorithm-task-service.jest.test.cjs",
+        "test-report/new-algorithm/FIX-V03-01/server-timing.md",
+        "test-report/new-algorithm/T13/lifecycle.md"
+      ],
       "expected": "R FLUENCY 服务端重放冻结的阅读/回看事件，并由服务端计算有效阅读时长与 WPM 后再评分",
-      "actual": "发现 submitNewAlgorithmFluencyAnswer 直接信任客户端 timing_valid、reading_seconds、wpm；伪造时钟可影响正式 R 分数。",
+      "actual": "正式 R FLUENCY 先冻结答案，再回放服务端事件并用冻结材料词数计算时长/WPM；客户端计时字段不参与计分。伪造字段场景按服务端 20 秒/300 WPM 得 60→100；中断轨迹保持 60 分、tick 不变。全 Jest 15 suites/187 tests 通过；tsc 只有两个既有无关错误。",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "服务端回放事件、只持久化计算所得计时；覆盖合法回看、伪造字段、乱序/中断与分数边界，再复验 T13。"
+      "next_action": null
     },
     {
       "id": "V03",
@@ -453,10 +461,12 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": "V03 自动轨迹未开始；FIX-V03-01 修复并复验 T13 后继续。",
-      "blockers": ["R FLUENCY 服务端目前信任客户端计时字段；见 FIX-V03-01。"],
+      "actual": "FIX-V03-01 已修复并复验 T13；V03 的自动计分基础具备，但真实材料内容与正式页面人工验收尚未进行。",
+      "blockers": [
+        "还没有真实 provider 生成的 R 材料供内容审阅；尚无真人在正式页面完成初读/回看及窄屏交互记录。"
+      ],
       "repair_attempts": 0,
-      "next_action": "等待 FIX-V03-01 完成后运行自动轨迹并准备人工验收。"
+      "next_action": "准备可运行的 R FLUENCY 真材料场景，再完成真人内容/页面验收及记录。"
     },
     {
       "id": "V04",
@@ -511,7 +521,7 @@
     {
       "id": "T13",
       "phase": "S4",
-      "status": "STALE",
+      "status": "DONE",
       "depends_on": [
         "T04",
         "T07",
@@ -527,7 +537,7 @@
       ],
       "owner": "/root",
       "contract_version": "0.3",
-      "source_revision": "b26b2ae",
+      "source_revision": "d494c43",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-task-service.ts",
@@ -538,7 +548,7 @@
         "test-report/new-algorithm/T13/lifecycle.md"
       ],
       "expected": "可恢复的实例与冻结作答；服务端重试不重复结算；skip/exit/submit 互斥；choice/cued/free/fluency 连续派发与手动恢复",
-      "actual": "Task API dispatches scheduler-selected retrieval and axis-specific fluency stages. Submitted answers and timing are frozen before async grading; exact instance GET/replay restores lost responses, conflicting answers are rejected, and grading retries reuse the frozen response. Skip/exit have separate idempotent terminal events, capacity/material handling, and retry-attempt exit. UI retains pending answers across refresh, keeps feedback separate from next issuance, offers explicit retry without polling, and uses the R/P fluency renderers. Full Jest 15 suites/181 tests and diff-check pass. TypeScript still reports only the two known unrelated errors. Live provider and human browser evidence are explicitly deferred to V06.",
+      "actual": "原生命周期与恢复实现已复验，并补齐 R FLUENCY 服务端 timing protocol 回放，客户端不能伪报阅读速度；全 Jest 15 suites/187 tests、diff-check 通过。TS 仍仅有既有 score-history/page.tsx:57 与 manual-test-fixtures.ts:183 错误。真实 provider 和人工页面交互不在自动证据内。",
       "blockers": [],
       "repair_attempts": 0,
       "next_action": null

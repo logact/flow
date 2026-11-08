@@ -50,12 +50,13 @@
 | T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；T11/T13 已接入 UI、计时、冻结作答和重试；内容验收留 V04 |
 | T09 | DONE | R 阅读/回看分段与计时协议；T13 已接正式服务端提交、计时判定和恢复；人工验收留 V03 |
 | T11 | DONE | P 写作 renderer、计时/短答保留；T13 已接正式 API/服务端判分和持久重试；内容验收留 V04 |
+| T13 | DONE | 复验 skip/exit/submit、冻结作答重放；R FLUENCY 服务端回放事件并忽略客户端速度字段；全 Jest 187/187，见 FIX-V03-01 与 T13 报告 |
 | T12 | DONE | DB chooser 已接正式 task service：按词条时区选候选、返回具体 EMPTY 原因/可预测 next availability、只签发执行日有容量预约的候选，保留逾期 due_at；目标变化在容量允许时重建当天预约，复习失败按退级轴预约回到 scheduler。专项 27/27、全 Jest 15 suites / 170 tests。cued/free/FLUENCY 发题属于 T13，人工双轴验收属于 V05 |
 | V01 | DONE | 用户于 2026-11-08 明确批准按通过记录；详细操作观察与截图未提供，见 `test-report/new-algorithm/V01/acceptance.md` |
 | FIX-V02-01 | DONE | 新版 goals 目标 API/页面与隔离人工场景库已准备；目标/API 专项与全 Jest 186 项通过；见修复报告 |
 | V02 | DONE | 用户于 2026-11-08 明确确认验收通过；详细操作记录与截图未提供，见 `test-report/new-algorithm/V02/acceptance.md` |
-| FIX-V03-01 | IN_PROGRESS | R FLUENCY 服务端须重放计时事件并忽略客户端速度字段；复验 T13 |
-| V03 | BLOCKED | 等待 FIX-V03-01；人工页面/材料验收也尚待完成 |
+| FIX-V03-01 | DONE | R FLUENCY 服务端回放与派生阅读速度；全 Jest 187/187，见修复报告 |
+| V03 | BLOCKED | FIX-V03-01 已关闭；等待真实 provider 材料与人工内容/正式页面验收 |
 | T14–T15、V04–V08 | TODO | 依赖前序纵向/人工验收节点，按 DAG 继续推进 |
 
 此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。V01 和 V02 按用户于 2026-11-08 的明确批准记录为 DONE；详细操作观察与截图未提供，分别见验收记录。V03–V08 在其依赖技术节点完成后准备。源码/自动化检查不能替代人工验收。
@@ -232,8 +233,8 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **输入→输出**：C5 的 refresh/retry/skip/exit/interruption + C6 → 恢复的同一实例/作答或明确终态与下一题。
 - **范围/非目标**：网络失败保留原答，判分重试复用不可变答案；显式跳过、退出分开；新版 EMPTY 原因（今日完成、容量不足、冷却、材料、空范围）UI、到期刷新和手动刷新。反馈与下一实例分离，不靠重新挂载丢输入。不延期、不修改跳过词优先级。
 - **G/W/T**：Given 已提交但响应丢失；When 刷新/重试；Then 按保存的实例 ID 查询并重放原结果、tick 不变。Given 跳过/提交/退出并发；Then 只有一个终态和唯一相应事件；重复 skip 不再记事件、释放未结算材料占用并可返回同一候选。Given FLUENCY 中断；Then 全学习状态不变，新开始新计时；未提交上滑忽略。给 wait=null，不能零延迟自动轮询；材料恢复后刷新可派发。
-- **完成情况**：正式 task API 已按 scheduler 派发 choice/cued/free 与 R/P FLUENCY；R/P 提交由服务端判定，提交前冻结原答和计时，判分重试只重用同一作答，conflict 拒绝换答。实例查询 GET、刷新优先恢复待提交答案、完成请求重放、skip/exit 互斥和唯一事件、grading_retry 显式 exit、跳过释放材料使用计数均已接入。新算法页面接入已有 renderer；不自动轮询，EMPTY 提供手动重试，反馈通过“下一题”显式进入。专项生命周期轨迹与既有 renderer 契约纳入全 Jest 181/181；`git diff --check` 通过。`npx tsc --noEmit` 仍仅报两处既有无关错误（score-history/page.tsx:57、manual-test-fixtures.ts:183）。配置中的真实 LLM 端点和浏览器人工操作不在 mock 技术验收中；交互观察由 V06 留档。
-- **验证/证据**：I/E 故障/并发轨迹见 [T13 生命周期报告](../test-report/new-algorithm/T13/lifecycle.md)；B/H 在 V06。**阻塞**：静默丢答、自动无限重试、退出被重复计入、当前任务展示上一题判分。
+- **完成情况**：正式 task API 已按 scheduler 派发 choice/cued/free 与 R/P FLUENCY；R/P 提交由服务端判定，提交前冻结原答；R 计时事件在服务端回放并派生 WPM，判分重试只重用原作答/计时，conflict 拒绝换答。实例查询 GET、刷新优先恢复待提交答案、完成请求重放、skip/exit 互斥和唯一事件、grading_retry 显式 exit、跳过释放材料使用计数均已接入。新算法页面接入已有 renderer；不自动轮询，EMPTY 提供手动重试，反馈通过“下一题”显式进入。专项生命周期轨迹与既有 renderer 契约纳入全 Jest 187/187；`git diff --check` 通过。`npx tsc --noEmit` 仍仅报两处既有无关错误（score-history/page.tsx:57、manual-test-fixtures.ts:183）。配置中的真实 LLM 端点和浏览器人工操作不在 mock 技术验收中；交互观察由 V06 留档。
+- **验证/证据**：I/E 故障/并发轨迹见 [T13 生命周期报告](../test-report/new-algorithm/T13/lifecycle.md)；R 计时缺口修复见 [FIX-V03-01](../test-report/new-algorithm/FIX-V03-01/server-timing.md)；B/H 在 V06。**阻塞**：静默丢答、自动无限重试、退出被重复计入、当前任务展示上一题判分。
 
 ### T14 · S5 · 练习历史与有事件来源的分析
 
