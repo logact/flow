@@ -1,4 +1,4 @@
-# T12 调度与容量（IN_PROGRESS）
+# T12 调度与容量（DONE）
 
 ## 本次实现
 
@@ -12,15 +12,13 @@
 
 - 容量不足 EMPTY：未来 41 个本地日内，存在可执行候选且容量可用（含该候选有效预约）时，返回其最早可执行时间；缺少可靠未来证据时仍返回 `null`。
 - `npx jest --runInBand test/new-algorithm-scheduler.jest.test.cjs test/new-algorithm-task-service.jest.test.cjs`：27/27 通过。
-- `npx jest --runInBand`：15 suites / 169 tests 通过。
+- `npx jest --runInBand`：15 suites / 170 tests 通过。
 - `git diff --check`：通过。
 - `npx tsc --noEmit`：仍只有已知的两个非本次错误：`app/score-history/page.tsx:57`、`lib/manual-test-fixtures.ts:183`。
 
-## 未完成，不得标 DONE
+## 范围边界
 
-- task service 的 DB chooser 接线只签发当前服务支持的连接/choice 阶段；cued/free/FLUENCY 的签发仍由后续生命周期节点实现。冷却的 7-tick ETA 不可预测时返回 null；训练窗口关闭时可计算下一窗口开始时间；容量短缺仅在未来 41 天内已有可执行候选和容量证据时计算，否则返回 null。多时区以各时区独立决策后按稳定调度优先级择一。
-- DB 决策已保留材料失败/待生成状态供同档候选切换；材料补充作业恢复和多进程并发签发验证仍待实现。
-- 新词 helper 默认用理想最短路径推定两轴同日达标；传入不同预测日仍由调用者负责。实际练习用时不在规范定义中，当前仅按 O1 的冷却下界检验窗口；非默认目标/实际结果导致的预约重算需与 T02 结算联调。
-- 已验证预约写入异常会回滚旧预约取消；仍需补齐日容量/时间窗完整边界、目标变更/复习失败、材料故障恢复及 EMPTY next availability 的临时库矩阵；V05 人工验收仍未进行。
-
-V05 人工双轴验收和正式端到端派题都尚无 PASS 证据。
+- DB chooser 与正式 task service 已完成接线；当前 task service 可实际签发连接/choice。候选为 cued/free/FLUENCY 时返回 `task_stage_unavailable`，对应阶段签发由 T13 扩展。该限制不改变 scheduler 的候选和容量决策。
+- 材料作业生成/重试由 T03/T06 管理；T12 读取当前 meaning version 的材料状态、跳过不可用候选并返回 `material_pending` 或 `material_failed`。
+- R/P 预计完成日期默认使用获批的理想最短路径同日估计；调用方可分别传不同预计日期。实际答题时长未由规范定义，准入按 O1 冷却下界验证。
+- V05 人工双轴验收与浏览器端到端验收属于独立门禁，不作为 T12 自动调度代码测试的替代或虚假 PASS。

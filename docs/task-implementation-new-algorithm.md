@@ -50,7 +50,7 @@
 | T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；专项 29/29、全 Jest 150/150；UI/持久重试待 T11/T13、内容验收待 V04 |
 | T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
 | T11 | DONE | P 写作 renderer、计时/短答保留；专项 3/3、全 Jest 154/154；正式 API/持久重试待 T13，内容验收待 V04 |
-| T12 | IN_PROGRESS | DB chooser 已接正式 task service：按词条时区选候选、返回具体 EMPTY 原因、只签发实际执行日有容量预约的候选，保留逾期 due_at；当前签发限连接/choice。材料作业恢复、多进程竞争和目标变化/复习失败/容量窗口完整矩阵仍待实现 |
+| T12 | DONE | DB chooser 已接正式 task service：按词条时区选候选、返回具体 EMPTY 原因/可预测 next availability、只签发执行日有容量预约的候选，保留逾期 due_at；目标变化在容量允许时重建当天预约，复习失败按退级轴预约回到 scheduler。专项 27/27、全 Jest 15 suites / 170 tests。cued/free/FLUENCY 发题属于 T13，人工双轴验收属于 V05 |
 | V01 | DONE | 用户于 2026-11-08 明确批准按通过记录；详细操作观察与截图未提供，见 `test-report/new-algorithm/V01/acceptance.md` |
 | T13–T15、V02–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
@@ -214,13 +214,13 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **G/W/T**：Given 未点开始；When 等待/开始后输入并删改/提交；Then 开始前不计时、开始后全部时间纳入、只算最终有效词数；失败显示具体未满足要求，语言合理但未用目标词不能误称语言错误；中断需重新计时。
 - **交付/验证**：`components/new-algorithm-p-fluency-renderer.tsx` 明确 ready/start/writing/short/done/interrupted 状态；点击开始后计入全部构思/输入/删改时间，少于 30 个有效词保留草稿并继续计时，只提交最终文本和完整用时；中断清空计时但保留草稿，重新开始计新时长。无客户端评分或目标英文展示。专项 Jest 3/3、全 Jest 15 suites / 154 tests、diff-check 通过。当前 T04 未签发 P fluency 任务，正式 API/答案持久重试由 T13 接线，人工内容/交互验收留 V04。
 
-### T12 · S4 · 完整排期、容量与材料保底调度（IN_PROGRESS）
+### T12 · S4 · 完整排期、容量与材料保底调度（DONE）
 
 - **依赖**：T02、T03、T04、T06；适用 D5/D7 需按新规范复核。**文件**：新 scheduler/candidate/容量投影模块、材料作业接口。
 - **输入→输出**：scope、当地日期、`due_at_R/P`、`review_level_R/P`、容量/预约、共享冷却、材料 → 复习→学习→新词的正式候选或有原因的 EMPTY。
 - **范围**：未来 41 天的已确定排期与按轴条件预约分列；新词按估计初分对应的当日最少 3/5/7/9 个任务及 R/P 各自预计达标后的第 1/4/11/41 天容量检查，还要校验剩余时间和材料。每次有效结算按冻结的 `capacity_reservation_id` 消费一项；T02 重算目标轴确定/条件预约。T12 撤销受影响轴过时条件预约并重算总容量；超容量停止准入新词并报告短缺。签发的每个容量任务都要冻结 reservation ID。逾期 `due_at_a` 不静默后移。材料失败改比其他候选，不降档。
 - **G/W/T**：Given 同时有已到期的 R 复习、同词 P 逾期学习、新词；When 调度；Then 按组别与对应 `due_at_a`、词 ID、同词 R→P 稳定选取，已毕业轴不派发。Given 7 tick 或 20 分钟；Then 冷却解除，skip/invalid 不计。Given 容量刚好/不足、单轴复习失败、目标变化、跨日/夏令时、材料失败；Then 另一轴排期不被改写，预约和 EMPTY 原因/next_available_at 可复算，没有零延迟循环或无限重试。
-- **当前部分交付**：新词排序、DB 驱动的冷却/窗口/预约容量感知候选决策与 EMPTY 分类、当前 `meaning_version` ready 材料检查、schema-backed due candidates（按每词 IANA 时区）、事务式 41 天准入预测和 R/P 轴独立预约已有。容量不足时，可在未来 41 个本地日内找到已预约或有余量、材料就绪且已到期候选的前提下返回最早可执行时间；证据不足仍返回 null。专项 17/17、全 Jest 15 suites / 166 tests、`git diff --check` 通过。**仍未完成，禁止标 DONE**：DB/API 正式派题尚未接 scheduler；冷却（7 tick 可能早于 20 分钟）与材料补充作业恢复未接入；准入 helper 已按数据库训练窗口计算保守冷却下界（未包含作答耗时）；不同于理想最短路径的 R/P 预计达标日期仍由调用者提供；非默认目标与结算后预约需联调；正式派题和 V05 人工双轴验收缺失。
+- **完成情况**：新词排序、DB 驱动的冷却/窗口/预约容量感知候选决策与 EMPTY 分类、当前 `meaning_version` 材料检查、按每词 IANA 时区的 due 候选、事务式 41 天准入预测和 R/P 轴独立预约均已实现。正式 task service 在签发事务中调用 DB chooser，只签发 chooser 选中的连接/choice 候选；每个实例冻结准确预约 ID。容量不足可在未来 41 个本地日内有可执行候选和容量证据时返回最早时间，证据不足返回 null。逾期 due_at 不改写，只有执行日存在有效预约才派发。目标上调后按容量重建当日轴预约或明确报告受容量阻塞；复习失败后的轴独立退级预约可重新被调度。专项 scheduler/service 27/27、全 Jest 15 suites / 170 tests、`git diff --check` 通过；tsc 仍仅有两处既有错误。后续 T13 扩展 cued/free/FLUENCY 的正式生命周期派题，V05 独立进行人工双轴验收。
 
 ### T13 · S4 · 生命周期恢复与连续流整合
 
