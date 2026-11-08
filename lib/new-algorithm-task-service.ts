@@ -82,6 +82,36 @@ export function getNewAlgorithmTaskInstance(db:Database.Database,instanceId:stri
   return row?publicFromRow(row):null;
 }
 
+/** Start (or explicitly restart after interruption) the P writing clock on server time. */
+export function startNewAlgorithmPWriting(db:Database.Database,input:{instanceId:string;now:number}):{startedAt:number} {
+  return db.transaction(()=>{
+    const row=db.prepare('SELECT axis,type,stage,status,snapshot_json FROM task_instances WHERE instance_id=?').get(input.instanceId) as {axis:string;type:string;stage:string;status:string;snapshot_json:string}|undefined;
+    if(!row)throw new NewAlgorithmTaskError('Unknown task instance',404);
+    if(row.axis!=='p'||row.type!=='FLUENCY'||row.stage!=='fluency')throw new NewAlgorithmTaskError('Task is not a P fluency task',409);
+    if(row.status!=='issued')throw new NewAlgorithmTaskError('Task is not accepting a writing start',409);
+    if(!Number.isSafeInteger(input.now)||input.now<0)throw new NewAlgorithmTaskError('Invalid server timestamp',400);
+    const snapshot=JSON.parse(row.snapshot_json) as Record<string,unknown>;
+    snapshot.p_writing_started_at=input.now;
+    db.prepare('UPDATE task_instances SET snapshot_json=? WHERE instance_id=? AND status=\'issued\'').run(JSON.stringify(snapshot),input.instanceId);
+    return {startedAt:input.now};
+  })();
+}
+
+/** Mark a P writing session interrupted; a later explicit start replaces its clock. */
+export function interruptNewAlgorithmPWriting(db:Database.Database,input:{instanceId:string;now:number}):{interrupted:boolean} {
+  return db.transaction(()=>{
+    const row=db.prepare('SELECT axis,type,stage,status,snapshot_json FROM task_instances WHERE instance_id=?').get(input.instanceId) as {axis:string;type:string;stage:string;status:string;snapshot_json:string}|undefined;
+    if(!row)throw new NewAlgorithmTaskError('Unknown task instance',404);
+    if(row.axis!=='p'||row.type!=='FLUENCY'||row.stage!=='fluency')throw new NewAlgorithmTaskError('Task is not a P fluency task',409);
+    if(row.status!=='issued')throw new NewAlgorithmTaskError('Task is not accepting an interruption',409);
+    if(!Number.isSafeInteger(input.now)||input.now<0)throw new NewAlgorithmTaskError('Invalid server timestamp',400);
+    const snapshot=JSON.parse(row.snapshot_json) as Record<string,unknown>;
+    const interrupted=typeof snapshot.p_writing_started_at==='number';
+    if(interrupted){delete snapshot.p_writing_started_at;snapshot.p_writing_interrupted_at=input.now;db.prepare('UPDATE task_instances SET snapshot_json=? WHERE instance_id=? AND status=\'issued\'').run(JSON.stringify(snapshot),input.instanceId);}
+    return {interrupted};
+  })();
+}
+
 function getReservation(db:Database.Database,wordId:number,axis:Axis,timezone:string,date:string):Reservation|null {
   const capacity=db.prepare('SELECT capacity,completed FROM daily_capacity WHERE local_date=? AND timezone=?').get(date,timezone) as {capacity:number;completed:number}|undefined;
   if(!capacity)return null;
@@ -295,24 +325,29 @@ export async function submitNewAlgorithmFluencyAnswer(db:Database.Database,input
     if(prior){
       const saved=JSON.parse(prior.response_json) as {response:unknown;judgment?:Judgment};
       if(canonical(saved.response)!==canonical(input.response))throw new NewAlgorithmTaskError('INSTANCE_CONFLICT',409);
-      if(instance.status==='completed'&&prior.status==='completed'&&saved.judgment)return {instance,attemptId:prior.attempt_id,replay:true,response:input.response,judgment:saved.judgment,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown}};
+      if(instance.status==='completed'&&prior.status==='completed'&&saved.judgment)return {instance,attemptId:prior.attempt_id,replay:true,response:input.response,judgment:saved.judgment,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown;elapsed_seconds?:number;started_at?:number;submitted_at?:number;source?:string}};
       if(!['grading','grading_retry'].includes(instance.status)||!['frozen','grading_retry'].includes(prior.status))throw new NewAlgorithmTaskError('Task is not retryable',409);
-      return {instance,attemptId:prior.attempt_id,replay:false,response:input.response,judgment:undefined,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown}};
+      return {instance,attemptId:prior.attempt_id,replay:false,response:input.response,judgment:undefined,timing:JSON.parse(prior.timing_json) as {valid?:boolean;reading_seconds?:number;wpm?:number|null;reason?:string;protocol?:unknown;elapsed_seconds?:number;started_at?:number;submitted_at?:number;source?:string}};
     }
     const wellFormed=instance.axis==='r'
       ?Array.isArray(response?.answers)&&response!.answers.length===2&&response!.answers.every(answer=>typeof answer==='string'&&answer.trim())&&Array.isArray(response?.timing_protocol)
-      :typeof response?.text==='string'&&typeof response?.elapsed_seconds==='number';
+      :typeof response?.text==='string';
     if(!wellFormed)throw new NewAlgorithmTaskError('Fluency response is incomplete',400);
     if(instance.status!=='issued')throw new NewAlgorithmTaskError('Task instance is not accepting a response',409);
     const attemptId=randomUUID();
-    let timing:{protocol?:unknown;reading_seconds?:number;wpm?:number|null;valid?:boolean;reason?:string;elapsed_seconds?:number};
+    let timing:{protocol?:unknown;reading_seconds?:number;wpm?:number|null;valid?:boolean;reason?:string;elapsed_seconds?:number;started_at?:number;submitted_at?:number;source?:string};
     if(instance.axis==='r'){
       const material=db.prepare('SELECT public_payload FROM materials WHERE id=? AND version=?').get(instance.material_id,instance.material_version) as {public_payload:string}|undefined;
       if(!material)throw new NewAlgorithmTaskError('Frozen fluency material is unavailable',409);
       const passage=JSON.parse(material.public_payload).passage;
       const replayed=replayRTaskTiming(response!.timing_protocol,countRWords(typeof passage==='string'?passage:''),instance.issued_at,input.now);
       timing={protocol:replayed.events,reading_seconds:replayed.readingSeconds,wpm:replayed.wpm,valid:replayed.valid,...(!replayed.valid?{reason:replayed.reason}:{})};
-    }else timing={elapsed_seconds:Number(response!.elapsed_seconds)};
+    }else {
+      const snapshot=JSON.parse(instance.snapshot_json) as Record<string,unknown>;
+      const startedAt=snapshot.p_writing_started_at;
+      if(!Number.isSafeInteger(startedAt)||typeof startedAt!=='number'||startedAt>input.now)throw new NewAlgorithmTaskError('P writing timer was not started',409);
+      timing={elapsed_seconds:(input.now-startedAt)/1000,started_at:startedAt,submitted_at:input.now,source:'server'};
+    }
     db.prepare('INSERT INTO attempts(attempt_id,instance_id,response_json,timing_json,exposure_json,status,created_at) VALUES(?,?,?,?,?,\'frozen\',?)')
       .run(attemptId,instance.instance_id,JSON.stringify({response:input.response}),JSON.stringify(timing),'{}',input.now);
     db.prepare("UPDATE task_instances SET status='grading' WHERE instance_id=? AND status='issued'").run(instance.instance_id);
@@ -359,7 +394,7 @@ export async function submitNewAlgorithmFluencyAnswer(db:Database.Database,input
       },
       });
     });
-    const result=await evaluatePFluency({text:String(response!.text),elapsedSeconds:Number(response!.elapsed_seconds),targetForm:requirements.target_form,answerKey:key,evaluator});
+    const result=await evaluatePFluency({text:String(response!.text),elapsedSeconds:Number(frozen.timing?.elapsed_seconds),targetForm:requirements.target_form,answerKey:key,evaluator});
     judgment={kind:'fluency',result:result.kind==='valid'?{kind:'valid',targetPassed:result.targetPassed,overallPassed:result.overallPassed,wpm:result.wpm}:{kind:result.kind}};
   }
   if(frozen.replay){const settlement=settleNewAlgorithmAttempt(db,{instanceId:input.instanceId,attemptId:frozen.attemptId,judgment,exposedBeforeFeedback:false,now:input.now});return {action:'settled' as const,settlement,replay:true};}

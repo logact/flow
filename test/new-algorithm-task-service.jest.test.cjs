@@ -1,5 +1,5 @@
 const {createNewAlgorithmDb}=require('../lib/new-algorithm-db');
-const {endNewAlgorithmTask,getOrIssueNewAlgorithmTask,submitNewAlgorithmFluencyAnswer,submitNewAlgorithmRetrievalAnswer,submitNewAlgorithmTaskResponse,NewAlgorithmTaskError}=require('../lib/new-algorithm-task-service');
+const {endNewAlgorithmTask,getOrIssueNewAlgorithmTask,startNewAlgorithmPWriting,submitNewAlgorithmFluencyAnswer,submitNewAlgorithmRetrievalAnswer,submitNewAlgorithmTaskResponse,NewAlgorithmTaskError}=require('../lib/new-algorithm-task-service');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
@@ -181,10 +181,12 @@ describe('isolated new algorithm task service',()=>{
     db.prepare("INSERT INTO capacity_reservations(reservation_id,word_id,axis,local_date,timezone,reservation_kind,task_count,status) VALUES('review-p-fluency',1,'p','2026-11-07','Asia/Shanghai','determined',1,'active')").run();
     db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('p-fluency-grade',1,'p','fluency',1,1,'ready','{\"scene_zh\":\"场景\",\"instructions_zh\":\"写作\"}','{\"answer\":\"private\"}','{\"target_form\":\"targetform\",\"forbidden_target_forms\":[]}','{}','{}',1)").run();
     const task=getOrIssueNewAlgorithmTask(db,NOW);
+    startNewAlgorithmPWriting(db,{instanceId:task.instanceId,now:NOW+100});
     const text=Array.from({length:30},(_,i)=>`word${String.fromCharCode(97+i%26)}${i}`).join(' ');
-    const result=await submitNewAlgorithmFluencyAnswer(db,{instanceId:task.instanceId,response:{text,elapsed_seconds:60},now:NOW+100,pEvaluator:()=>({targetPassed:true,overallPassed:true,targetEvidence:'target used',overallEvidence:'meaning clear'})});
+    const result=await submitNewAlgorithmFluencyAnswer(db,{instanceId:task.instanceId,response:{text,elapsed_seconds:1},now:NOW+60_100,pEvaluator:()=>({targetPassed:true,overallPassed:true,targetEvidence:'target used',overallEvidence:'meaning clear'})});
     expect(result.action).toBe('settled');expect(result.settlement.scoreBefore).toBe(60);expect(result.settlement.scoreAfter).toBeCloseTo(65.71428571428571,10);
     expect(JSON.parse(db.prepare('SELECT response_json FROM attempts').get().response_json).response.text).toBe(text);
+    expect(JSON.parse(db.prepare('SELECT timing_json FROM attempts').get().timing_json)).toMatchObject({elapsed_seconds:60,started_at:NOW+100,submitted_at:NOW+60_100,source:'server'});
     db.close();
   });
 

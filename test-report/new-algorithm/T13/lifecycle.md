@@ -10,9 +10,10 @@
 
 ## Verification
 
-- `npx jest --runInBand`: 15 suites, 187 tests passed.
+- `npx jest --runInBand`: 17 suites, 201 tests passed.
 - Service traces cover repeated skip, exit/submit conflict, release and reissue after skip, frozen text grading after evaluator failure, answer conflict rejection, replay without an extra tick, empty-answer non-freezing, material recovery, axis-specific fluency dispatch, R fluency timing/scoring, P fluency separate judgments/scoring, and explicit exit from grading retry.
 - R timing regression: a valid 20-second read of 100 words calculates 300 WPM and `60→100` even when the client sends `timing_valid=false`, `reading_seconds=0.01`, and `wpm=1`. An interrupted trace remains invalid despite client claims of 1 second/6000 WPM; score stays 60 and tick remains unchanged.
+- P timing regression: start/interruption/restart/submit are handled through server actions; client `elapsed_seconds` is ignored. A grading retry reuses the first server duration and answer without a second event/tick.
 - `git diff --check`: passed.
 - `npx tsc --noEmit`: still reports only the unrelated errors at `app/score-history/page.tsx:57` and `lib/manual-test-fixtures.ts:183`; no T13/FIX-V03-01 file is reported.
 

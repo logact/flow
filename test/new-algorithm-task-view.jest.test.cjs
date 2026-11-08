@@ -19,6 +19,12 @@ describe('isolated new algorithm task UI contract',()=>{
     expect(source).toContain("end('exit')");
     expect(source).not.toContain('setTimeout(');
   });
+  test('P writing start and interruption use task API server actions',()=>{
+    expect(source).toContain("action:'start_writing'");
+    expect(source).toContain("action:'interrupt_writing'");
+    expect(source).toContain('onStart={startPWriting}');
+    expect(source).toContain('onInterrupt={interruptPWriting}');
+  });
   test('renders ENCODE confirmation and accessible choice controls without client scoring',()=>{
     expect(source).toContain('确认并继续');
     expect(source).toContain("from './new-algorithm-retrieval-renderer'");

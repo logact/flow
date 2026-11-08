@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getNewAlgorithmDb } from '../../../../lib/new-algorithm-runtime-db';
-import { endNewAlgorithmTask, getNewAlgorithmTaskInstance, getOrIssueNewAlgorithmTask, NewAlgorithmTaskError, submitNewAlgorithmFluencyAnswer, submitNewAlgorithmRetrievalAnswer, submitNewAlgorithmTaskResponse } from '../../../../lib/new-algorithm-task-service';
+import { endNewAlgorithmTask, getNewAlgorithmTaskInstance, getOrIssueNewAlgorithmTask, interruptNewAlgorithmPWriting, NewAlgorithmTaskError, startNewAlgorithmPWriting, submitNewAlgorithmFluencyAnswer, submitNewAlgorithmRetrievalAnswer, submitNewAlgorithmTaskResponse } from '../../../../lib/new-algorithm-task-service';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -21,6 +21,8 @@ export async function POST(request:Request) {
   try {
     const body=await request.json() as {instanceId?:unknown;response?:unknown;action?:unknown};
     if(typeof body.instanceId!=='string')return NextResponse.json({error:'instanceId is required'},{status:400});
+    if(body.action==='start_writing')return NextResponse.json(startNewAlgorithmPWriting(getNewAlgorithmDb(),{instanceId:body.instanceId,now:Date.now()}));
+    if(body.action==='interrupt_writing')return NextResponse.json(interruptNewAlgorithmPWriting(getNewAlgorithmDb(),{instanceId:body.instanceId,now:Date.now()}));
     if(body.action==='skip'||body.action==='exit')return NextResponse.json(endNewAlgorithmTask(getNewAlgorithmDb(),{instanceId:body.instanceId,action:body.action,now:Date.now()}));
     const db=getNewAlgorithmDb();
     const row=db.prepare('SELECT type,stage FROM task_instances WHERE instance_id=?').get(body.instanceId) as {type:string;stage:string}|undefined;
