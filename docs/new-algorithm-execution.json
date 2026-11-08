@@ -446,9 +446,9 @@
         "D5",
         "D7"
       ],
-      "owner": "/root/t12_scheduler_finish",
+      "owner": "/root (coordinator integration after T12 audit)",
       "contract_version": null,
-      "source_revision": "22c346a",
+      "source_revision": "15aa0fe",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "Scheduler now has per-axis DB candidates/reservation reconciliation and new-word D7/forecast helpers. Last attempted admission test run failed because the out-of-range test fixture had insufficient daily capacity; D7 sorter also has not been integrated into candidate loading. Continue audit/fix before any task completion claim.",
+      "actual": "Added D7 ordering in algorithm.md order, current-meaning-version ready-material lookup, transactional new-word admission/reservations, and a candidate/EMPTY decision helper with cooldown/capacity inputs. Scheduler Jest 12/12 and integrated Jest 15 suites/161 tests pass; diff-check passes; TypeScript check still has only the two previously recorded unrelated errors. This is helper-level evidence, not a completed DB/API scheduling path.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Fix T12 scheduler tests and D7 candidate integration, verify all capacity checks run atomically/idempotently, then rerun focused/full Jest, diff-check and TypeScript audit."
+      "next_action": "Integrate DB candidate loading, cooldown anchors, capacity and material states into one decision/next_available_at path; preserve blocked material candidates for same-stage fallback; derive remaining-time and independent R/P completion forecasts from target/window state; validate post-settlement reservation recalculation and boundary matrix before marking T12 DONE."
     },
     {
       "id": "T13",
