@@ -302,7 +302,7 @@
     {
       "id": "T09",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T05",
         "T08"
@@ -312,14 +312,19 @@
       ],
       "owner": "/root/t09_r_timing",
       "contract_version": null,
-      "source_revision": "22c346a",
+      "source_revision": "a71dd56",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "lib/new-algorithm-r-timing.ts",
+        "components/new-algorithm-r-fluency-renderer.tsx",
+        "test/new-algorithm-r-timing.jest.test.cjs",
+        "test-report/new-algorithm/T09/r-timing.md"
+      ],
       "expected": "实现 R fluency 阅读/回看分段 UI 与服务器可核验的 timing protocol 轨迹",
-      "actual": "T05 UI and T08 R fluency material/evaluator are complete; T09 begins isolated reading, rereading and timing interaction.",
+      "actual": "Ready screen hides the passage until timing starts; renderer shows passage only during initial/reread and questions only during answer. RReadingClock accumulates initial/reread visible intervals, excludes answer time, invalidates interruption, rejects zero time, and event replay validates reread transitions. Focused Jest 6/6, full Jest 13 suites/127 tests, diff check pass. TypeScript reports only the two existing unrelated errors. Server submission/replay/concurrency wiring remains T13; browser/manual interaction evidence remains V03.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement separate R fluency renderer and timing protocol/client events without changing score locally; test pause/visibility/segment validity and accumulated read time."
+      "next_action": "T13 wires timing protocol replay to the authoritative submission transaction; V03 performs human timing and interruption acceptance."
     },
     {
       "id": "T10",

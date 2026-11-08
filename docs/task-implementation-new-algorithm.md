@@ -44,11 +44,11 @@
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
-| T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 HTTP/UI 接线及生产 provider 留给 T07/T13 |
+| T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 retrieval HTTP 接线及生产 provider 留给 T13 |
 | T07 | DONE | 六档 renderer 与输入载荷已实现；专项 4/4、全 Jest 116/116；API 生命周期待 T13，人工验收待 V02 |
-| T08 | DONE | R 流利材料生成/评估契约；专项 11/11；HTTP、计时、UI、恢复留 T09/T13 |
+| T08 | DONE | R 流利材料生成/评估契约；专项 11/11；R UI/计时由 T09、HTTP/恢复由 T13 |
 | T10 | IN_PROGRESS | P 流利材料生成与服务端评估 |
-| T09 | IN_PROGRESS | R 阅读、回看与计时交互；依赖 T05/T08 已满足 |
+| T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
 | T11–T12 | IN_PROGRESS（T12）/ TODO（T11） | P fluency renderer 与排程/容量节点按 DAG 并行推进 |
 | T13–T15、V01–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
 
@@ -182,19 +182,19 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 
 ### T08 · S3 · R 流利材料与服务端评估（DONE）
 
-- **依赖**：T02、T03、T04、T06；D3/D5。**文件**：R material producer/evaluator、材料仓储与 service 接口。
+- **依赖**：T02、T03、T04、T06；D3/D5。**文件**：隔离的 R fluency producer/evaluator 模块；正式服务接口由 T13 接线。
 - **输入→输出**：目标义/水平 → 恰好 100 词/目标≥5 次的短文、两道题、私有答案/原文依据，R 检查结果与词数。
 - **范围/非目标**：复用 AI 与校验基础；支持无书源词；缓存/补充遵守共用作业规则。不用零碎细节题替换整段理解，不更新文中其他词。
 - **G/W/T**：Given 99/100/101 词、目标 4/5 次、错义或难度不合材料；When 生成后校验；Then 仅完全合格材料可签发；两题键在签发前固定。Given 有效计时；When 两题结果四组合；Then 交 T02 得出规定分支，整体失败不变分不等于 invalid。
 - **交付/验证**：`lib/new-algorithm-r-fluency.ts` 校验恰好 100 个空白分隔词、目标词形至少 5 次、两道公开题与两条冻结私有答案/依据；通过 T03 的 D5 两次/8 秒持久 job 封装；注入式 evaluator 保留 invalid/uncertain/service_error，valid 才映射 T02 规则。专项 Jest 11/11、执行者报告全 Jest 10 suites/109 tests、`git diff --check` 通过。未配置或声称生产 AI；HTTP/计时/UI/恢复仍归 T09/T13，provider fixture 不构成真实内容质量验收。
 
-### T09 · S3 · R 阅读、回看与计时（IN_PROGRESS）
+### T09 · S3 · R 阅读、回看与计时（DONE）
 
-- **依赖**：T05、T08；D4。**文件**：R fluency renderer、新 timing 协议/服务校验模块、service 接线。
+- **依赖**：T05、T08；D4。**文件**：R fluency renderer 与 timing protocol helper；正式服务端事件校验/结算由 T13 接线。
 - **输入→输出**：C2/C3 timing_protocol → 初次/各次回看片段、两题 response、有效性结果。
 - **范围/非目标**：文本实际显示才计时；读完藏原文答题，回看藏题并累计；不把答题时间计入，不宣称通用读速。
 - **G/W/T**：Given 初读 20s、回看 10s、答题 40s；When 两题均对提交；Then reading_seconds=30、wpm=200，F≈73.333 未舍入；题文按阶段互斥。中断、缺片段、重复片段或计时无效时不更新任何学习字段，重新开始不能接旧时间。
-- **验证/证据**：U/I、计时 fake clock 轨迹；B/H 在 V03。**阻塞**：回看计时无法被服务端验证或中断事件与 D4 冲突。
+- **交付/验证**：`components/new-algorithm-r-fluency-renderer.tsx` 在 ready 阶段不展示短文，点击开始后才显示并计时；初读/各次回看分别累计，答题阶段只展示问题且不计时；interruption 使实例无效，重启使用新时钟。`lib/new-algorithm-r-timing.ts` 用确定性事件轨迹检查回看状态、段数和零秒无效。专项 Jest 6/6、全 Jest 13 suites / 127 tests、diff-check 通过。计时事件的正式 HTTP 验证/结算由 T13 接线，浏览器与中断人工验收留 V03。
 
 ### T10 · S3 · P 流利材料与服务端评估（IN_PROGRESS）
 
@@ -347,7 +347,7 @@ flowchart TD
   T07["T07 S2 提取交互 DONE"]
   V02["V02 双轴提取"]
   T08["T08 S3 R材料评估 DONE"]
-  T09["T09 S3 R计时交互 IN_PROGRESS"]
+  T09["T09 S3 R计时交互 DONE"]
   T10["T10 S3 P材料评估 IN_PROGRESS"]
   T11["T11 S3 P计时交互"]
   V03["V03 R流利闭环"]
