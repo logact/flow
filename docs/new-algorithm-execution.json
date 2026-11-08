@@ -448,7 +448,7 @@
       ],
       "owner": "/root (coordinator integration)",
       "contract_version": null,
-      "source_revision": "6101022",
+      "source_revision": "a067746",
       "working_tree_diff_hash": null,
       "evidence": [
         "lib/new-algorithm-scheduler.ts",
@@ -456,10 +456,10 @@
         "test-report/new-algorithm/T12/scheduler.md"
       ],
       "expected": "可派候选优先级、当地日期调度、双轴41天容量预测与新词准入",
-      "actual": "DB-driven schedule decision composes due candidates, current-version material state, cooldown, training window, 42-day capacity and active candidate reservations. It rejects user/word timezone mismatch, skips unreserved zero-score words as capacity-insufficient, and computes next training-window start across a DST boundary. Cooldown ETA remains null when seven-tick release cannot be predicted. Focused Jest 15/15, full Jest 15 suites/164 tests, diff-check pass; tsc retains only two known unrelated errors. flow.db deletion was executed separately; only in-memory/temp DB tests were run afterward and the path remains absent.",
+      "actual": "DB-driven schedule decisions handle due candidates, current-meaning material state, cooldown, training window, 42-day capacity and own active reservations. EMPTY availability handles reliable window starts, filtered future due timestamps, scope-empty and missing new-word reservations; 7-tick ETA stays null when unknown. Temp DB tests cover DST, material fallback, exact capacity, insufficient capacity/time, idempotent admission and rollback after forced write failure. Focused Jest 16/16, full Jest 15 suites/165 tests, diff-check pass; tsc retains two known unrelated errors. flow.db is absent after deletion and remains ignored/untracked state is preserved.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Finish deriving admission time feasibility and independent R/P completion forecasts instead of trusting caller inputs; complete capacity/material EMPTY availability semantics; integrate the chooser with atomic formal issuance/settlement so reservations cannot be double-consumed; add target-change, review-failure, multi-timezone policy and transaction rollback cases. T12 remains IN_PROGRESS."
+      "next_action": "Finish deriving admission time feasibility and independent R/P completion forecasts instead of trusting caller inputs; complete material/capacity next_available_at semantics; integrate chooser with formal task issuance and verify settlement consumes reservations exactly once under concurrency; add target-change, review-failure and full capacity/time-window boundary cases. T12 remains IN_PROGRESS."
     },
     {
       "id": "T13",
