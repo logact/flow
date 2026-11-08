@@ -177,7 +177,7 @@
     {
       "id": "V01",
       "phase": "S1",
-      "status": "BLOCKED",
+      "status": "DONE",
       "depends_on": [
         "T01",
         "T02",
@@ -191,19 +191,16 @@
       "source_revision": "7cd56c0",
       "working_tree_diff_hash": null,
       "evidence": [
-        "test-report/new-algorithm/V01/blocked.md",
+        "test-report/new-algorithm/V01/acceptance.md",
         "test-report/new-algorithm/T03/import-materials.md",
         "test-report/new-algorithm/T04/isolated-task-service.md",
         "test-report/new-algorithm/T05/isolated-task-ui.md"
       ],
       "expected": "从正式导入到一次词级连接双轴初始化、choice、反馈和下一任务/EMPTY 的 I/E/B 证据",
-      "actual": "Prerequisite node reports provide only isolated import, connection/choice service and source-contract UI evidence. No linked import→task→settlement→next response run or human visual B/H exists. T04 currently issues choice only, so V01 initial profiles requiring later stages are not yet reachable.",
-      "blockers": [
-        "T04/T13 must expose every V01 initial score stage in the isolated formal lifecycle.",
-        "Human desktop/narrow-screen B/H acceptance is outstanding; no browser/usability PASS is claimed."
-      ],
+      "actual": "Accepted as PASS by explicit user approval on 2026-11-08. Detailed execution observations and screenshots were not supplied; see acceptance.md.",
+      "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Complete formal task-stage lifecycle, prepare an isolated fresh-DB run, then request human desktop and narrow-screen execution; attach observed DB/event/HTTP evidence before unblocking."
+      "next_action": "None; user-approved PASS. Detailed evidence was not supplied."
     },
     {
       "id": "T06",
