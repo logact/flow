@@ -359,7 +359,7 @@
     {
       "id": "T11",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "T05",
         "T10"
@@ -369,14 +369,18 @@
       ],
       "owner": "/root/t11_p_writing",
       "contract_version": null,
-      "source_revision": "a2f0bb6",
+      "source_revision": "6586399",
       "working_tree_diff_hash": null,
-      "evidence": [],
+      "evidence": [
+        "components/new-algorithm-p-fluency-renderer.tsx",
+        "test/new-algorithm-p-fluency-renderer.jest.test.cjs",
+        "test-report/new-algorithm/T11/p-writing-renderer.md"
+      ],
       "expected": "实现 P fluent 中文写作阶段、目标私密、最终有效词数和完整用时提交",
-      "actual": "T05 base UI and T10 P fluency contracts/evaluator are complete; T11 starts the isolated P writing renderer and timing interaction.",
+      "actual": "P renderer has explicit ready/start/writing/short/done/interrupted phases. Timing starts only on explicit begin; under-30-word response retains its draft and keeps elapsed time, final text plus elapsed seconds is submitted, and interruption resets the timer while preserving draft. No client scoring or target/example answer leakage. Focused Jest 3/3, full Jest 15 suites/154 tests, diff-check pass. T04 does not yet issue P fluency tasks; submission persistence/retry is T13 and browser/content B/H is V04.",
       "blockers": [],
       "repair_attempts": 0,
-      "next_action": "Implement ready/start/drafting/submission UX, preserve draft across short retry, count only final submitted text, send complete elapsed duration and server-evaluated response without client scoring."
+      "next_action": "T13 wires P fluency task issuance, server timing and answer persistence/retry; V04 runs human/content acceptance."
     },
     {
       "id": "V03",
