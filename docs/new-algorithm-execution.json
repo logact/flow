@@ -445,6 +445,28 @@
       "next_action": null
     },
     {
+      "id": "FIX-V03-02",
+      "phase": "S3",
+      "status": "IN_PROGRESS",
+      "depends_on": [
+        "T03",
+        "T08",
+        "T10",
+        "T13"
+      ],
+      "decision_dependencies": [],
+      "owner": "Codex",
+      "contract_version": "0.3",
+      "source_revision": "6ebc256",
+      "working_tree_diff_hash": null,
+      "evidence": [],
+      "expected": "新版目标页可触发 R/P FLUENCY 真实材料生成，使用有界 provider 与既有校验并显示可用/失败结果",
+      "actual": "发现 R/P fluency producer 仅有注入式库函数；新版没有材料生成 API/UI，V03/V04 无法准备真实 provider 材料。",
+      "blockers": [],
+      "repair_attempts": 0,
+      "next_action": "新增隔离材料 API 与目标页 R/P fluency 生成按钮；使用已有 2 次/8 秒策略，测试 schema 校验、当前 meaning_version 和失败安全。"
+    },
+    {
       "id": "V03",
       "phase": "S3",
       "status": "BLOCKED",
@@ -452,7 +474,8 @@
         "V02",
         "T08",
         "T09",
-        "FIX-V03-01"
+        "FIX-V03-01",
+        "FIX-V03-02"
       ],
       "decision_dependencies": [],
       "owner": "Codex",
@@ -464,12 +487,13 @@
         "test-report/new-algorithm/V03/automated-r-score.md"
       ],
       "expected": "正式 R FLUENCY 阅读/回看/判分和有效达标证据",
-      "actual": "正式 scheduler→R FLUENCY answer→服务端计时回放→evaluator→settlement 自动轨迹已通过：149/150/200/225/300 WPM 对应 R 80→40/60/73.333/79.999/100，P 保持35；达标场景仅 R 开始第1级复习。确定性夹具不代表真实内容质量。",
+      "actual": "算法自动轨迹已具备；等待 FIX-V03-02 提供真实 R/P 材料入口，之后还需真人内容与正式页面验收。",
       "blockers": [
-        "还没有真实 provider 生成的 R 材料供内容审阅；尚无真人在正式页面完成初读/回看及窄屏交互记录。"
+        "新版没有 R/P FLUENCY 材料生成 API/UI，无法按计划准备真实 provider 材料。",
+        "真人内容语义和正式页面交互尚未验收。"
       ],
       "repair_attempts": 0,
-      "next_action": "准备可运行的 R FLUENCY 真材料场景，再完成真人内容/页面验收及记录。"
+      "next_action": "等待 FIX-V03-02 完成后生成真实材料，继续人工内容/页面验收。"
     },
     {
       "id": "FIX-V04-01",
@@ -503,12 +527,13 @@
     {
       "id": "V04",
       "phase": "S3",
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "depends_on": [
         "V02",
         "T10",
         "T11",
-        "FIX-V04-01"
+        "FIX-V04-01",
+        "FIX-V03-02"
       ],
       "decision_dependencies": [],
       "owner": "Codex",
@@ -517,10 +542,13 @@
       "working_tree_diff_hash": null,
       "evidence": [],
       "expected": "正式 P FLUENCY 复述/判分重试和有效达标证据",
-      "actual": "FIX-V04-01 已完成；正式 scheduler→P FLUENCY→服务端计时/判分/重试→settlement 自动场景正在整理为验收报告。真实场景语义与真人页面验收未声明。",
-      "blockers": [],
+      "actual": "算法自动轨迹已具备；等待 FIX-V03-02 提供真实 R/P 材料入口，之后还需真人内容与正式页面验收。",
+      "blockers": [
+        "新版没有 R/P FLUENCY 材料生成 API/UI，无法按计划准备真实 provider 材料。",
+        "真人内容语义和正式页面交互尚未验收。"
+      ],
       "repair_attempts": 0,
-      "next_action": "记录分数变化、复核 V04 自动证据；准备真人审阅真实中文场景和正式写作页面。"
+      "next_action": "等待 FIX-V03-02 完成后生成真实材料，继续人工内容/页面验收。"
     },
     {
       "id": "T12",
