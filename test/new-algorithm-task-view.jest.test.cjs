@@ -11,6 +11,14 @@ describe('isolated new algorithm task UI contract',()=>{
     expect(source).toContain('axis:completedTask.axis,type:completedTask.type');
     expect(source).toContain('result.axis.toUpperCase()');
   });
+  test('freezes an answer before the request, retries it after reload, and exposes separate skip and exit actions',()=>{
+    expect(source).toContain('sessionStorage.setItem(`new-algorithm-answer:${completedTask.instanceId}`');
+    expect(source).toContain("key.startsWith('new-algorithm-answer:')");
+    expect(source).toContain('/api/new-algorithm/task?instanceId=');
+    expect(source).toContain("end('skip')");
+    expect(source).toContain("end('exit')");
+    expect(source).not.toContain('setTimeout(');
+  });
   test('renders ENCODE confirmation and accessible choice controls without client scoring',()=>{
     expect(source).toContain('确认并继续');
     expect(source).toContain("from './new-algorithm-retrieval-renderer'");

@@ -227,8 +227,9 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **依赖**：T04、T07、T09、T11、T12；D4/D5/D6/D8。**文件**：task service/routes、`app/page.tsx`、共享 flow/timing controller。
 - **输入→输出**：C5 的 refresh/retry/skip/exit/interruption + C6 → 恢复的同一实例/作答或明确终态与下一题。
 - **范围/非目标**：网络失败保留原答，判分重试复用不可变答案；显式跳过、退出分开；新版 EMPTY 原因（今日完成、容量不足、冷却、材料、空范围）UI、到期刷新和手动刷新。反馈与下一实例分离，不靠重新挂载丢输入。不延期、不修改跳过词优先级。
-- **G/W/T**：Given 已提交但响应丢失；When 刷新/重试；Then 返回原结果、tick 不变。Given 跳过/提交/退出并发；Then 只有一个终态和唯一相应事件；重复 skip 不再记事件且可返回同词新实例。Given FLUENCY 中断；Then 全学习状态不变，新开始新计时；未提交上滑忽略。给 wait=null，不能零延迟自动轮询；材料恢复后刷新可派发。
-- **验证/证据**：I/E 故障/并发轨迹；B/H 在 V06。**阻塞**：静默丢答、自动无限重试、退出被重复计入、当前任务展示上一题判分。
+- **G/W/T**：Given 已提交但响应丢失；When 刷新/重试；Then 按保存的实例 ID 查询并重放原结果、tick 不变。Given 跳过/提交/退出并发；Then 只有一个终态和唯一相应事件；重复 skip 不再记事件、释放未结算材料占用并可返回同一候选。Given FLUENCY 中断；Then 全学习状态不变，新开始新计时；未提交上滑忽略。给 wait=null，不能零延迟自动轮询；材料恢复后刷新可派发。
+- **完成情况**：正式 task API 已按 scheduler 派发 choice/cued/free 与 R/P FLUENCY；R/P 提交由服务端判定，提交前冻结原答和计时，判分重试只重用同一作答，conflict 拒绝换答。实例查询 GET、刷新优先恢复待提交答案、完成请求重放、skip/exit 互斥和唯一事件、grading_retry 显式 exit、跳过释放材料使用计数均已接入。新算法页面接入已有 renderer；不自动轮询，EMPTY 提供手动重试，反馈通过“下一题”显式进入。专项生命周期轨迹与既有 renderer 契约纳入全 Jest 181/181；`git diff --check` 通过。`npx tsc --noEmit` 仍仅报两处既有无关错误（score-history/page.tsx:57、manual-test-fixtures.ts:183）。配置中的真实 LLM 端点和浏览器人工操作不在 mock 技术验收中；交互观察由 V06 留档。
+- **验证/证据**：I/E 故障/并发轨迹见 [T13 生命周期报告](../test-report/new-algorithm/T13/lifecycle.md)；B/H 在 V06。**阻塞**：静默丢答、自动无限重试、退出被重复计入、当前任务展示上一题判分。
 
 ### T14 · S5 · 练习历史与有事件来源的分析
 
