@@ -283,7 +283,7 @@
     {
       "id": "V02",
       "phase": "S2",
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "depends_on": [
         "V01",
         "T06",
