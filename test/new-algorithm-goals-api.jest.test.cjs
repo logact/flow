@@ -43,4 +43,37 @@ describe('new algorithm goals API', () => {
     expect(db.prepare('select count(*) n from words').get().n).toBe(0);
     expect(db.prepare('select count(*) n from capacity_reservations').get().n).toBe(0);
   });
+  test('target action updates the selected axis and preserves the other target', async()=>{
+    db.prepare("INSERT INTO words(id,term,meaning,target_r,target_p,local_timezone,created_at) VALUES(1,'word','gloss',80,70,'UTC',1)").run();
+    const response=await route.POST(new Request('http://localhost/api/new-algorithm/goals',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'target',wordId:1,targetR:90,targetP:70})}));
+    expect(response.status).toBe(200);expect(await response.json()).toMatchObject({ok:true,requeuedAxes:[],capacityBlockedAxes:[]});
+    expect(db.prepare('SELECT target_r,target_p FROM words WHERE id=1').get()).toEqual({target_r:90,target_p:70});
+  });
+  test('target action rejects invalid values and leaves targets unchanged', async()=>{
+    db.prepare("INSERT INTO words(id,term,meaning,target_r,target_p,local_timezone,created_at) VALUES(1,'word','gloss',80,70,'UTC',1)").run();
+    const response=await route.POST(new Request('http://localhost/api/new-algorithm/goals',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'target',wordId:1,targetR:101,targetP:70})}));
+    expect(response.status).toBe(400);expect(db.prepare('SELECT target_r,target_p FROM words WHERE id=1').get()).toEqual({target_r:80,target_p:70});
+  });
+  test('target action refuses to change an axis while its task is live', async()=>{
+    db.prepare("INSERT INTO words(id,term,meaning,target_r,target_p,local_timezone,created_at) VALUES(1,'word','gloss',80,70,'UTC',1)").run();
+    db.prepare("INSERT INTO materials(id,word_id,axis,stage,version,meaning_version,status,public_payload,answer_key,grading_requirements,timing_protocol,validation_json,created_at) VALUES('m',1,'both','encode',1,1,'ready','{}','{}','{}','{}','{}',1)").run();
+    db.prepare("INSERT INTO task_instances(instance_id,definition_id,word_id,axis,type,stage,purpose,score_before,material_id,material_version,meaning_version,snapshot_json,status,issued_at) VALUES('live','encode',1,'both','ENCODE','encode','introduce',0,'m',1,1,'{}','issued',1)").run();
+    const response=await route.POST(new Request('http://localhost/api/new-algorithm/goals',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'target',wordId:1,targetR:90,targetP:70})}));
+    expect(response.status).toBe(400);expect(db.prepare('SELECT target_r FROM words WHERE id=1').get().target_r).toBe(80);
+  });
+  test('target action reports capacity-blocked requeue without overbooking', async()=>{
+    const now=Date.now();const local=new Intl.DateTimeFormat('en-CA',{timeZone:'UTC',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+    db.prepare("INSERT INTO words(id,term,meaning,target_r,target_p,score_r,score_p,fluency_pass_r,learning_complete_r,review_level_r,due_at_r,local_timezone,created_at) VALUES(1,'word','gloss',80,70,80,30,1,1,1,?,'UTC',1)").run(new Date(now).toISOString());
+    db.prepare('INSERT INTO daily_capacity(local_date,timezone,capacity,completed) VALUES(?,\'UTC\',0,0)').run(local);
+    const response=await route.POST(new Request('http://localhost/api/new-algorithm/goals',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'target',wordId:1,targetR:90,targetP:70})}));
+    expect(response.status).toBe(200);expect(await response.json()).toMatchObject({capacityBlockedAxes:['r'],requeuedAxes:[]});
+    expect(db.prepare('SELECT target_r,learning_complete_r FROM words WHERE id=1').get()).toEqual({target_r:90,learning_complete_r:0});
+    expect(db.prepare("SELECT count(*) n FROM capacity_reservations WHERE status='active'").get().n).toBe(0);
+  });
+  test('new algorithm target page uses the isolated API and exposes independent R/P controls',()=>{
+    const page=fs.readFileSync(require.resolve('../app/new-algorithm/goals/page.tsx'),'utf8');
+    expect(page).toContain('action:\'target\'');
+    expect(page).toContain('targetR');expect(page).toContain('targetP');
+    expect(page).toContain('R 阅读目标');expect(page).toContain('P 写作目标');
+  });
 });

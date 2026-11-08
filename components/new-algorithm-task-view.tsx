@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { RetrievalRenderer } from './new-algorithm-retrieval-renderer';
 import { RFluencyRenderer } from './new-algorithm-r-fluency-renderer';
 import { PFluencyRenderer } from './new-algorithm-p-fluency-renderer';
+import Link from 'next/link';
 
 type Task = {instanceId:string;wordId:number;axis:'r'|'p'|'both';type:'ENCODE'|'RETRIEVE'|'FLUENCY';stage:'encode'|'choice'|'cued'|'free'|'fluency';purpose:string;scoreBefore:number;issuedAt:number;payload:Record<string,unknown>};
 type Result = {settlement:{scoreBefore:number;scoreAfter:number;tick:number;replay:boolean};replay:boolean;axis:string;type:string};
@@ -22,7 +23,7 @@ export default function NewAlgorithmTaskView(){
   const frozenAnswer=task&&typeof window!=='undefined'?sessionStorage.getItem(`new-algorithm-answer:${task.instanceId}`):null;
   const options=Array.isArray(task?.payload.options)?task.payload.options.filter((x):x is string=>typeof x==='string'):[];
   return <main style={{maxWidth:720,margin:'40px auto',padding:'24px',fontFamily:'system-ui,sans-serif',color:'#18212f'}}>
-    <header><h1>新算法练习</h1><p>隔离的新算法任务流</p></header>
+    <header><h1>新算法练习</h1><p>隔离的新算法任务流 · <Link href="/new-algorithm/goals">调整 R/P 目标</Link></p></header>
     {error&&<p role="alert" style={{color:'#a32020'}}>{error}</p>}
     {result&&<section aria-live="polite"><h2>结算完成{result.replay?'（重复请求，已返回原结果）':''}</h2><p>{result.axis.toUpperCase()} {result.type}：{result.settlement.scoreBefore} → {result.settlement.scoreAfter} 分；tick {result.settlement.tick}</p><button onClick={()=>void load()}>下一题</button></section>}
     {!task&&!result&&<section><p>{empty?`当前没有可派任务：${empty}`:'正在读取任务…'}</p><button onClick={()=>void load()}>重新检查</button></section>}

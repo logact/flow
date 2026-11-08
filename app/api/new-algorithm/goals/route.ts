@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getNewAlgorithmDb } from '../../../../lib/new-algorithm-runtime-db';
 import { confirmNewAlgorithmMeaning, importNewAlgorithmWords, reserveIntroductionCapacity, setDailyAvailability } from '../../../../lib/new-algorithm-import';
+import { updateNewAlgorithmTargets } from '../../../../lib/new-algorithm-settlement';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     if (!timezone) return NextResponse.json({error:'timezone is required'},{status:400});
     const date=localDate(Date.now(),timezone);
     const capacity=db.prepare('SELECT capacity,completed FROM daily_capacity WHERE local_date=? AND timezone=?').get(date,timezone) ?? null;
-    const words=db.prepare('SELECT id,term,meaning,score_r,score_p,introduced,due_at_r,due_at_p FROM words ORDER BY id DESC LIMIT 200').all();
+    const words=db.prepare('SELECT id,term,meaning,score_r,score_p,target_r,target_p,introduced,due_at_r,due_at_p FROM words ORDER BY id DESC LIMIT 200').all();
     const ready=(db.prepare("SELECT count(*) n FROM materials WHERE status='ready'").get() as {n:number}).n;
     return NextResponse.json({date,timezone,capacity,words,readyMaterials:ready});
   } catch (e) { return NextResponse.json({error:(e as Error).message},{status:400}); }
@@ -37,6 +38,11 @@ export async function POST(request: Request) {
       const ids=importNewAlgorithmWords(db,input.words.map((word:Record<string,unknown>)=>({...word,timezone})),now,
         (tx,candidates,createdAt,tz)=>reserveIntroductionCapacity(tx,candidates,createdAt,tz));
       return NextResponse.json({ids});
+    }
+    if(input.action==='target') {
+      if(!Number.isSafeInteger(input.wordId)||typeof input.targetR!=='number'||typeof input.targetP!=='number')return NextResponse.json({error:'wordId, targetR and targetP are required'},{status:400});
+      const result=updateNewAlgorithmTargets(db,{wordId:input.wordId,targetR:input.targetR,targetP:input.targetP,now:Date.now()});
+      return NextResponse.json({ok:true,...result});
     }
     return NextResponse.json({error:'Unknown action'},{status:400});
   } catch (e) { const message=(e as Error).message; return NextResponse.json({error:message},{status:message==='CAPACITY_INSUFFICIENT'?409:400}); }

@@ -44,17 +44,19 @@
 | T03 | DONE | 导入、时间窗、隔离 goals API/page、材料状态及 schema v3 原子 3/5/7/9 容量预留；Jest 22/22；人工 UI 与 worker 接线留后续节点 |
 | T04 | DONE | 隔离 task GET/POST 实现连接与 choice、答案脱敏/重放、冻结并消费预约 ID；7/7 专项、全 Jest 70/70，旧路由和 `flow.db` 未触碰 |
 | T05 | DONE | 独立 `/new-algorithm` 页面支持连接与 choice、服务端反馈；组件契约 Jest 2/2；人工视觉验收留 V01/V08 |
-| T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试结算 helper；26/26 专项、全 Jest 98/98；正式 retrieval HTTP 接线及生产 provider 留给 T13 |
-| T07 | DONE | 六档 renderer 与输入载荷已实现；专项 4/4、全 Jest 116/116；API 生命周期待 T13，人工验收待 V02 |
-| T08 | DONE | R 流利材料生成/评估契约；专项 11/11；R UI/计时由 T09、HTTP/恢复由 T13 |
-| T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；专项 29/29、全 Jest 150/150；UI/持久重试待 T11/T13、内容验收待 V04 |
-| T09 | DONE | R 阅读/回看分段与计时协议 helper；专项 6/6、全 Jest 127/127；服务端提交接线待 T13，人工验收待 V03 |
-| T11 | DONE | P 写作 renderer、计时/短答保留；专项 3/3、全 Jest 154/154；正式 API/持久重试待 T13，内容验收待 V04 |
+| T06 | DONE | 六条 R/P 提取材料契约、判定器与受限重试；T13 已接正式 retrieval HTTP 与冻结作答；实时 provider 由环境提供，人工内容检查留 V02/V04 |
+| T07 | DONE | 六档 renderer 与输入载荷已实现；T13 已接入正式派发、恢复和服务端判分；视觉/交互人工验收留 V02 |
+| T08 | DONE | R 流利材料生成/评估契约；T09/T13 已接入 renderer、计时、正式 HTTP 和服务端判定；材料内容验收留 V03 |
+| T10 | DONE | P 中文材料契约/有界生成、双项判定与分数映射；T11/T13 已接入 UI、计时、冻结作答和重试；内容验收留 V04 |
+| T09 | DONE | R 阅读/回看分段与计时协议；T13 已接正式服务端提交、计时判定和恢复；人工验收留 V03 |
+| T11 | DONE | P 写作 renderer、计时/短答保留；T13 已接正式 API/服务端判分和持久重试；内容验收留 V04 |
 | T12 | DONE | DB chooser 已接正式 task service：按词条时区选候选、返回具体 EMPTY 原因/可预测 next availability、只签发执行日有容量预约的候选，保留逾期 due_at；目标变化在容量允许时重建当天预约，复习失败按退级轴预约回到 scheduler。专项 27/27、全 Jest 15 suites / 170 tests。cued/free/FLUENCY 发题属于 T13，人工双轴验收属于 V05 |
 | V01 | DONE | 用户于 2026-11-08 明确批准按通过记录；详细操作观察与截图未提供，见 `test-report/new-algorithm/V01/acceptance.md` |
-| T13–T15、V02–V08 | TODO | 尚无本版完整业务或纵向验收证据；依 DAG 顺序推进 |
+| FIX-V02-01 | DONE | 新版 goals 目标 API/页面与隔离人工场景库已准备；目标/API 专项与全 Jest 186 项通过；见修复报告 |
+| V02 | IN_PROGRESS | 六种 R/P 提取路径、错误反馈与单轴目标调整的人工操作包已准备；待在隔离页面操作并记录实际观察 |
+| T14–T15、V03–V08 | TODO | 依赖前序纵向/人工验收节点，按 DAG 继续推进 |
 
-此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。源码可确认预览有轴切换、分数档按钮和局部反馈，但配色、响应式、焦点、可读性、滚动和计时体验仍待人工检查。V01 按用户于 2026-11-08 的明确批准记录为 DONE；详细操作观察与截图未提供，见验收记录。V02–V08 在其依赖技术节点完成后再准备。V01–V08 的源码检查不能替代人工验收，V08 检查预览和正式页。
+此前 Browser 技能连接 `http://localhost:3000/task-preview` 失败，没有视觉或交互验收证据。浏览器 UI 改由人验证；不要求恢复 AI 自动化浏览器能力。V01 按用户于 2026-11-08 的明确批准记录为 DONE；详细操作观察与截图未提供，见验收记录。V02 的页面与独立场景库现已准备，运行步骤见 FIX-V02-01 报告；本仓库另有 Next 开发服务器占用 `.next` 锁，不能并行启动隔离实例，需从其所属终端停止后再按报告启动。V03–V08 在其依赖技术节点完成后准备。源码/自动化检查不能替代人工验收。
 
 开发约束：Next/React、strict TS、better-sqlite3 的 Node runtime。现有 `npm run test:new-algorithm-scenarios` 和 `npm run test:new-algorithm-memory` 是旧语义轨迹；重写前不得当作本版通过率。`npx tsc --noEmit` 仍有 `app/score-history/page.tsx:57` 与 `lib/manual-test-fixtures.ts:183` 的既有错误。测试注入 clock、用户时区、ID、provider 与容量，禁止真实等待 20 分钟或 41 天。
 
@@ -283,7 +285,7 @@ V01–V08 的 B/H 是人工门禁：AI 先生成可复现的测试数据、操�
 - **依赖**：T02、T03。**文件**：新版 goals API、`app/new-algorithm/goals/page.tsx`、新算法任务页入口、Jest。
 - **输入→输出**：新版词条、当前容量与目标 → 可查看/调整 R/P 目标、持久化目标和明确的容量受阻/重排结果。
 - **G/W/T**：Given 新版隔离库中的词条；When 只修改 R 或 P 目标并刷新；Then 目标保存、另一轴保持原值，T02 原子重算资格/排期；活动任务保护及容量不足按既有结果返回，不写入部分目标。
-- **验收**：API/页面使用新版隔离库；Jest 覆盖更新成功、无效范围、活动实例冲突、单轴保持和容量受阻；真实浏览器操作留给 V02。
+- **完成情况**：新版 goals GET 返回 R/P 目标值；POST `action=target` 调用 T02 原子更新，独立 `/new-algorithm/goals` 页面可以查看和调整两轴并显示回排/容量阻塞结果；任务页有入口链接。新增临时数据库场景脚本（拒绝覆盖现有路径）准备六种 R/P choice/cued/free、目标调整和复习材料。目标 API/页面与 settlement 专项 19/19 通过；全 Jest 15 suites / 186 tests、diff-check 通过；tsc 只有两处既有错误。完整手工步骤见 [FIX-V02-01 报告](../test-report/new-algorithm/FIX-V02-01/target-controls.md)；真实浏览器操作留给 V02。
 
 ### V02 · S2 · R/P 提取升降与目标调整
 
