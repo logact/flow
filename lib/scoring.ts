@@ -2,18 +2,11 @@ export type Axis = 'R' | 'P';
 export type RetrieveStage = 'choice' | 'cued' | 'free';
 export type TaskType = 'ENCODE' | 'RETRIEVE' | 'FLUENCY';
 export type Outcome = 'pass' | 'fail' | 'invalid';
-
 export interface ScoreState { R: number; P: number }
-export interface ScoreEvent {
-  task: TaskType; axis: Axis | 'both'; stage?: RetrieveStage;
-  before: Partial<ScoreState>; result: unknown; speedWpm?: number;
-  speedValid?: boolean; branch: string; calculated?: number;
-  after: Partial<ScoreState>; valid: boolean;
-}
+export interface ScoreEvent { task: TaskType; axis: Axis | 'both'; stage?: RetrieveStage; before: Partial<ScoreState>; result: unknown; speedWpm?: number; speedValid?: boolean; branch: string; calculated?: number; after: Partial<ScoreState>; valid: boolean }
 export type EventLogger = (event: ScoreEvent) => void;
 import { logger as appLogger } from './logger';
 const defaultEventLogger: EventLogger = event => appLogger.info({ event: 'score.update', ...event }, 'Score updated');
-
 export function selectTask(score: number, encodePending = false): { task: TaskType; stage?: RetrieveStage } {
   if (encodePending) return { task: 'ENCODE' };
   if (score < 20) return { task: 'RETRIEVE', stage: 'choice' };
@@ -22,36 +15,39 @@ export function selectTask(score: number, encodePending = false): { task: TaskTy
   return { task: 'FLUENCY' };
 }
 
-export function scoreEncode(state: ScoreState, completed: boolean, logger: EventLogger = defaultEventLogger): ScoreState {
-  const after = completed ? { R: Math.max(5, state.R), P: Math.max(5, state.P) } : { ...state };
-  logger?.({ task: 'ENCODE', axis: 'both', before: { ...state }, result: completed, branch: completed ? 'completed' : 'incomplete', after, valid: true });
-  return after;
-}
+type ScoreInput =
+  | { task: 'ENCODE'; state: ScoreState; completed: boolean }
+  | { task: 'RETRIEVE'; axis: Axis; score: number; stage: RetrieveStage; outcome: Outcome }
+  | { task: 'FLUENCY'; axis: Axis; score: number; targetPassed: boolean; overallPassed: boolean; speedWpm: number; timingValid: boolean; materialValid?: boolean; interrupted?: boolean };
+export interface ScoreResult { score: number | ScoreState; event: ScoreEvent }
 
-const retrieveScores: Record<RetrieveStage, { pass: number; fail: number }> = {
-  choice: { pass: 20, fail: 5 }, cued: { pass: 40, fail: 5 }, free: { pass: 60, fail: 20 },
-};
-export function scoreRetrieve(score: number, stage: RetrieveStage, outcome: Outcome, axis: Axis, logger: EventLogger = defaultEventLogger): number {
-  const valid = outcome !== 'invalid';
-  const after = valid ? retrieveScores[stage][outcome] : score;
-  logger?.({ task: 'RETRIEVE', axis, stage, before: { [axis]: score }, result: outcome, branch: valid ? `${stage}_${outcome}` : 'invalid', calculated: after, after: { [axis]: after }, valid });
-  return after;
-}
-
-export function scoreFluency(input: { axis: Axis; score: number; targetPassed: boolean; overallPassed: boolean; speedWpm: number; timingValid: boolean; materialValid?: boolean; interrupted?: boolean }, logger: EventLogger = defaultEventLogger): number {
-  const { axis, score, targetPassed, overallPassed, speedWpm } = input;
-  const valid = input.timingValid && input.materialValid !== false && !input.interrupted && Number.isFinite(speedWpm) && speedWpm > 0;
-  let after = score, branch = 'invalid', calculated: number | undefined;
-  if (valid) {
-    const threshold = axis === 'R' ? 150 : 25;
-    if (!targetPassed) { after = 40; branch = 'target_failed'; }
-    else if (!overallPassed) branch = 'overall_failed';
-    else if (speedWpm < threshold) { after = 40; branch = 'below_threshold'; }
-    else {
-      calculated = axis === 'R' ? Math.min(100, 60 + (speedWpm - 150) / 3.75) : Math.min(100, 60 + (speedWpm - 25) * 40 / 35);
-      after = calculated; branch = 'speed_formula';
+/** Pure scoring boundary: returns the score and its audit event; performs no logging or I/O. */
+export function score(input: ScoreInput, logger: EventLogger = defaultEventLogger): ScoreResult {
+  let value: number | ScoreState;
+  let event: ScoreEvent;
+  if (input.task === 'ENCODE') {
+    const after = input.completed ? { R: Math.max(5, input.state.R), P: Math.max(5, input.state.P) } : { ...input.state };
+    value = after;
+    event = { task: 'ENCODE', axis: 'both', before: { ...input.state }, result: input.completed, branch: input.completed ? 'completed' : 'incomplete', after, valid: true };
+  } else if (input.task === 'RETRIEVE') {
+    const valid = input.outcome !== 'invalid';
+    const table = { choice: { pass: 20, fail: 5 }, cued: { pass: 40, fail: 5 }, free: { pass: 60, fail: 20 } } as const;
+    const after = valid ? table[input.stage][input.outcome as 'pass' | 'fail'] : input.score;
+    value = after;
+    event = { task: 'RETRIEVE', axis: input.axis, stage: input.stage, before: { [input.axis]: input.score }, result: input.outcome, branch: valid ? `${input.stage}_${input.outcome}` : 'invalid', calculated: after, after: { [input.axis]: after }, valid };
+  } else {
+    const valid = input.timingValid && input.materialValid !== false && !input.interrupted && Number.isFinite(input.speedWpm) && input.speedWpm > 0;
+    let after = input.score, branch = 'invalid', calculated: number | undefined;
+    if (valid) {
+      const threshold = input.axis === 'R' ? 150 : 25;
+      if (!input.targetPassed) { after = 40; branch = 'target_failed'; }
+      else if (!input.overallPassed) branch = 'overall_failed';
+      else if (input.speedWpm < threshold) { after = 40; branch = 'below_threshold'; }
+      else { calculated = input.axis === 'R' ? Math.min(100, 60 + (input.speedWpm - 150) / 3.75) : Math.min(100, 60 + (input.speedWpm - 25) * 40 / 35); after = calculated; branch = 'speed_formula'; }
     }
+    value = after;
+    event = { task: 'FLUENCY', axis: input.axis, before: { [input.axis]: input.score }, result: { targetPassed: input.targetPassed, overallPassed: input.overallPassed }, speedWpm: input.speedWpm, speedValid: valid, branch, calculated, after: { [input.axis]: after }, valid };
   }
-  logger?.({ task: 'FLUENCY', axis, before: { [axis]: score }, result: { targetPassed, overallPassed }, speedWpm, speedValid: valid, branch, calculated, after: { [axis]: after }, valid });
-  return after;
+  logger(event);
+  return { score: value, event };
 }
