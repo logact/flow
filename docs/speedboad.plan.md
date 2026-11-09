@@ -131,13 +131,70 @@ Test multiple strata, all-correct/all-incorrect results, malformed input, determ
 
 ## P4 daily capacity and the next 41 days
 
-Implement the rolling capacity view for today through day 41 inclusive. For each local calendar day, report capacity, completed tasks, scheduled tasks, conditional reservations, remaining capacity, and any shortfall. Keep confirmed due tasks separate from conditional future reviews.
+Implement a function that answers the product question directly: **how many more new words can the user introduce today?** It uses the user's existing study plan, future study plan, candidate new words, and maximum task volume per day. Return the count and the admission simulation that justifies it. Also expose the underlying 42-day daily-capacity view so the result can be inspected. Keep planning pure and logging at the application boundary; do not duplicate P1 scoring or P2 schedule settlement. The window is the user's local date today through today + 41 days, inclusive (42 rows). Each task consumes one slot; a connection task is one task even though it initializes both axes.
 
-Before introducing a word, verify both today's task budget and the 41-day plan. Use the expected minimum first-day task count for its estimated-score band (3/5/7/9), account for shared cooldown and available practice time, and reserve each axis's expected reviews on days 1, 4, 11, and 41 after that axis is expected to reach its goal. Test different R/P completion dates and targets.
+### Contract
 
-After each valid result, recompute only affected conditional reservations and capacity totals. Preserve the other axis's confirmed due date. Never move an overdue confirmed task to make room for a new word. Record the inputs, before/after capacity view, reservation changes, and the reason introduction was allowed or rejected. Add unit tests for boundaries, over-capacity days, failures, and rolling-window movement.
+Keep confirmed work, conditional forecasts, and actual completions separately visible. Use a per-date row equivalent to:
 
-Human verification: use a fixed test clock and small daily capacity, then inspect the 42-row capacity view before and after introducing a word and after a failed task. Compare each day’s scheduled and conditional counts with the event log; confirm the blocked introduction names the first over-capacity date and that an overdue task keeps its original due date.
+```ts
+interface DailyCapacity {
+  date: string;                 // ISO local calendar date
+  capacity: number;
+  completed: number;             // valid tasks already completed on this date
+  confirmed: number;             // unfinished axes whose current dueAt is this date
+  overdue: number;               // confirmed work due before asOf, surfaced on today's row
+  conditional: number;           // future reviews on the modeled success path
+  remaining: number;             // capacity - completed - confirmed - overdue - conditional
+  shortfall: number;             // max(0, -remaining)
+}
+interface CapacityPlan {
+  asOf: string;
+  through: string;               // asOf + 41 local days
+  days: DailyCapacity[];         // exactly 42 rows
+  firstOverCapacityDate: string | null;
+}
+interface NewWordCapacityResult {
+  asOf: string;
+  maxNewWordsToday: number;
+  admittedWordIds: string[];     // candidates that fit in the simulated order
+  blockedWordId: string | null;  // first candidate that cannot be admitted
+  blockingDate: string | null;   // earliest day its addition exceeds capacity
+  reason: 'capacity_reached' | 'candidate_unavailable' | 'no_candidates' | null;
+  plan: CapacityPlan;            // final view after admitting the prefix
+}
+```
+
+Plan inputs must include the local `asOf` date, daily capacity policy, words in the active scope, their independent R/P `AxisSchedule`s, and valid completed-task counts by date. Inject dates/counts rather than reading the clock or logs inside the planner. Treat `dueAt: 'infinity'` and graduated axes as no work. A finite `dueAt` before `asOf` remains unchanged in the word state, but is surfaced in today's `overdue` count and consumes today's projected capacity; expose shortfall rather than silently rewriting its due date. A due date equal to `asOf` is `confirmed`, not `overdue`. Dates beyond day 41 do not create rows, and the plan must say its horizon ends at day 41.
+
+The plan should expose conditional reservations with provenance (word ID, axis, calculated attainment date, review date, and modeled path), so each conditional count can be explained. Calculate attainment dates inside the planner from each axis's current score/target, due_at, task ladder, and remaining daily task slots; callers must not supply attainment dates. Assume the shortest all-success task path, including a shared ENCODE task when both initial scores are zero. After an axis first reaches its target through valid FLUENCY, reserve that axis's next successful reviews at +1, +4, +11, and +41 local days from its own calculated attainment date. R and P use their own targets and attainment dates. Only include reservations inside the rolling window. These are forecasts, never due tasks or logged user outcomes.
+
+Provide two pure functions: `planCapacity(input): CapacityPlan` and `estimateNewWordCapacity(input): NewWordCapacityResult`. The latter takes the existing current/future study plan, `maxTasksPerDay` (or a per-day maximum policy), completed-task counts, and an ordered pool of eligible unintroduced candidates with their P3 estimates, task paths, and required materials. It simulates introducing candidates in that stable order, overlaying each candidate's expected first-day task demand (P3 band mapping 3/5/7/9) plus R/P future review reservations. `maxNewWordsToday` is the number of consecutive candidates that can be admitted today without any date in the 42-day window exceeding the user's maximum daily task volume. Return the admitted IDs, first blocked candidate, first blocking date, and final plan so the number is explainable. A no-candidate pool returns zero with `no_candidates`; distinguish this from capacity being exhausted.
+
+Candidate forecasts must provide P3's estimate band and the R/P targets; derive initial scores from that band and calculate the shortest successful task path internally. Admission only succeeds when that complete first-day path fits today's remaining capacity and material/cooldown/time checks pass, so an admitted candidate's forecast attainment date is today. Stop at the first ineligible candidate in stable order and return its reason. Keep a lower-level `checkWordAdmission({ plan, candidate, ... })` if useful, with a stable reason, blocking date, and proposed reservations; rejection must not mutate inputs. The 3/5/7/9 first-day task demand is explicitly tested against the P3 score bands and target defaults.
+
+### Recompute and persistence
+
+On each valid task result, first use the existing scoring/scheduling flow to settle the affected axis. Rebuild that word's conditional success-path reservations from its actual new state and actual first-attainment date, then recompute daily totals. Keep the other axis's schedule and confirmed due date byte-for-byte unchanged. A failed but valid result replaces only the affected axis's now-invalid success-path forecast with reservations derived from its actual state; do not keep claiming the original shortest path. Invalid, interrupted, or unavailable-material attempts consume no completed-task slot and cause no score/schedule change (per P1/P2); they may be logged as attempt events outside capacity completion counts.
+
+Log at the application boundary, not inside the pure planner. Capacity/admission events should include the as-of date, capacity policy, relevant current confirmed schedules, completion counts, candidate and its P3 band/task demand, before/after 42-day summaries, added/removed conditional reservations, decision, first over-capacity date, and reason. Keep event payloads bounded and structured; do not write all unrelated word state if a stable summary plus affected word IDs/reservations is sufficient to reproduce the decision. P3 estimate events remain separate.
+
+### Implementation sequence
+
+1. Confirm the 3/5/7/9 first-day-demand mapping against P3 bands and capture it as a named pure function/table.
+2. Define capacity inputs, daily rows, conditional-reservation and result types; validate finite non-negative maximums/counts, ISO local dates, and unique word/axis entries.
+3. Implement the pure 42-day current-plan view, including overdue accounting and completed counts.
+4. Calculate each unfinished current axis's fastest successful task path and attainment date from its score, target, due_at, and daily capacity. Add per-axis conditional review forecasts from those calculated dates; completed axes forecast from their next due_at/reviewLevel. Ignore dates beyond the horizon.
+5. Implement single-candidate admission simulation; check today's tasks/time/cooldown and every day in the 42-day horizon, returning the earliest limiting date and reason.
+6. Implement `estimateNewWordCapacity` by repeatedly simulating the ordered eligible candidate pool against the updated provisional plan; report the admitted count and first candidate/date that cannot fit.
+7. Wire valid task settlement to recompute only the changed axis forecast, preserve the other axis schedule, and emit persistent before/after capacity/admission logs.
+8. Add a dedicated `npm run test:p4` command and keep P4 tests in TypeScript, separate from the general suite.
+
+### Tests and acceptance
+
+Cover: exactly 42 rows and inclusive day-41 boundary; local-date arithmetic across month/year/leap-day boundaries; uniform and per-day maximums; completed, confirmed, overdue, conditional, remaining, and shortfall arithmetic; `infinity`/graduated axes; overdue due dates retained in state and charged to today's view; both axes due on one date counting as one shared ENCODE task or two independent tasks as applicable; asymmetric R/P targets and internally calculated attainment dates from score/task paths; reservations on days 1/4/11/41; reservations that fall outside the horizon; 3/5/7/9 demand mapping; candidate pool empty; one/many candidates admitted; heterogeneous candidate bands and stable ordering; exactly-at-capacity and one-over cases; future bottleneck and earliest blocking date; material/cooldown/time ineligibility; valid failure replacing only affected forecasts; invalid attempts leaving counts, scores, schedules, and forecasts unchanged; rolling the as-of date by one day; deterministic output and no input mutation; persistent event fields and reason codes. Assert `maxNewWordsToday === admittedWordIds.length` and that simulating one additional candidate demonstrates the returned blocking reason/date.
+
+Human verification: with a fixed date and small maximum task volume, inspect the returned `maxNewWordsToday` and admitted IDs alongside all 42 rows. Add one candidate at a time until the first candidate is blocked; verify the reported blocking date is the earliest over-capacity date. Repeat after an R result, a P result on a different date, a valid failure, and moving the window forward one day. Reconcile row totals against event records; confirm a failure changes only its own axis forecast and overdue confirmed tasks keep their original `dueAt`.
 
 ## p5 the logic of task assignment run with prioriry rightly.
 
