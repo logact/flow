@@ -2,8 +2,8 @@ import { describe, expect, test } from '@jest/globals';
 import { score, selectTask } from '../lib/scoring';
 
 describe('pure unified P1 scoring interface', () => {
-  test.each([[0, 'choice'], [20, 'cued'], [40, 'free'], [60, undefined]])('selects task at score %s', (value, stage) => {
-    expect(selectTask(value).stage).toBe(stage);
+  test.each([[0, 'ENCODE', undefined], [5, 'RETRIEVE', 'choice'], [20, 'RETRIEVE', 'cued'], [40, 'RETRIEVE', 'free'], [60, 'FLUENCY', undefined]])('selects task at score %s', (value, task, stage) => {
+    expect(selectTask(value)).toEqual({ task, ...(stage ? { stage } : {}) });
   });
   test('ENCODE returns both updated scores and an event without mutating input', () => {
     const state = { R: 0, P: 0 };

@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "test": "jest --runInBand",
-    "test:p2": "jest --runInBand test/schedule.jest.test.ts"
+    "test:p2": "jest --runInBand test/schedule.jest.test.ts",
+    "test:p3": "jest --runInBand test/vocabulary.jest.test.ts test/scoring.jest.test.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.0",

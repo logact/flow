@@ -7,8 +7,8 @@ export interface ScoreEvent { task: TaskType; axis: Axis | 'both'; stage?: Retri
 export type EventLogger = (event: ScoreEvent) => void;
 import { logger as appLogger } from './logger';
 const defaultEventLogger: EventLogger = event => appLogger.info({ event: 'score.update', ...event }, 'Score updated');
-export function selectTask(score: number, encodePending = false): { task: TaskType; stage?: RetrieveStage } {
-  if (encodePending) return { task: 'ENCODE' };
+export function selectTask(score: number): { task: TaskType; stage?: RetrieveStage } {
+  if (score === 0) return { task: 'ENCODE' };
   if (score < 20) return { task: 'RETRIEVE', stage: 'choice' };
   if (score < 40) return { task: 'RETRIEVE', stage: 'cued' };
   if (score < 60) return { task: 'RETRIEVE', stage: 'free' };
