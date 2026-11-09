@@ -59,10 +59,22 @@ genraete the unit test case to cover the following cases.
 4. after the word pass the last review,it mark its due_at to ∞.
 
 
-## P3 the logic of user's vacabulary capbility and the fluency score of the introduced word run rightly.
+## P3 user vocabulary estimate and introduced-word scores
+
+Verify that the user's estimated vocabulary size and comparable word-frequency rank produce the correct initial R/P scores. Cover all four PRD bands (`rank ≤ 0.5V`, `0.5V < rank ≤ V`, `V < rank ≤ 1.5V`, and above `1.5V` or unavailable rank), including boundary values and incomparable frequency sources.
+
+Confirm that estimated scores do not count as FLUENCY evidence, do not mark an axis complete or graduated, and do not trigger ENCODE when either axis has a non-zero estimate. When both axes start at zero, schedule exactly one ENCODE task; completion initializes both axes to at least 5. Check that changing the vocabulary estimate does not reset scores or schedules for words already in practice.
+
+Log the estimate, rank and source, selected band, initial R/P scores, and any reason the rank could not be compared. Use unit tests for the band boundaries and state-transition tests for introduction and ENCODE behavior.
 
 
-## p4 the capaicity for the next 40 days calculation 
+## P4 daily capacity and the next 41 days
+
+Implement the rolling capacity view for today through day 41 inclusive. For each local calendar day, report capacity, completed tasks, scheduled tasks, conditional reservations, remaining capacity, and any shortfall. Keep confirmed due tasks separate from conditional future reviews.
+
+Before introducing a word, verify both today's task budget and the 41-day plan. Use the expected minimum first-day task count for its estimated-score band (3/5/7/9), account for shared cooldown and available practice time, and reserve each axis's expected reviews on days 1, 4, 11, and 41 after that axis is expected to reach its goal. Test different R/P completion dates and targets.
+
+After each valid result, recompute only affected conditional reservations and capacity totals. Preserve the other axis's confirmed due date. Never move an overdue confirmed task to make room for a new word. Record the inputs, before/after capacity view, reservation changes, and the reason introduction was allowed or rejected. Add unit tests for boundaries, over-capacity days, failures, and rolling-window movement.
 
 ## p5 the logic of task assignment run with prioriry rightly.
 
@@ -77,23 +89,43 @@ genreate the unit test to cover and verify the logic ,you need persist the log (
 已毕业轴 due_at_a = ∞ 不参加竞争。对同一 due_at_a 使用词 ID 升序、同词 R 先于 P 的稳定顺序。到期但因冷却未就绪的高优先级轴暂不阻塞其他可派候选；冷却结束时重新比较。到期轴未完成时保持原 due_at_a，跨日自动成为逾期，不能为了引入新词顺延。只有用户显式改变目标、范围或其他已排期前提时，才按新状态重算相应排期并记录原因。
 
 
-## p6 AI task generator 
-you should log the input to the AI and the output let the user estimate the output
-1. genrate the fluency task according to the user's level properly
-2. generate the R[option/cue/free] tasks according to the user's level properly
+## P6 AI task generation
 
-## p7 AI estimator for the 
-you should log the input to the AI and the output let the user estimate the output
-   
-1. let the AI estimate the output fluency task
+Generate tasks that match the user's level, selected word sense, axis, score band, and task type. Use the PRD task ladder: ENCODE only when both initial scores are zero; R/P RETRIEVE choice, cued, or free for scores below 60; and axis-specific FLUENCY at 60 or above. Do not silently lower a task's difficulty when suitable material is unavailable.
+
+Cover the following with representative fixtures and validation:
+
+1. Generate R and P choice, cued, and free tasks with the required prompts and support for each level.
+2. Generate R FLUENCY material with exactly 100 English words, at least five natural occurrences of the target word, two answerable comprehension questions, and fixed answers/evidence.
+3. Generate P FLUENCY Chinese scenarios that elicit the target expression without revealing its English form, plus grading requirements for target use and overall expression.
+4. Reject malformed, ambiguous, level-inappropriate, or target-sense-mismatched output; retry within a finite budget, then report material unavailable.
+5. Cache validated material with its version and preserve the prompt inputs and raw AI output for inspection.
+
+Log the model/provider, prompt inputs, generated output, validation results, retries, and failure reason so the user can assess generation quality. Test through the task-generation boundary with deterministic AI fixtures; do not treat generated material as valid until it passes checks.
+
+## P7 AI grading for FLUENCY tasks
+
+Use AI to grade submitted FLUENCY answers against requirements frozen when the task was issued. For P, return separate outcomes for correct target-word use and successful overall retelling, with evidence for each. For R, return separate outcomes for the target-word meaning question and passage-comprehension question. Preserve the answer and grading requirements used for every decision.
+
+Apply the P1 score rules only after validity checks: invalid timing, interruption, bad material, or an AI/service error must not change scores or schedules. A grading result must not be recalculated from an edited answer; retry a service failure against the saved original answer. Test pass/fail combinations, target-word omission or misuse, semantically valid paraphrases, ambiguous answers, and service failures.
+
+Log the model/provider, full grading inputs, submitted answer, structured output, evidence, validity checks, and score/schedule changes. Keep AI generation logs distinct from grading logs so the user can inspect both.
 
 
 
-## P8 the prototype html 
-generate the basic UI to integerate the verified basic function
-1. estimate the user's  vacubulary level,
-2. introduce the material and init the word the fluence by user's word level
-3. all kinds of type of the words let user to learn.
+## P8 prototype UI
+
+Build a basic HTML prototype that connects the verified vocabulary, material, task, grading, score, schedule, and capacity functions. Keep the flow small and usable; show the user what task is being done and why it was selected.
+
+The prototype should support:
+
+1. Estimate and save the user's vocabulary size, with a clear indication when frequency-rank data is unavailable or not comparable.
+2. Select or introduce material, resolve/confirm target-word meaning, and initialize each word's R/P scores from the user's vocabulary estimate and word rank.
+3. Practice ENCODE, all R/P RETRIEVE levels, and both FLUENCY task types with the appropriate prompt, answer input, timing, feedback, and score update.
+4. Show current R/P scores, targets, next due dates, review levels, graduation state, today's queue/capacity, and why a task was selected or is unavailable.
+5. Provide a task/event history that exposes AI generation and grading inputs/outputs and explains score and schedule changes.
+
+Use the real verified core functions rather than duplicate UI-only rules. Keep the UI states for loading, empty queue, cooldown, capacity shortfall, unavailable material, invalid attempt, and grading failure explicit. Demonstrate the complete happy path and representative failure/recovery paths in the prototype.
  
 
 
