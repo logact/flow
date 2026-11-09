@@ -8,6 +8,9 @@ for more detail you can read the @RPD
 
 ## P1 basic fluency
 
+implement the baisc fluency increase and descrease function  
+
+### how to test?
 I can see the fluent change and how they change to check the behavior of the fluent. I hope these log store in the log file.
 
 generate the unit test to cover the following scenarios.
@@ -47,6 +50,10 @@ F_R_new = min(100, 60 + (reading_wpm − 150) / 3.75)
 
 ## P2 schedule task right
 
+make the schedule work well
+
+### how to test
+
 I can see the due_at,review_interval change and how they change to check the behavior of the fluent. I hope these log store in the log file.
 
 The due_at assign correctly
@@ -67,6 +74,8 @@ Confirm that estimated scores do not count as FLUENCY evidence, do not mark an a
 
 Log the estimate, rank and source, selected band, initial R/P scores, and any reason the rank could not be compared. Use unit tests for the band boundaries and state-transition tests for introduction and ENCODE behavior.
 
+Human verification: open the event log for each fixture and compare the displayed V, rank/source, chosen band, R/P starting scores, and ENCODE decision with the expected values above. Complete an ENCODE task and confirm one event changes both scores to 5; inspect a nonzero estimate and confirm it has no FLUENCY-pass evidence.
+
 
 ## P4 daily capacity and the next 41 days
 
@@ -75,6 +84,8 @@ Implement the rolling capacity view for today through day 41 inclusive. For each
 Before introducing a word, verify both today's task budget and the 41-day plan. Use the expected minimum first-day task count for its estimated-score band (3/5/7/9), account for shared cooldown and available practice time, and reserve each axis's expected reviews on days 1, 4, 11, and 41 after that axis is expected to reach its goal. Test different R/P completion dates and targets.
 
 After each valid result, recompute only affected conditional reservations and capacity totals. Preserve the other axis's confirmed due date. Never move an overdue confirmed task to make room for a new word. Record the inputs, before/after capacity view, reservation changes, and the reason introduction was allowed or rejected. Add unit tests for boundaries, over-capacity days, failures, and rolling-window movement.
+
+Human verification: use a fixed test clock and small daily capacity, then inspect the 42-row capacity view before and after introducing a word and after a failed task. Compare each day’s scheduled and conditional counts with the event log; confirm the blocked introduction names the first over-capacity date and that an overdue task keeps its original due date.
 
 ## p5 the logic of task assignment run with prioriry rightly.
 
@@ -87,6 +98,8 @@ genreate the unit test to cover and verify the logic ,you need persist the log (
 当天及 41 天容量检查通过时引入新词；新词按来源可比较的词频、目标缺口、词 ID 和同词 R 优先稳定排序。
 没有可派发旧任务且不能准入新词时返回今天完成、冷却等待、材料不可用或容量不足的具体原因。
 已毕业轴 due_at_a = ∞ 不参加竞争。对同一 due_at_a 使用词 ID 升序、同词 R 先于 P 的稳定顺序。到期但因冷却未就绪的高优先级轴暂不阻塞其他可派候选；冷却结束时重新比较。到期轴未完成时保持原 due_at_a，跨日自动成为逾期，不能为了引入新词顺延。只有用户显式改变目标、范围或其他已排期前提时，才按新状态重算相应排期并记录原因。
+
+人工观察与核验：使用固定时钟和可控词/轴数据，逐个触发“到期复习优先、到期学习其次、新词最后、毕业轴跳过、同到期时间按词 ID 且 R 优先”的队列场景。查看任务队列日志中的候选、冷却状态、材料状态、容量判断、最终选中任务及原因，并与上述顺序逐项核对。另验证高优先级候选在冷却中时其他可派任务仍能出现；跨日后到期时间保持不变且显示逾期。每个场景写成调度单元测试，并保存一份可供人工查看的队列日志。
 
 
 ## P6 AI task generation
@@ -103,6 +116,8 @@ Cover the following with representative fixtures and validation:
 
 Log the model/provider, prompt inputs, generated output, validation results, retries, and failure reason so the user can assess generation quality. Test through the task-generation boundary with deterministic AI fixtures; do not treat generated material as valid until it passes checks.
 
+Human verification: run one example for each task type and open its generation record. Check the prompt includes the intended level, word sense and axis; count the R passage words and target occurrences; confirm P material does not expose the English target; inspect validation status and the material actually presented. Feed one invalid fixture and confirm its rejection/retry reason is visible and it is never presented as a valid task.
+
 ## P7 AI grading for FLUENCY tasks
 
 Use AI to grade submitted FLUENCY answers against requirements frozen when the task was issued. For P, return separate outcomes for correct target-word use and successful overall retelling, with evidence for each. For R, return separate outcomes for the target-word meaning question and passage-comprehension question. Preserve the answer and grading requirements used for every decision.
@@ -110,6 +125,8 @@ Use AI to grade submitted FLUENCY answers against requirements frozen when the t
 Apply the P1 score rules only after validity checks: invalid timing, interruption, bad material, or an AI/service error must not change scores or schedules. A grading result must not be recalculated from an edited answer; retry a service failure against the saved original answer. Test pass/fail combinations, target-word omission or misuse, semantically valid paraphrases, ambiguous answers, and service failures.
 
 Log the model/provider, full grading inputs, submitted answer, structured output, evidence, validity checks, and score/schedule changes. Keep AI generation logs distinct from grading logs so the user can inspect both.
+
+Human verification: submit prepared passing and failing answers for R and P, then compare the saved answer, frozen rubric, AI outcomes/evidence, and score decision with the P1 tables. Submit an invalid-timing answer and simulate a grader error; confirm both records show no score or schedule change. Retry the grader error and verify it uses the original saved answer.
 
 
 
@@ -126,6 +143,8 @@ The prototype should support:
 5. Provide a task/event history that exposes AI generation and grading inputs/outputs and explains score and schedule changes.
 
 Use the real verified core functions rather than duplicate UI-only rules. Keep the UI states for loading, empty queue, cooldown, capacity shortfall, unavailable material, invalid attempt, and grading failure explicit. Demonstrate the complete happy path and representative failure/recovery paths in the prototype.
+
+How to verify: provide a short manual walkthrough using seeded data: set vocabulary estimate, introduce a word, complete one RETRIEVE and one FLUENCY task, then inspect score and due-date changes. Repeat with a failed answer and unavailable material. At each step, compare the visible task reason and history detail with the corresponding event records; confirm the capacity panel and queue agree with the scheduler. Capture screenshots of the initial setup, active task, result/history, and one blocked/error state so a reviewer can verify the prototype without reading implementation code.
  
 
 
