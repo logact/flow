@@ -68,13 +68,57 @@ genraete the unit test case to cover the following cases.
 
 ## P3 user vocabulary estimate and introduced-word scores
 
-Verify that the user's estimated vocabulary size and comparable word-frequency rank produce the correct initial R/P scores. Cover all four PRD bands (`rank ≤ 0.5V`, `0.5V < rank ≤ V`, `V < rank ≤ 1.5V`, and above `1.5V` or unavailable rank), including boundary values and incomparable frequency sources.
+Implement the PRD's initial-score estimate and word introduction boundary. `lib/scoring.ts` currently owns task selection and result scoring; it has no vocabulary estimate, rank provenance, or introduction state. Keep estimated scores separate from score-result settlement so estimates cannot be mistaken for answer evidence.
 
-Confirm that estimated scores do not count as FLUENCY evidence, do not mark an axis complete or graduated, and do not trigger ENCODE when either axis has a non-zero estimate. When both axes start at zero, schedule exactly one ENCODE task; completion initializes both axes to at least 5. Check that changing the vocabulary estimate does not reset scores or schedules for words already in practice.
+### Proposed input/output contract
 
-Log the estimate, rank and source, selected band, initial R/P scores, and any reason the rank could not be compared. Use unit tests for the band boundaries and state-transition tests for introduction and ENCODE behavior.
+Use one new estimator and the existing task selector. Estimation is pure and returns initial R/P scores; the caller stores those scores in a new word's state and passes each score to `selectTask()`. A zero score selects ENCODE, so P3 does not add an `introduceWord()` API or a separate `encodePending` input. The existing `score()` remains responsible for its own score event when ENCODE is completed.
 
-Human verification: open the event log for each fixture and compare the displayed V, rank/source, chosen band, R/P starting scores, and ENCODE decision with the expected values above. Complete an ENCODE task and confirm one event changes both scores to 5; inspect a nonzero estimate and confirm it has no FLUENCY-pass evidence.
+```ts
+type EstimateBand = 'common' | 'known' | 'less_common' | 'unknown';
+type RankSource = { id: string; basis: string };
+
+interface VocabularyEstimate {
+  size: number;                 // V, must be finite and > 0
+  rankSource: RankSource;       // identifies how V's rank scale was produced
+}
+interface WordFrequencyRank {
+  value: number | null;         // positive rank; null means unavailable
+  source: RankSource | null;    // null means unavailable
+}
+interface InitialScoreEstimateInput {
+  vocabulary: VocabularyEstimate;
+  wordRank: WordFrequencyRank;
+}
+interface InitialScoreEstimate {
+  R: number;
+  P: number;
+  band: EstimateBand;
+  comparable: boolean;
+  reason?: 'rank_unavailable' | 'rank_source_missing' | 'rank_source_mismatch' | 'invalid_vocabulary_size' | 'invalid_rank';
+}
+function estimateInitialScores(input: InitialScoreEstimateInput): InitialScoreEstimate;
+```
+
+`RankSource.id` plus `basis` must match exactly before comparing values. Invalid or non-comparable rank produces the `unknown` band and `(0,0)`; malformed numeric input is reported by `reason` rather than silently compared. The function returns no evidence flags, schedule, persistence handle, or timestamp. The caller applies its result only when creating an eligible new word, preserves any existing word's scores and schedules when V changes, then calls `selectTask()` for task choice. With the agreed rule, `selectTask(0)` returns ENCODE; nonzero scores follow the existing RETRIEVE/FLUENCY thresholds. Since ENCODE initializes both axes, its completion passes both current scores to `score({ task: 'ENCODE', state: { R, P }, completed: true })`.
+
+The estimate event should include V and its source, rank and its source, comparability/reason, selected band, and initial R/P scores. Persist it at the caller that applies an estimate; do not make `estimateInitialScores` write to disk. ENCODE completion continues to use the score event emitted by `score()`.
+
+### Implementation plan
+
+1. Define typed inputs for a saved vocabulary estimate (`V > 0` and its rank-source identity), a word's optional frequency rank and source, and the word's current practice state. Treat rank as a rank, never as a raw frequency count.
+2. Add a deterministic, side-effect-free estimator (for example `estimateInitialScores`) that returns `{ R, P, band, comparable, reason }`. Compare ranks only when the source and ranking basis are explicitly compatible. Use the PRD table: `rank ≤ 0.5V → (60,40)`, `0.5V < rank ≤ V → (40,20)`, `V < rank ≤ 1.5V → (20,5)`, and `rank > 1.5V` or unavailable/incomparable rank `→ (0,0)`.
+3. Update the task-selection contract so `selectTask(0)` returns ENCODE and nonzero scores retain the existing RETRIEVE/FLUENCY thresholds. ENCODE completion uses the unified `score({ task: 'ENCODE', state: { R, P }, completed: true })` path and initializes both axes to at least 5.
+4. Keep estimate application at the word-creation caller: apply the estimated scores only to a new eligible word, leave learning evidence and schedule defaults untouched, and never recalculate an in-practice word when `V` changes. Do not implement P4 capacity admission here.
+5. Persist a `vocabulary.estimated` event where the estimate is applied. Include V and its source, rank and its source, comparability/reason, selected band, initial R/P scores, and selected first task. Keep the score event emitted by `score()` as the record of ENCODE settlement; estimates must not create FLUENCY evidence.
+
+### Tests and acceptance
+
+Create `test/vocabulary.jest.test.ts` and a dedicated `npm run test:p3` command. Cover exact boundaries at `0.5V`, `V`, and `1.5V`, values immediately on either side, missing/invalid V or rank, and same-source versus incomparable rank sources. Assert the estimator is deterministic and does not mutate input.
+
+Test that estimated scores select the intended first task: nonzero bands use the existing score thresholds and `(0,0)` selects ENCODE. Verify ENCODE completion changes both axes to at least 5 through `score()`. Verify applying a new V affects future words only and leaves an in-practice word's scores and due dates intact. Capture estimate and score events at their respective caller boundaries and confirm estimates create no FLUENCY-pass evidence. Keep capacity checks and the 3/5/7/9 daily task admission enforcement for P4.
+
+Human verification: use fixtures at each band and inspect the persistent event log for V/source, rank/source, chosen band, initial R/P scores, and selected first task. Complete ENCODE once for a `(0,0)` word and confirm its score event updates both axes to 5. Re-estimate V after a word enters practice and confirm its score and schedule are unchanged; verify no estimate event is reported as a FLUENCY pass.
 
 
 ## P4 daily capacity and the next 41 days
