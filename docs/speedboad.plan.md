@@ -256,19 +256,152 @@ Human verification: with a fixed date and small maximum task volume, inspect the
 
 ## P6 AI task generation
 
-Generate tasks that match the user's level, selected word sense, axis, score band, and task type. Use the PRD task ladder: ENCODE only when both initial scores are zero; R/P RETRIEVE choice, cued, or free for scores below 60; and axis-specific FLUENCY at 60 or above. Do not silently lower a task's difficulty when suitable material is unavailable.
+Generate task material that matches the selected word and sense, learner level, axis, score, and task type. Follow the P1/P5 task ladder: ENCODE is shared by R/P and is selected only when both initial scores are zero; RETRIEVE uses choice, cued, or free below 60; FLUENCY is axis-specific from 60 onward. Never silently replace unavailable material with an easier task.
 
-Cover the following with representative fixtures and validation:
+### Two implementation stages
 
-1. Generate R and P choice, cued, and free tasks with the required prompts and support for each level.
-2. Generate R FLUENCY material with exactly 100 English words, at least five natural occurrences of the target word, two answerable comprehension questions, and fixed answers/evidence.
-3. Generate P FLUENCY Chinese scenarios that elicit the target expression without revealing its English form, plus grading requirements for target use and overall expression.
-4. Reject malformed, ambiguous, level-inappropriate, or target-sense-mismatched output; retry within a finite budget, then report material unavailable.
-5. Cache validated material with its version and preserve the prompt inputs and raw AI output for inspection.
+1. **Run without an API key.** Implement a deterministic fixture generator behind the same interface as the real provider. Fixtures must exercise successful generation, malformed output, target-sense mismatch, validation rejection, retry, and retry exhaustion. Run prompt construction, parsing, validation, retry, result selection, and logging through the real task-generation service boundary.
+2. **Allow API-key developer debugging.** Implement a real provider adapter selected by server-side configuration. Read the API key only from a server environment variable; never include it in input types or logs. Record each attempt as structured application log data so a developer can inspect provider/model, prompt inputs, raw output, validation, retry count, and failure reason. Debug records are logs only; do not add a debug-record database or query API. Only validated material may be returned for presentation.
 
-Log the model/provider, prompt inputs, generated output, validation results, retries, and failure reason so the user can assess generation quality. Test through the task-generation boundary with deterministic AI fixtures; do not treat generated material as valid until it passes checks.
+### Generation boundary
 
-Human verification: run one example for each task type and open its generation record. Check the prompt includes the intended level, word sense and axis; count the R passage words and target occurrences; confirm P material does not expose the English target; inspect validation status and the material actually presented. Feed one invalid fixture and confirm its rejection/retry reason is visible and it is never presented as a valid task.
+The task-generation input carries the word and chosen sense directly; the generator does not look them up by ID. The ID remains for correlation and logs. Fixture and real-provider adapters implement the same raw-output boundary. Parsing and validation happen after the adapter returns, so provider output is always treated as untrusted.
+
+```ts
+type Axis = 'R' | 'P';
+type RetrieveStage = 'choice' | 'cued' | 'free';
+type TaskType = 'ENCODE' | 'RETRIEVE' | 'FLUENCY';
+
+interface TaskGenerationInput {
+  word: {
+    id: string;
+    text: string;
+    sense: {
+      id: string;
+      definition: string;
+      partOfSpeech?: string;
+      examples?: string[];
+    };
+  };
+  axis: Axis | 'both'; // both is used only by shared ENCODE
+  task: TaskType;
+  stage?: RetrieveStage; // required only for RETRIEVE
+  learner: {
+    level: string;
+    score: number | { R: number; P: number };
+    language: string;
+  };
+  promptVersion: string;
+}
+
+interface RawGenerationResult {
+  provider: string; // e.g. fixture or configured provider
+  model: string;
+  rawOutput: string; // unparsed, untrusted provider/fixture output
+  requestId?: string;
+}
+
+interface TaskMaterialGenerator {
+  generate(input: TaskGenerationInput): Promise<RawGenerationResult>;
+}
+
+type TaskGenerationOutcome =
+  | { status: 'ready'; material: GeneratedTask; generationId: string }
+  | { status: 'unavailable'; reason: string; generationId: string };
+
+interface TaskGenerationService {
+  generateTask(input: TaskGenerationInput): Promise<TaskGenerationOutcome>;
+}
+```
+
+The service parses and validates each attempt, retries invalid output only within a finite configured budget, logs every attempt, and returns `ready` only for validated material. On exhaustion it returns `unavailable` with a reason. The task assignment function remains pure; the application boundary calls generation after P5 selects a task and handles unavailable material without lowering its difficulty. Cache only validated material and associate it with the prompt/schema version; debug inspection itself is provided by logs, not a separate persistence API.
+
+### Per-task material schemas
+
+All task material uses a versioned envelope. `wordId` correlates the generated task with the input; answer keys and grading requirements are server-side and must be removed from learner-facing payloads.
+
+```ts
+interface TaskEnvelope<TTask extends string, TContent> {
+  schemaVersion: '1';
+  task: TTask;
+  wordId: string;
+  content: TContent;
+}
+
+type EncodeTask = TaskEnvelope<'ENCODE', {
+  word: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  definition: string;
+  examples: Array<{ sentence: string; translation?: string }>;
+  instruction: string;
+}>;
+
+type RetrieveChoiceTask = TaskEnvelope<'RETRIEVE', {
+  axis: Axis;
+  stage: 'choice';
+  prompt: string;
+  options: Array<{ id: string; text: string }>;
+  answerOptionId: string;
+  explanation: string;
+}>;
+
+type RetrieveCuedTask = TaskEnvelope<'RETRIEVE', {
+  axis: Axis;
+  stage: 'cued';
+  prompt: string;
+  cue: string;
+  answerKey: { acceptedAnswers: string[]; explanation: string };
+}>;
+
+type RetrieveFreeTask = TaskEnvelope<'RETRIEVE', {
+  axis: Axis;
+  stage: 'free';
+  prompt: string;
+  answerKey: { acceptedAnswers: string[]; explanation: string };
+}>;
+
+type ReadingFluencyTask = TaskEnvelope<'FLUENCY', {
+  axis: 'R';
+  passage: string; // 90-120 English words, inclusive
+  questions: Array<{ prompt: string; answer: string; evidence: string }>;
+  targetOccurrences: number;
+}>;
+
+type ProductionFluencyTask = TaskEnvelope<'FLUENCY', {
+  axis: 'P';
+  scenario: string;
+  responseInstruction: string;
+  gradingRequirements: {
+    targetExpression: string;
+    targetUseCriteria: string[];
+    overallExpressionCriteria: string[];
+  };
+}>;
+
+type GeneratedTask =
+  | EncodeTask
+  | RetrieveChoiceTask
+  | RetrieveCuedTask
+  | RetrieveFreeTask
+  | ReadingFluencyTask
+  | ProductionFluencyTask;
+```
+
+### Validation rules
+
+1. Validate the discriminant and required fields for the selected task/axis/stage; reject extra or missing task-specific structure and malformed/ambiguous content.
+2. ENCODE is shared (`axis: 'both'` at input); its material must match the supplied word and sense and include at least one example.
+3. RETRIEVE choice has at least two options, exactly one keyed answer, and a valid `answerOptionId`. R prompts test recognition of the intended English word/sense; P prompts elicit English production from a suitable non-English cue. Cued/free prompts must not disclose the answer in their cue or prompt.
+4. R FLUENCY has an English passage of 90-120 words inclusive, at least five natural occurrences of the target word, and exactly two answerable comprehension questions with fixed answers and evidence found in the passage. `targetOccurrences` must match the validated count.
+5. P FLUENCY has a Chinese scenario and response instruction that elicit the target expression without exposing its English form. Grading requirements separately cover correct target use and overall expression.
+6. Reject target-sense mismatch, level-inappropriate material, invalid language, or any failed structural/content rule. Retry within the finite budget; after exhaustion report material unavailable and never present rejected output as a valid task.
+
+### Logging, cache, and verification
+
+Write one structured generation-attempt log containing `generationId`, attempt number, provider/model, prompt version and input, raw output, parsed output when available, validation status/errors, and retry/failure reason. Never log API keys. Logs are the developer inspection surface; do not create a separate generation-record database/API. Cache only successfully validated material and include schema/prompt version in its cache identity so stale material cannot bypass updated validation.
+
+Add deterministic fixture tests through the task-generation service boundary, with a dedicated `npm run test:p6` command and TypeScript test files. Cover every schema/task variant, validation and retry paths, unavailable output, no input mutation, no presentation of invalid output, and the same service behavior with fixture and provider adapters. Human verification: generate one example of each task variant, inspect its attempt logs and presented material, verify R passage word/target counts, verify P material does not reveal the English target, and feed invalid output to confirm the rejection and retry reason are logged.
 
 ## P7 AI grading for FLUENCY tasks
 
