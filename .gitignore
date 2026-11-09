@@ -3,5 +3,6 @@ node_modules/
 .manual-test/
 flow.db*
 .data/
+logs/
 *.traineddata
 tsconfig.tsbuildinfo

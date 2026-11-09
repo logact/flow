@@ -6,13 +6,15 @@
     "dev": "next dev --hostname 0.0.0.0",
     "dev:manual-test": "FLOW_MANUAL_TEST_MODE=1 next dev --hostname 0.0.0.0 -p 3101",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.0",
     "better-sqlite3": "^13.0.3",
     "next": "^16.4.4",
     "pdfjs-dist": "^6.5.438",
+    "pino": "^10.4.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tesseract.js": "^7.0.0"
