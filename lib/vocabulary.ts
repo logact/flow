@@ -12,6 +12,73 @@ export interface VocabularyEstimate {
   rankSource: RankSource;
 }
 
+/** A test stratum samples words uniformly from an interval of the rank list. */
+export interface VocabularyCapacityTestStratum {
+  rankStart: number;
+  rankEnd: number;
+  correct: number;
+  questions: number;
+}
+
+export interface VocabularyCapacityTestInput {
+  rankSource: RankSource;
+  strata: VocabularyCapacityTestStratum[];
+}
+
+export interface VocabularyCapacityEstimateEvent {
+  event: 'vocabulary.capacity_estimated';
+  rankSource: RankSource;
+  strata: VocabularyCapacityTestStratum[];
+  estimate: VocabularyEstimate;
+}
+
+export type VocabularyCapacityEstimateLogger = (event: VocabularyCapacityEstimateEvent) => void;
+const defaultVocabularyCapacityEstimateLogger: VocabularyCapacityEstimateLogger = event =>
+  appLogger.info(event, 'User vocabulary capacity estimated');
+
+/**
+ * Extrapolates known vocabulary from representative, uniformly sampled rank bands.
+ * The result uses the same rank-list identity required by P3 score estimation.
+ */
+export function estimateVocabularyCapacity(input: VocabularyCapacityTestInput): VocabularyEstimate {
+  if (!input.rankSource?.id || !input.rankSource?.basis) {
+    throw new RangeError('rankSource must include id and basis');
+  }
+  if (!Array.isArray(input.strata) || input.strata.length === 0) {
+    throw new RangeError('at least one test stratum is required');
+  }
+
+  let estimatedSize = 0;
+  for (const stratum of input.strata) {
+    const { rankStart, rankEnd, correct, questions } = stratum;
+    if (!Number.isFinite(rankStart) || !Number.isFinite(rankEnd) || rankStart < 0 || rankEnd <= rankStart) {
+      throw new RangeError('each stratum must have a valid rank interval');
+    }
+    if (!Number.isInteger(questions) || questions <= 0 || !Number.isInteger(correct) || correct < 0 || correct > questions) {
+      throw new RangeError('each stratum must have valid correct and questions counts');
+    }
+    estimatedSize += (rankEnd - rankStart) * (correct / questions);
+  }
+
+  return { size: estimatedSize, rankSource: { ...input.rankSource } };
+}
+
+/** Estimate capacity and persist the test provenance at the application boundary. */
+export function recordVocabularyCapacityEstimate(
+  input: VocabularyCapacityTestInput,
+  logger: VocabularyCapacityEstimateLogger = defaultVocabularyCapacityEstimateLogger,
+): VocabularyCapacityEstimateEvent {
+  const estimate = estimateVocabularyCapacity(input);
+  const event: VocabularyCapacityEstimateEvent = {
+    event: 'vocabulary.capacity_estimated',
+    rankSource: { ...input.rankSource },
+    strata: input.strata.map(stratum => ({ ...stratum })),
+    estimate,
+  };
+  logger(event);
+  return event;
+}
+
 export interface WordFrequencyRank {
   value: number | null;
   source: RankSource | null;

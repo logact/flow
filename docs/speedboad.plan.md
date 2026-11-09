@@ -121,6 +121,14 @@ Test that estimated scores select the intended first task: nonzero bands use the
 Human verification: use fixtures at each band and inspect the persistent event log for V/source, rank/source, chosen band, initial R/P scores, and selected first task. Complete ENCODE once for a `(0,0)` word and confirm its score event updates both axes to 5. Re-estimate V after a word enters practice and confirm its score and schedule are unchanged; verify no estimate event is reported as a FLUENCY pass.
 
 
+## P3.1 user vocabulary capaicity estimate
+
+Implement `estimateVocabularyCapacity(test)` as a pure function. The input contains the rank-list identity and one or more test strata; each stratum defines the sampled rank interval plus its correct and total answer counts. Estimate known vocabulary by adding each interval's width multiplied by its correct-answer proportion. Return `{ size, rankSource }`, exactly matching P3's `VocabularyEstimate`, so the result can be passed to `estimateInitialScores()` without conversion.
+
+Reject empty tests, malformed rank intervals, invalid answer counts, or missing source identity. Keep the estimator pure; `recordVocabularyCapacityEstimate()` writes a `vocabulary.capacity_estimated` event with the test strata, rank-list identity, and resulting P3-compatible estimate. This proportional extrapolation assumes each stratum's questions are representative samples of its rank interval.
+
+Test multiple strata, all-correct/all-incorrect results, malformed input, deterministic output, and compatibility with P3's input contract.
+
 ## P4 daily capacity and the next 41 days
 
 Implement the rolling capacity view for today through day 41 inclusive. For each local calendar day, report capacity, completed tasks, scheduled tasks, conditional reservations, remaining capacity, and any shortfall. Keep confirmed due tasks separate from conditional future reviews.
