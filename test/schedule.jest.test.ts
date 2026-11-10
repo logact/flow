@@ -26,6 +26,30 @@ test.each([[1, 1], [3, 1], [7, 3], [30, 7]] as const)('failed review at %i falls
   expect(result.word.R).toMatchObject({ score: 40, reviewLevel: next, learningComplete: false, fluencyPass: false, dueAt: '2026-11-09' });
 });
 
+test('regression: recovery after a failed 30-day review keeps the fallback 7-day interval', () => {
+  const failed = schedule({
+    word: word(base({ learningComplete: true, fluencyPass: true, reviewLevel: 30, dueAt: '2026-11-09' })),
+    date: '2026-11-09', result: { axis: 'R', targetPassed: false, overallPassed: true, speedWpm: 150, timingValid: true },
+  }).word;
+  expect(failed.R).toMatchObject({ reviewLevel: 7, learningComplete: false, dueAt: '2026-11-09' });
+
+  const recovered = schedule({
+    word: failed, date: '2026-11-09',
+    result: { axis: 'R', targetPassed: true, overallPassed: true, speedWpm: 225, timingValid: true },
+  }).word;
+  expect(recovered.R).toMatchObject({ reviewLevel: 7, learningComplete: true, fluencyPass: true, dueAt: '2026-11-16' });
+});
+
+test('regression: a valid passing result before dueAt cannot graduate an axis', () => {
+  const initial = word(base({ learningComplete: true, fluencyPass: true, reviewLevel: 30, dueAt: '2026-12-10' }));
+  const result = schedule({
+    word: initial, date: '2026-11-10',
+    result: { axis: 'R', targetPassed: true, overallPassed: true, speedWpm: 225, timingValid: true },
+  });
+  expect(result.word).toEqual(initial);
+  expect(result.word.R.graduated).toBe(false);
+});
+
 test('30-day pass graduates only target axis with infinity due date', () => {
   const result = run(base({ learningComplete: true, fluencyPass: true, reviewLevel: 30 }), '2026-11-09');
   expect(result.word.R).toMatchObject({ graduated: true, dueAt: 'infinity' });

@@ -57,7 +57,8 @@ export function selectNextTask(input: TaskAssignmentInput): TaskAssignmentResult
   for (const word of [...input.words].sort((a, b) => a.id.localeCompare(b.id))) {
     const sharedEncode = word.R.score === 0 && word.P.score === 0 &&
       !word.R.graduated && !word.P.graduated && word.R.dueAt !== 'infinity' && word.P.dueAt !== 'infinity' &&
-      !word.R.learningComplete && !word.P.learningComplete;
+      !word.R.learningComplete && !word.P.learningComplete &&
+      word.R.dueAt <= input.asOf && word.P.dueAt <= input.asOf;
     if (sharedEncode) {
       candidates.push(makeCandidate(input, word.id, 'both', 'learning', 'ENCODE', undefined, minDate(word.R.dueAt, word.P.dueAt), word.R.materialAvailable && word.P.materialAvailable));
       continue;

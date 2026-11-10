@@ -87,35 +87,49 @@ export function analyzeMaterialText(text: string, options: {
 }): MaterialAnalysis {
   if (typeof text !== 'string' || !text.trim()) throw new RangeError('material text must not be empty');
   const lemmatize = options.lemmatize ?? (word => word);
-  const counts = new Map<string, { lookup: FamilyLookup; forms: Map<string, number> }>();
+  const counts = new Map<string, { family: FamilyLookup['family']; headword: string; band: WordFamilyBand; forms: Map<string, number> }>();
   const unmatched = new Map<string, { frequency: number; reason: 'not_in_list' | 'ambiguous' }>();
   const tokens = text.normalize('NFKC').toLocaleLowerCase('en').match(/[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu) ?? [];
   for (const token of tokens) {
     const lookupForm = normalizeLemma(token);
     if (!lookupForm) continue;
-    const configured = options.index.lookup(lookupForm);
-    const familyIndex = options.index.source.id === bncCocaFamilyIndex.source ? bncCocaFamilyIndex : bncCocaFamilyIndex;
-    const found = familyIndex.lookup(token, configured?.partOfSpeech ? { partOfSpeech: configured.partOfSpeech } : {});
-    if (found.status !== 'matched' || !found.family) {
+    const configured = options.index.lookup(lookupForm) ?? options.index.lookup(token);
+    const useReferenceFamilies = options.index.source.basis === 'word-family-frequency-band';
+    const found = useReferenceFamilies
+      ? bncCocaFamilyIndex.lookup(token, configured?.partOfSpeech ? { partOfSpeech: configured.partOfSpeech } : {} )
+      : undefined;
+    const family = found?.status === 'matched' ? found.family : undefined;
+    const indexedWord = configured && !useReferenceFamilies ? configured : undefined;
+    // Keep an ambiguous homograph visible in material frequencies, but do not assign
+    // it a family ID or include it in family-level estimates.
+    const ambiguousFamily = found?.status === 'ambiguous' ? found.candidates?.[0] : undefined;
+    if (!family && !indexedWord && !ambiguousFamily) {
       const prev = unmatched.get(token);
-      unmatched.set(token, { frequency: (prev?.frequency ?? 0) + 1, reason: found.status === 'ambiguous' ? 'ambiguous' : 'not_in_list' });
+      unmatched.set(token, { frequency: (prev?.frequency ?? 0) + 1, reason: found?.status === 'ambiguous' ? 'ambiguous' : 'not_in_list' });
       continue;
     }
-    const key = found.family.id;
+    const key = family?.id ?? `custom:${normalizeLemma(indexedWord?.word ?? ambiguousFamily!.headword)}`;
     let group = counts.get(key);
-    if (!group) { group = { lookup: found, forms: new Map() }; counts.set(key, group); }
+    if (!group) {
+      group = {
+        family,
+        headword: family?.headword ?? indexedWord?.word ?? ambiguousFamily!.headword,
+        band: family?.band ?? indexedWord?.band ?? ambiguousFamily!.band,
+        forms: new Map(),
+      };
+      counts.set(key, group);
+    }
     group.forms.set(token, (group.forms.get(token) ?? 0) + 1);
   }
   const ordered = [...counts].sort((a, b) => [...b[1].forms.values()].reduce((x,y)=>x+y,0) - [...a[1].forms.values()].reduce((x,y)=>x+y,0) || a[0].localeCompare(b[0]));
   const words = ordered.map(([familyId, group], index): MaterialWordAnalysis => {
-    const family = group.lookup.family!;
     const frequency = [...group.forms.values()].reduce((a,b)=>a+b,0);
     const representative = group.forms.keys().next().value as string;
     return {
-      familyId, headword: family.headword, word: representative, materialFrequency: frequency, materialRank: index + 1,
-      vocabularyBand: family.band,
+      familyId: group.family?.id ?? null, headword: group.headword, word: representative, materialFrequency: frequency, materialRank: index + 1,
+      vocabularyBand: group.band,
       estimate: options.vocabulary
-        ? estimateTargetWordInitialScores({ vocabulary: options.vocabulary, target: { word: representative, ...(group.lookup.family?.pos?.[0] ? { partOfSpeech: group.lookup.family.pos[0] } : {}) } })
+        ? estimateTargetWordInitialScores({ vocabulary: options.vocabulary, target: { word: representative, ...(group.family?.pos?.[0] ? { partOfSpeech: group.family.pos[0] } : {}) } })
         : { originalWord: representative, family: null, lookup: 'not_in_list' as const, probabilityKnown: null, R: 0, P: 0, scoreBand: 'unknown' as const, comparable: false, reason: 'not_in_list' as const },
     };
   });

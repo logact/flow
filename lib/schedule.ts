@@ -54,6 +54,10 @@ export function schedule(input: {
 
 function settleAxis<T extends AxisSchedule>(input: FluencyTestResult & { state: T; date: string; scoreLogger?: EventLogger; logger?: (event: ScheduleEvent) => void }): T {
   const { axis, state, date } = input;
+  if (!state.graduated && state.dueAt !== 'infinity' && date < state.dueAt) {
+    (input.logger ?? defaultScheduleLogger)({ event: 'schedule.updated', axis, reason: 'not_due', outcome: 'unchanged', date, before: { ...state }, after: { ...state } });
+    return { ...state };
+  }
   const scored = score({ task: 'FLUENCY', axis, score: state.score, targetPassed: input.targetPassed, overallPassed: input.overallPassed, speedWpm: input.speedWpm, timingValid: input.timingValid, materialValid: input.materialValid, interrupted: input.interrupted }, input.scoreLogger);
   const newScore = scored.score as number;
   const valid = input.timingValid && input.materialValid !== false && !input.interrupted && Number.isFinite(input.speedWpm) && input.speedWpm > 0;
@@ -70,8 +74,8 @@ function settleAxis<T extends AxisSchedule>(input: FluencyTestResult & { state: 
   }
   if (!state.learningComplete) {
     if (passed) {
-      after.learningComplete = true; after.fluencyPass = true; after.reviewLevel = 1;
-      after.dueAt = addLocalDays(date, 1);
+      after.learningComplete = true; after.fluencyPass = true;
+      after.dueAt = addLocalDays(date, state.reviewLevel);
     } else after.dueAt = date;
   } else if (passed) {
     const i = LEVELS.indexOf(state.reviewLevel);

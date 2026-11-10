@@ -25,6 +25,16 @@ describe('P7.2 material analysis', () => {
     expect(result.status).toBe('analyzed');
   });
 
+  test('regression: uses the supplied custom frequency index for material word bands', () => {
+    const index = createVocabularyFrequencyIndex([
+      { word: 'quokka', band: '25k' },
+    ], { id: 'custom-frequency-v1', basis: 'custom-word-band' });
+    const result = analyzeMaterialText('quokka quokka', { index });
+    expect(result.words).toHaveLength(1);
+    expect(result.words[0]).toMatchObject({ word: 'quokka', headword: 'quokka', materialFrequency: 2, vocabularyBand: '25k' });
+    expect(result.status).toBe('analyzed');
+  });
+
   test('keeps ambiguous homographs out of family totals', () => {
     const index = createVocabularyFrequencyIndex([{ word: 'bank', band: '3k' }], { id: 'fixture-v1', basis: 'word-family-frequency-band' });
     const result = analyzeMaterialText('bank', { index });

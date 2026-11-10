@@ -54,6 +54,14 @@ test('共享 ENCODE 只出现一次；其中一个轴材料缺失时不派部分
   expect(blocked).toMatchObject({ status: 'material_unavailable', task: null });
 });
 
+test('regression: shared ENCODE is not assigned before the word is due', () => {
+  const result = selectNextTask(base({
+    words: [{ id: 'future-zero', R: axis({ score: 0, dueAt: '2026-11-12' }), P: axis({ score: 0, dueAt: '2026-11-12' }) }],
+  }));
+  expect(result.status).toBe('no_due_tasks');
+  expect(result.task).toBeNull();
+});
+
 test('共享冷却会阻止所有任务；单个候选缺材料时会跳过并继续派其他任务', () => {
   const words = [
     { id: 'cooling-review', R: axis({ learningComplete: true }), P: axis({ graduated: true, dueAt: 'infinity' }) },
