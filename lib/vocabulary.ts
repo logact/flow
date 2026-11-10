@@ -166,7 +166,18 @@ export interface VocabularyCapacityLearnerView {
 }
 
 export interface VocabularyCapacityTestBandSpec { band: FrequencyBand; count: number }
-export interface VocabularyCapacityTestSpec { bands: VocabularyCapacityTestBandSpec[]; seed?: number }
+export interface VocabularyCapacityTestSpec { bands?: ReadonlyArray<VocabularyCapacityTestBandSpec>; seed?: number }
+
+/** Default capacity test: 4 items from each of the 25 BNC/COCA frequency bands, 100 items total. */
+export const DEFAULT_VOCABULARY_CAPACITY_ITEMS_PER_BAND = 4;
+export const DEFAULT_VOCABULARY_CAPACITY_TEST_SPEC: VocabularyCapacityTestSpec = Object.freeze({
+  bands: Object.freeze(
+    Array.from({ length: 25 }, (_, i) => ({
+      band: `${i + 1}k` as FrequencyBand,
+      count: DEFAULT_VOCABULARY_CAPACITY_ITEMS_PER_BAND,
+    })),
+  ),
+});
 
 export interface VocabularyCapacityTestSubmission {
   testId: string;
@@ -202,18 +213,19 @@ const defaultVocabularyCapacityByBandEstimateLogger: VocabularyCapacityByBandEst
 
 /** Create a frozen, deterministic vocabulary capacity test form and a separate learner view. */
 export function createVocabularyCapacityTest(
-  spec: VocabularyCapacityTestSpec,
+  spec: VocabularyCapacityTestSpec = DEFAULT_VOCABULARY_CAPACITY_TEST_SPEC,
   list: FamilyList = BNC_COCA_L6_V2,
 ): { form: Readonly<VocabularyCapacityTestForm>; learnerView: Readonly<VocabularyCapacityLearnerView> } {
   if (!list.source || !list.version || !Array.isArray(list.families) || list.families.length === 0) {
     throw new RangeError('list must have source, version, and at least one family');
   }
-  if (!Array.isArray(spec.bands) || spec.bands.length === 0) throw new RangeError('at least one band spec is required');
+  const resolvedBands = spec.bands ?? DEFAULT_VOCABULARY_CAPACITY_TEST_SPEC.bands;
+  if (!Array.isArray(resolvedBands) || resolvedBands.length === 0) throw new RangeError('at least one band spec is required');
   if (spec.seed !== undefined && !Number.isInteger(spec.seed)) throw new RangeError('seed must be an integer when supplied');
 
   const seed = spec.seed ?? randomSeed();
   const bandCounts = countFamiliesByBand(list);
-  const bands = [...spec.bands]
+  const bands = [...resolvedBands]
     .map(s => ({ ...s }))
     .sort((a, b) => parseInt(a.band, 10) - parseInt(b.band, 10));
 
@@ -288,7 +300,7 @@ export function checkVocabularyCapacityTest(
   if (form.listSource.id !== submission.listSource?.id || form.listSource.basis !== submission.listSource?.basis) {
     errors.push({ message: 'listSource identity mismatch' });
   }
-  if (form.sourceVersion !== list.version || form.listSource.id !== list.source) {
+  if (form.sourceVersion !== list.version || form.listSource.id !== list.source || form.listSource.basis !== VOCABULARY_LIST_SOURCE.basis) {
     errors.push({ message: 'form does not match the pinned list identity' });
   }
   if (form.learnerItems.length === 0) errors.push({ message: 'test form contains no items' });
@@ -297,6 +309,7 @@ export function checkVocabularyCapacityTest(
   const familyMap = new Map(list.families.map(f => [f.id, f]));
   const bandCounts = countFamiliesByBand(list);
 
+  const populationBands = new Set(form.populations.map(p => p.band));
   for (const pop of form.populations) {
     if (bandCounts.get(pop.band) !== pop.familyCount) {
       errors.push({ message: `population for ${pop.band} does not match the pinned list` });
@@ -304,6 +317,11 @@ export function checkVocabularyCapacityTest(
   }
 
   const seenFormFamilyIds = new Set<string>();
+  for (const key of form.answerKey) {
+    if (!populationBands.has(key.band)) {
+      errors.push({ itemId: key.itemId, message: `missing population for band ${key.band}` });
+    }
+  }
   for (const key of form.answerKey) {
     if (seenFormFamilyIds.has(key.familyId)) {
       errors.push({ itemId: key.itemId, message: `duplicate family ${key.familyId} in test form` });
