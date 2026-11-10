@@ -14,20 +14,37 @@ describe('P7.2 material analysis', () => {
     await expect(extractMaterialText({ filename: 'bad.md', data: '�� broken text' })).rejects.toThrow('text_decode_error');
   });
 
-  test('uses injected frequency and rank behavior, with stable material counts', () => {
+  test('aggregates material counts by word family and reports its band', () => {
     const index = createVocabularyFrequencyIndex([
-      { lemma: 'café', frequency: 50, perMillion: 5, rank: 1200 },
-      { lemma: 'open', frequency: 100, perMillion: 10, rank: 500 },
-    ], { id: 'fixture-v1', basis: 'lemma-rank' });
-    const result = analyzeMaterialText('Café, open café!', { index, name: 'fixture', version: '1' });
-    expect(result.words.map(({ lemma, materialFrequency, materialRank, vocabularyRank }) => ({ lemma, materialFrequency, materialRank, vocabularyRank }))).toEqual([
-      { lemma: 'café', materialFrequency: 2, materialRank: 1, vocabularyRank: 1200 },
-      { lemma: 'open', materialFrequency: 1, materialRank: 2, vocabularyRank: 500 },
+      { word: 'run', band: '2k', partOfSpeech: 'verb' },
+    ], { id: 'fixture-v1', basis: 'word-family-frequency-band' });
+    const result = analyzeMaterialText('Run runs running.', { index, name: 'fixture', version: '1' });
+    expect(result.words.map(({ headword, materialFrequency, materialRank, vocabularyBand }) => ({ headword, materialFrequency, materialRank, vocabularyBand }))).toEqual([
+      { headword: 'run', materialFrequency: 3, materialRank: 1, vocabularyBand: '1k' },
     ]);
     expect(result.status).toBe('analyzed');
   });
 
-  test('aggregates inflected forms under a lemma while retaining original spellings', async () => {
+  test('keeps ambiguous homographs out of family totals', () => {
+    const index = createVocabularyFrequencyIndex([{ word: 'bank', band: '3k' }], { id: 'fixture-v1', basis: 'word-family-frequency-band' });
+    const result = analyzeMaterialText('bank', { index });
+    expect(result.words[0]).toMatchObject({ headword: 'bank', vocabularyBand: '1k' });
+  });
+
+  test('estimates initial scores through P3 band-based target word API', () => {
+    const { VOCABULARY_LIST_SOURCE } = require('../lib/vocabulary-reference') as typeof import('../lib/vocabulary-reference');
+    const { estimateTargetWordInitialScores } = require('../lib/vocabulary') as typeof import('../lib/vocabulary');
+    const result = analyzeMaterialText('the', {
+      index: createVocabularyFrequencyIndex([{ word: 'the', band: '1k', partOfSpeech: 'determiner' }], VOCABULARY_LIST_SOURCE),
+      vocabulary: { size: 1000, listSource: VOCABULARY_LIST_SOURCE },
+    });
+    expect(result.words[0].estimate).toMatchObject(estimateTargetWordInitialScores({
+      vocabulary: { size: 1000, listSource: VOCABULARY_LIST_SOURCE }, target: { word: 'the', partOfSpeech: 'determiner' },
+    }));
+    expect(result.words[0].estimate).toMatchObject({ lookup: 'matched', comparable: true });
+  });
+
+  test('complete extraction still reports surface forms and material ranks', async () => {
     const report = await analyzeMaterial({ filename: 'forms.txt', data: 'Cats chased a cat and are chasing cats.' });
     expect(report.words.find(row => row.lemma === 'cat')).toMatchObject({
       frequency: 3,

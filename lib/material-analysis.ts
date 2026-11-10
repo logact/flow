@@ -1,36 +1,33 @@
-import { estimateInitialScores, type InitialScoreEstimate, type RankSource, type VocabularyEstimate } from './vocabulary';
+import { estimateTargetWordInitialScores, type VocabularyEstimate } from './vocabulary';
+import { bncCocaFamilyIndex, type FamilyLookup, type WordFamilyBand } from './vocabulary-reference';
 
 export type MaterialFormat = 'text' | 'markdown' | 'pdf';
 export interface MaterialWordFrequency {
-  lemma: string;
+  word: string;
+  band: WordFamilyBand;
   partOfSpeech?: string;
-  frequency: number;
-  perMillion?: number;
-  /** One-based rank in the source's complete vocabulary list. */
-  rank: number;
 }
 export interface VocabularyFrequencyIndex {
-  readonly source: RankSource;
-  lookup(lemma: string): MaterialWordFrequency | undefined;
+  readonly source: { id: string; basis: string };
+  lookup(word: string): MaterialWordFrequency | undefined;
 }
 export interface MaterialWordAnalysis {
+  familyId: string | null;
+  headword: string | null;
   word: string;
-  lemma: string;
   materialFrequency: number;
   materialRank: number;
-  vocabularyFrequency: number | null;
-  vocabularyPerMillion: number | null;
-  vocabularyRank: number | null;
-  estimate: InitialScoreEstimate;
+  vocabularyBand: WordFamilyBand | null;
+  estimate: ReturnType<typeof estimateTargetWordInitialScores>;
 }
 export interface MaterialAnalysis {
   schemaVersion: '1';
-  status: 'analyzed' | 'rank_unavailable';
-  source: { name: string; version: string; rankSource: RankSource };
+  status: 'analyzed' | 'band_unavailable';
+  source: { name: string; version: string; vocabularySource: { id: string; basis: string } };
   tokenCount: number;
   uniqueWordCount: number;
   words: MaterialWordAnalysis[];
-  unknownWords: string[];
+  unmatchedWords: Array<{ word: string; frequency: number; reason: 'not_in_list' | 'ambiguous' }>;
 }
 
 export interface MaterialFrequencyReport {
@@ -70,53 +67,62 @@ async function loadEnglishLemmatizer(): Promise<(word: string) => string> {
   };
 }
 
-/** A compact immutable index suitable for loading a checked-in/local frequency table. */
-export function createVocabularyFrequencyIndex(rows: MaterialWordFrequency[], source: RankSource): VocabularyFrequencyIndex {
+/** A compact immutable band index. */
+export function createVocabularyFrequencyIndex(rows: MaterialWordFrequency[], source: { id: string; basis: string }): VocabularyFrequencyIndex {
   if (!source.id || !source.basis) throw new RangeError('frequency source id and basis are required');
   const entries = new Map<string, MaterialWordFrequency>();
   for (const row of rows) {
-    const lemma = normalizeLemma(row.lemma);
-    if (!lemma || !Number.isFinite(row.frequency) || row.frequency < 0 || !Number.isInteger(row.rank) || row.rank < 1) throw new RangeError(`invalid frequency row: ${row.lemma}`);
-    if (entries.has(lemma)) throw new RangeError(`duplicate lemma: ${lemma}`);
-    entries.set(lemma, { ...row, lemma });
+    const word = normalizeLemma(row.word);
+    if (!word || !/^([1-9]|1[0-9]|2[0-5])k$/.test(row.band)) throw new RangeError(`invalid band row: ${row.word}`);
+    if (entries.has(word)) throw new RangeError(`duplicate word: ${word}`);
+    entries.set(word, { ...row, word });
   }
-  return { source: { ...source }, lookup: lemma => entries.get(normalizeLemma(lemma)) };
+  return { source: { ...source }, lookup: word => entries.get(normalizeLemma(word)) };
 }
 
-/** Analyze already extracted text. Lemmatization is deliberately an injected, versioned boundary. */
+/** Analyze material with BNC/COCA word families as the aggregation unit. */
 export function analyzeMaterialText(text: string, options: {
   index: VocabularyFrequencyIndex; vocabulary?: VocabularyEstimate; name?: string; version?: string;
   lemmatize?: (word: string) => string;
 }): MaterialAnalysis {
   if (typeof text !== 'string' || !text.trim()) throw new RangeError('material text must not be empty');
   const lemmatize = options.lemmatize ?? (word => word);
-  const counts = new Map<string, number>();
-  const surface = new Map<string, string>();
+  const counts = new Map<string, { lookup: FamilyLookup; forms: Map<string, number> }>();
+  const unmatched = new Map<string, { frequency: number; reason: 'not_in_list' | 'ambiguous' }>();
   const tokens = text.normalize('NFKC').toLocaleLowerCase('en').match(/[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu) ?? [];
   for (const token of tokens) {
-    const lemma = normalizeLemma(lemmatize(token));
-    if (!lemma) continue;
-    counts.set(lemma, (counts.get(lemma) ?? 0) + 1);
-    if (!surface.has(lemma)) surface.set(lemma, token);
+    const lookupForm = normalizeLemma(token);
+    if (!lookupForm) continue;
+    const configured = options.index.lookup(lookupForm);
+    const familyIndex = options.index.source.id === bncCocaFamilyIndex.source ? bncCocaFamilyIndex : bncCocaFamilyIndex;
+    const found = familyIndex.lookup(token, configured?.partOfSpeech ? { partOfSpeech: configured.partOfSpeech } : {});
+    if (found.status !== 'matched' || !found.family) {
+      const prev = unmatched.get(token);
+      unmatched.set(token, { frequency: (prev?.frequency ?? 0) + 1, reason: found.status === 'ambiguous' ? 'ambiguous' : 'not_in_list' });
+      continue;
+    }
+    const key = found.family.id;
+    let group = counts.get(key);
+    if (!group) { group = { lookup: found, forms: new Map() }; counts.set(key, group); }
+    group.forms.set(token, (group.forms.get(token) ?? 0) + 1);
   }
-  const ordered = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const unknownWords: string[] = [];
-  const words = ordered.map(([lemma, frequency], index): MaterialWordAnalysis => {
-    const entry = options.index.lookup(lemma);
-    if (!entry) unknownWords.push(lemma);
+  const ordered = [...counts].sort((a, b) => [...b[1].forms.values()].reduce((x,y)=>x+y,0) - [...a[1].forms.values()].reduce((x,y)=>x+y,0) || a[0].localeCompare(b[0]));
+  const words = ordered.map(([familyId, group], index): MaterialWordAnalysis => {
+    const family = group.lookup.family!;
+    const frequency = [...group.forms.values()].reduce((a,b)=>a+b,0);
+    const representative = group.forms.keys().next().value as string;
     return {
-      word: surface.get(lemma) ?? lemma, lemma, materialFrequency: frequency, materialRank: index + 1,
-      vocabularyFrequency: entry?.frequency ?? null, vocabularyPerMillion: entry?.perMillion ?? null,
-      vocabularyRank: entry?.rank ?? null,
-      estimate: options.vocabulary && entry
-        ? estimateInitialScores({ vocabulary: options.vocabulary, wordRank: { value: entry.rank, source: options.index.source } })
-        : { R: 0, P: 0, band: 'unknown', comparable: false, reason: entry ? 'rank_unavailable' : 'rank_unavailable' },
+      familyId, headword: family.headword, word: representative, materialFrequency: frequency, materialRank: index + 1,
+      vocabularyBand: family.band,
+      estimate: options.vocabulary
+        ? estimateTargetWordInitialScores({ vocabulary: options.vocabulary, target: { word: representative, ...(group.lookup.family?.pos?.[0] ? { partOfSpeech: group.lookup.family.pos[0] } : {}) } })
+        : { originalWord: representative, family: null, lookup: 'not_in_list' as const, probabilityKnown: null, R: 0, P: 0, scoreBand: 'unknown' as const, comparable: false, reason: 'not_in_list' as const },
     };
   });
   return {
-    schemaVersion: '1', status: unknownWords.length ? 'rank_unavailable' : 'analyzed',
-    source: { name: options.name ?? 'local-frequency-index', version: options.version ?? 'unversioned', rankSource: { ...options.index.source } },
-    tokenCount: tokens.length, uniqueWordCount: counts.size, words, unknownWords,
+    schemaVersion: '1', status: unmatched.size ? 'band_unavailable' : 'analyzed',
+    source: { name: options.name ?? 'local-frequency-index', version: options.version ?? 'unversioned', vocabularySource: { ...options.index.source } },
+    tokenCount: tokens.length, uniqueWordCount: counts.size, words, unmatchedWords: [...unmatched].map(([word, value])=>({word,...value})),
   };
 }
 

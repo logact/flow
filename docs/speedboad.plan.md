@@ -68,7 +68,7 @@ genraete the unit test case to cover the following cases.
 
 ## P3 user vocabulary estimate and introduced-word scores
 
-Implement the PRD's initial-score estimate and word introduction boundary. `lib/scoring.ts` currently owns task selection and result scoring; it has no vocabulary estimate, rank provenance, or introduction state. Keep estimated scores separate from score-result settlement so estimates cannot be mistaken for answer evidence.
+Implement user vocabulary measurement and initial-score estimation using the BNC/COCA Level 6 word-family bands. The target-word API accepts the original surface word as supplied by material/import, performs reference-list lookup internally, and returns an estimated probability that the learner knows its family plus initial R/P scores. Keep estimates separate from answer evidence: a probability is only an initialization prior, never a pass or mastery record.
 
 ### Proposed input/output contract
 
@@ -76,41 +76,53 @@ Use one new estimator and the existing task selector. Estimation is pure and ret
 
 ```ts
 type EstimateBand = 'common' | 'known' | 'less_common' | 'unknown';
-type RankSource = { id: string; basis: string };
+type WordFamilyFrequencyBand = '1k' | '2k' | /* ... */ '25k';
 
 interface VocabularyEstimate {
-  size: number;                 // V, must be finite and > 0
-  rankSource: RankSource;       // identifies how V's rank scale was produced
+  size: number;                 // estimated known word families
+  source: 'BNC_COCA_L6_v2';
+  uncertainty: { lower: number; upper: number; method: string };
+  strata: Array<{ band: WordFamilyFrequencyBand; familyCount: number; questions: number; correct: number }>;
 }
-interface WordFrequencyRank {
-  value: number | null;         // positive rank; null means unavailable
-  source: RankSource | null;    // null means unavailable
+interface TargetWordInput {
+  word: string;                 // original surface form; no caller-side lemma/family required
+  context?: string;
+  partOfSpeech?: string;
 }
 interface InitialScoreEstimateInput {
   vocabulary: VocabularyEstimate;
-  wordRank: WordFrequencyRank;
+  target: TargetWordInput;
 }
 interface InitialScoreEstimate {
+  originalWord: string;
+  family: { headword: string; band: WordFamilyFrequencyBand } | null;
+  lookup: 'matched' | 'not_in_list' | 'ambiguous';
+  probabilityKnown: number | null;
   R: number;
   P: number;
-  band: EstimateBand;
+  scoreBand: EstimateBand;
   comparable: boolean;
-  reason?: 'rank_unavailable' | 'rank_source_missing' | 'rank_source_mismatch' | 'invalid_vocabulary_size' | 'invalid_rank';
+  reason?: 'not_in_list' | 'ambiguous_family' | 'invalid_vocabulary_estimate' | 'source_version_mismatch';
 }
 function estimateInitialScores(input: InitialScoreEstimateInput): InitialScoreEstimate;
 ```
 
-`RankSource.id` plus `basis` must match exactly before comparing values. Invalid or non-comparable rank produces the `unknown` band and `(0,0)`; malformed numeric input is reported by `reason` rather than silently compared. The function returns no evidence flags, schedule, persistence handle, or timestamp. The caller applies its result only when creating an eligible new word, preserves any existing word's scores and schedules when V changes, then calls `selectTask()` for task choice. With the agreed rule, `selectTask(0)` returns ENCODE; nonzero scores follow the existing RETRIEVE/FLUENCY thresholds. Since ENCODE initializes both axes, its completion passes both current scores to `score({ task: 'ENCODE', state: { R, P }, completed: true })`.
+The API receives the original word string. A pinned BNC/COCA v2 adapter resolves surface forms through its listed family members; it must not invent a family through stemming. If a form maps to multiple families, use supplied context/POS only when the resolver can disambiguate; otherwise return `ambiguous`. Missing words return `not_in_list`; neither case receives a fabricated probability or rank.
+
+Estimate `P(known | test result, family band)` from the learner's measured vocabulary-size distribution, not only its point estimate. For each possible known-family count `v`, assume known families occupy the cumulative frequency prefix of the reference list. Within the target band spanning cumulative family positions `[L,U]`, use `g(v,L,U)=clamp((v-L+1)/(U-L+1),0,1)`. Then compute `pKnown = Σ_v g(v,L,U)·P(V=v | test result)`. If only a point estimate is available, use the same formula at `v=V` and label it a coarse prior. Document this prefix assumption and expose uncertainty; do not describe the probability as an observed fact about the learner.
+
+Map probability to score bands via named configurable thresholds (initial defaults: `pKnown ≥ 0.8` common `(60,40)`; `0.5 ≤ pKnown < 0.8` known `(40,20)`; `0.2 ≤ pKnown < 0.5` less_common `(20,5)`; below `0.2` unknown `(0,0)`). Return the numeric probability as well as this score band. Keep thresholds isolated for calibration. The estimate function is pure and returns no evidence flags, schedule, persistence handle, or timestamp. Apply only to eligible new words; changing V does not reset in-practice scores or schedules. `selectTask(0)` returns ENCODE; other task selection remains unchanged.
 
 The estimate event should include V and its source, rank and its source, comparability/reason, selected band, and initial R/P scores. Persist it at the caller that applies an estimate; do not make `estimateInitialScores` write to disk. ENCODE completion continues to use the score event emitted by `score()`.
 
 ### Implementation plan
 
-1. Define typed inputs for a saved vocabulary estimate (`V > 0` and its rank-source identity), a word's optional frequency rank and source, and the word's current practice state. Treat rank as a rank, never as a raw frequency count.
-2. Add a deterministic, side-effect-free estimator (for example `estimateInitialScores`) that returns `{ R, P, band, comparable, reason }`. Compare ranks only when the source and ranking basis are explicitly compatible. Use the PRD table: `rank ≤ 0.5V → (60,40)`, `0.5V < rank ≤ V → (40,20)`, `V < rank ≤ 1.5V → (20,5)`, and `rank > 1.5V` or unavailable/incomparable rank `→ (0,0)`.
+1. Define typed P3 measurement results with BNC/COCA version, per-band sampling counts, point estimate, and an uncertainty distribution or documented coarse interval.
+2. Implement original-surface-word lookup through the pinned family-member index, returning matched/not-found/ambiguous with provenance; do not require callers to pre-lemmatize.
+3. Implement the pure band-based known-probability formula and configurable probability-to-score thresholds above. Never use corpus token frequency as rank or probability evidence.
 3. Update the task-selection contract so `selectTask(0)` returns ENCODE and nonzero scores retain the existing RETRIEVE/FLUENCY thresholds. ENCODE completion uses the unified `score({ task: 'ENCODE', state: { R, P }, completed: true })` path and initializes both axes to at least 5.
 4. Keep estimate application at the word-creation caller: apply the estimated scores only to a new eligible word, leave learning evidence and schedule defaults untouched, and never recalculate an in-practice word when `V` changes. Do not implement P4 capacity admission here.
-5. Persist a `vocabulary.estimated` event where the estimate is applied. Include V and its source, rank and its source, comparability/reason, selected band, initial R/P scores, and selected first task. Keep the score event emitted by `score()` as the record of ENCODE settlement; estimates must not create FLUENCY evidence.
+5. Persist `vocabulary.estimated` with the original input word, resolved family/band or lookup failure, P3 estimate/version, probabilityKnown, thresholded score band, initial R/P scores, and selected first task. Estimates must not create FLUENCY evidence; ENCODE completion remains recorded through `score()`.
 
 ### Tests and acceptance
 
@@ -123,11 +135,42 @@ Human verification: use fixtures at each band and inspect the persistent event l
 
 ## P3.1 user vocabulary capaicity estimate
 
-Implement `estimateVocabularyCapacity(test)` as a pure function. The input contains the rank-list identity and one or more test strata; each stratum defines the sampled rank interval plus its correct and total answer counts. Estimate known vocabulary by adding each interval's width multiplied by its correct-answer proportion. Return `{ size, rankSource }`, exactly matching P3's `VocabularyEstimate`, so the result can be passed to `estimateInitialScores()` without conversion.
+Implement `estimateVocabularyCapacity(test)` as a pure function. The input contains the pinned BNC/COCA family-list version and one or more frequency-band strata; each stratum records the band family population, sampled unique families, correct answers, and total answers. Return the estimated known-family count, per-band evidence, and an uncertainty representation consumable directly by P3's probability estimator.
 
-Reject empty tests, malformed rank intervals, invalid answer counts, or missing source identity. Keep the estimator pure; `recordVocabularyCapacityEstimate()` writes a `vocabulary.capacity_estimated` event with the test strata, rank-list identity, and resulting P3-compatible estimate. This proportional extrapolation assumes each stratum's questions are representative samples of its rank interval.
+Add two separate pure functions before estimation:
 
-Test multiple strata, all-correct/all-incorrect results, malformed input, deterministic output, and compatibility with P3's input contract.
+1. `createVocabularyCapacityTest(...)` draws a deterministic, seeded sample of unique family IDs from requested bands in the pinned list, then returns a frozen test form containing list source/version, test ID, per-band populations, item IDs, learner-facing prompts, and answer keys kept separate from the learner-facing view. Sampling must be uniform within each band and must never use `memberFrequencies` or `totalFrequency` to bias selection. The public test view must not reveal answer keys.
+2. `checkVocabularyCapacityTest(...)` validates a submitted test/result against the issued form and pinned list before estimation. Check test/list identity and version, exact item membership, duplicate or missing/extra answers, valid answer values, and that every sampled family belongs to its declared band. Return a typed valid/invalid result with item-level errors; never estimate from an invalid submission. The checker must not mutate the issued form or submission.
+
+The answer key and learner-facing test payload must have distinct types so callers cannot accidentally expose keys. Test creation is deterministic for a supplied seed, enabling reproducible fixtures while allowing a fresh seed for each real administration. Define how prompts are produced from family members (for example, select a listed member with a controlled, deterministic policy); do not assume frequency counts are ranks or treat generated definitions as validated unless a separate prompt authoring source is specified.
+
+Reject empty tests, duplicate family items, families outside the pinned list/version, invalid answer counts, or missing source identity. Keep the estimator pure; `recordVocabularyCapacityEstimate()` writes a `vocabulary.capacity_estimated` event with strata, list identity, estimate, and uncertainty. Sampling must be representative within each band; document that band-specific results describe expected known-family proportions rather than a precise personal word inventory.
+
+Test multiple strata, all-correct/all-incorrect results, malformed input, deterministic seeded sampling, uniform eligibility, answer-key separation, all checker rejection cases, no mutation, and compatibility with P3's input contract. Verify invalid submissions cannot reach or emit capacity estimates.
+
+## P3.2 BNC/COCA word-family list integration
+
+Integrate the BNC/COCA Level 6 word-family list (pin the selected release, initially v2.0.0) as the shared reference for P3 vocabulary measurement and target-word lookup. The public estimation interface accepts the original surface word. Do not treat corpus frequency counts (`Related forms` counts or `Total frequency`) as ranks. The list's `1k`–`25k` values are frequency bands; keep band identity distinct from raw BNC token counts and exact ordinal ranks.
+
+### Reference data and lookup
+
+1. Add a reproducible import script and a normalized, versioned local data artifact sourced from the downloadable list. Preserve attribution and the source license with the artifact; verify redistribution terms before committing the full source data. Record source URL, release/version, retrieval date, and checksum in metadata.
+2. Normalize each family as `{ headword, band, members, memberFrequencies? }`. Index headwords and related forms to their family. Preserve homographs/part-of-speech alternatives as multiple candidates; do not silently select a family when context is required. Normalize casing and whitespace only; retain source spelling and frequency values.
+3. Provide a pure lookup API that accepts a lemma (plus optional POS/context when available) and returns `matched`, `not_in_list`, or `ambiguous`, with family headword, band, source/version, and matched form when resolved. No heuristic stemming or guessed derivational-family expansion. A surface-form lemmatizer may be an upstream step but must not be represented as the family mapping itself.
+4. Keep out-of-list words explicit (`not_in_list`) and make probability unavailable. Do not treat them as the least frequent band or invent a rank. Record lookup status and provenance with the estimate event.
+
+### Connect the vocabulary measurement interface
+
+Adapt P3.1 test strata to the BNC/COCA band-based population: sample unique families within each band and store family ID, band, prompt/answer key, and result. Estimate total vocabulary as the sum of `band family count × correct / questions`; retain per-band counts, sample sizes, correct counts, uncertainty, and limitations. Test items must belong to the pinned list. P3 probability uses band cumulative family boundaries plus the V estimate distribution; it must not invent precise within-band ranks. Keep the list adapter separate from estimator policy so the data source can be replaced without rewriting raw data.
+
+### Acceptance
+
+- Import is deterministic and reports malformed/duplicate entries; original surface-word lookup returns expected families for listed forms and not-found/ambiguous states correctly.
+- Tests cover source version identity, unknown words, homographs, case normalization, duplicate membership, malformed data, and no mutation.
+- P3 measurement accepts only test items from the same pinned list, computes a family-count estimate and uncertainty from band strata, and returns provenance consumable by the probability estimator.
+- For known V distributions, probability is 1 below the band, 0 above it, and smoothly interpolated within it under the prefix assumption; tests verify boundary and monotonic behavior.
+- The original input word is preserved in results/events. A word absent or unresolved in the list receives no fabricated family, band, probability, or initial score band.
+- Include a small checked-in fixture for tests; keep full source data separate until license and repository-size decisions are confirmed.
 
 ## P4 daily capacity and the next 41 days
 

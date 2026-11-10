@@ -9,7 +9,7 @@
     "start": "next start",
     "test": "jest --runInBand",
     "test:p2": "jest --runInBand test/schedule.jest.test.ts",
-    "test:p3": "jest --runInBand test/vocabulary.jest.test.ts test/scoring.jest.test.ts",
+    "test:p3": "jest --runInBand test/vocabulary.jest.test.ts test/vocabulary-reference.jest.test.ts test/scoring.jest.test.ts",
     "test:p4": "jest --runInBand test/capacity.jest.test.ts",
     "test:p5": "jest --runInBand test/task-assignment.jest.test.ts",
     "test:p6": "jest --runInBand test/task-material.jest.test.ts",

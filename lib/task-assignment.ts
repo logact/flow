@@ -1,7 +1,7 @@
 import { logger as appLogger } from './logger';
 import type { AxisSchedule } from './schedule';
 import { selectTask, type Axis, type RetrieveStage, type TaskType } from './scoring';
-import type { RankSource } from './vocabulary';
+import type { ListSource } from './vocabulary';
 
 export interface AssignmentAxis extends AxisSchedule {
   materialAvailable: boolean;
@@ -12,7 +12,7 @@ export interface AssignmentNewWord {
   band: 'common' | 'known' | 'less_common' | 'unknown';
   targets: { R: number; P: number };
   rank: number | null;
-  rankSource: RankSource | null;
+  rankSource: ListSource | null;
   materialAvailable: { R: boolean; P: boolean };
 }
 export interface TaskAssignmentInput {
