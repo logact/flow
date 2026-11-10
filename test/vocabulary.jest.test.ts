@@ -70,7 +70,7 @@ describe('P3.1 vocabulary capacity estimate', () => {
       rankSource: source,
       strata: [{ rankStart: 0, rankEnd: 100, correct: 6, questions: 10 }],
     });
-    await new Promise<void>(resolve => appLogger.flush(resolve));
+    await new Promise<void>(resolve => appLogger.flush(() => resolve()));
     expect(event.event).toBe('vocabulary.capacity_estimated');
   });
 });

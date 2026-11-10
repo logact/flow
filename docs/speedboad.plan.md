@@ -261,7 +261,7 @@ Generate task material that matches the selected word and sense, learner level, 
 ### Two implementation stages
 
 1. **Run without an API key.** Implement a deterministic fixture generator behind the same interface as the real provider. Fixtures must exercise successful generation, malformed output, target-sense mismatch, validation rejection, retry, and retry exhaustion. Run prompt construction, parsing, validation, retry, result selection, and logging through the real task-generation service boundary.
-2. **Allow API-key developer debugging.** Implement a real provider adapter selected by server-side configuration. Read the API key only from a server environment variable; never include it in input types or logs. Record each attempt as structured application log data so a developer can inspect provider/model, prompt inputs, raw output, validation, retry count, and failure reason. Debug records are logs only; do not add a debug-record database or query API. Only validated material may be returned for presentation.
+2. **Allow API-key developer debugging.** Implement real adapters for OpenAI-compatible providers (including OpenAI, DeepSeek, and Kimi), selected/configured on the server. Read `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL` only from server environment configuration; never include the API key in input types or logs. The base URL may point to any compatible provider, and model names remain configurable. Record each attempt as structured application log data so a developer can inspect provider/model, prompt inputs, raw output, validation, retry count, and failure reason. Debug records are logs only; do not add a debug-record database or query API. Only validated material may be returned for presentation.
 
 ### Generation boundary
 
@@ -390,16 +390,20 @@ type GeneratedTask =
 
 ### Validation rules
 
-1. Validate the discriminant and required fields for the selected task/axis/stage; reject extra or missing task-specific structure and malformed/ambiguous content.
+1. Validate the discriminant and required fields for the selected task/axis/stage; reject extra or missing task-specific structure and malformed/ambiguous content. Prompt every variant to keep learner-facing English vocabulary and grammar at or below the supplied learner level, with only the target word as an intended exception.
 2. ENCODE is shared (`axis: 'both'` at input); its material must match the supplied word and sense and include at least one example.
 3. RETRIEVE choice has at least two options, exactly one keyed answer, and a valid `answerOptionId`. R prompts test recognition of the intended English word/sense; P prompts elicit English production from a suitable non-English cue. Cued/free prompts must not disclose the answer in their cue or prompt.
 4. R FLUENCY has an English passage of 90-120 words inclusive, at least five natural occurrences of the target word, and exactly two answerable comprehension questions with fixed answers and evidence found in the passage. `targetOccurrences` must match the validated count.
 5. P FLUENCY has a Chinese scenario and response instruction that elicit the target expression without exposing its English form. Grading requirements separately cover correct target use and overall expression.
 6. Reject target-sense mismatch, level-inappropriate material, invalid language, or any failed structural/content rule. Retry within the finite budget; after exhaustion report material unavailable and never present rejected output as a valid task.
 
+### Deferred: detecting out-of-level vocabulary
+
+Automatic detection of vocabulary above the learner's level is paused. The project has not chosen a CEFR vocabulary list, grading source, or detection method, and the current prompt instruction is not a guarantee. Resume this work after choosing a vocabulary reference and deciding how fixed input definitions should be handled when they contain words above the learner's level. Until then, level fit requires human review.
+
 ### Logging, cache, and verification
 
-Write one structured generation-attempt log containing `generationId`, attempt number, provider/model, prompt version and input, raw output, parsed output when available, validation status/errors, and retry/failure reason. Never log API keys. Logs are the developer inspection surface; do not create a separate generation-record database/API. Cache only successfully validated material and include schema/prompt version in its cache identity so stale material cannot bypass updated validation.
+Write one structured generation-attempt log containing `generationId`, attempt number, provider/model, prompt version and input, system/user prompts as readable fields, the exact outbound request URL/body, raw HTTP response, extracted model output, parsed output when available, validation status/errors, and retry/failure reason. Redact the Authorization header and never log API keys. Logs are the developer inspection surface; do not create a separate generation-record database/API. Cache only successfully validated material and include schema/prompt version in its cache identity so stale material cannot bypass updated validation. Provide an explicit live-debug command that makes one real request for each task variant at A1, B1, and C1 levels by default (or each level for one selected variant), prints only validated learner-facing material, and points to `logs/app.log` for provider output and validation details.
 
 Add deterministic fixture tests through the task-generation service boundary, with a dedicated `npm run test:p6` command and TypeScript test files. Cover every schema/task variant, validation and retry paths, unavailable output, no input mutation, no presentation of invalid output, and the same service behavior with fixture and provider adapters. Human verification: generate one example of each task variant, inspect its attempt logs and presented material, verify R passage word/target counts, verify P material does not reveal the English target, and feed invalid output to confirm the rejection and retry reason are logged.
 
@@ -413,7 +417,23 @@ Log the model/provider, full grading inputs, submitted answer, structured output
 
 Human verification: submit prepared passing and failing answers for R and P, then compare the saved answer, frozen rubric, AI outcomes/evidence, and score decision with the P1 tables. Submit an invalid-timing answer and simulate a grader error; confirm both records show no score or schedule change. Retry the grader error and verify it uses the original saved answer.
 
+## p7.1 the goal set and update logic
 
+we have functions that create goals and update the goals ,
+you should model the goals,and create function to manage or update them.
+
+## P7.2 the material analyze function
+
+give a PDF/text(md,txt..) materail and output the anlalyz the words analyze reslut inlcuding
+each word's frequency and rank in the material and the word's frequency and rank in the test vocabulary base (same with estimating our level).
+
+
+
+
+## P8-pre  all logic function integration test
+We need to verify the behavior from the user estimate vocabulary -> set the goal and analyze the material -> introduce the words -> assign task to the user -> the user finish the task -> the word's next review time and fluency change->next task loop->...->util finish all vocabulary achieve the goal.
+
+you should first ensure the all the moudle is comptiable and logic is right to get right behvaior
 
 ## P8 prototype UI
 
