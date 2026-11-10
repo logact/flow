@@ -3,7 +3,7 @@ import { buildTaskPrompt, createConfiguredTaskMaterialGenerator, createFixtureGe
 
 const input = (task: TaskGenerationInput['task'], axis: TaskGenerationInput['axis'], stage?: TaskGenerationInput['stage']): TaskGenerationInput => ({
   word: { id: 'w1', text: 'harbor', sense: { id: 's1', definition: 'a sheltered place for ships', examples: ['The boats entered the harbor.'] } },
-  axis, task, ...(stage ? { stage } : {}), learner: { level: 'B1', score: task === 'ENCODE' ? { R: 0, P: 0 } : 40, language: 'zh' }, promptVersion: 'p6-v1',
+  axis, task, ...(stage ? { stage } : {}), learner: { vocabularyProfile: { size: 1200, listSource: { id: 'BNC_COCA_L6_v2', basis: 'word-family-frequency-band' }, sourceVersion: '2.0.0', distribution: [{ value: 1100, probability: 0.25 }, { value: 1200, probability: 0.5 }, { value: 1300, probability: 0.25 }], uncertainty: { lower: 900, upper: 1500, method: 'fixture' } }, score: task === 'ENCODE' ? { R: 0, P: 0 } : 40, language: 'zh' }, promptVersion: 'p6-v1',
 });
 const passage = Array.from({ length: 8 }, () => 'The harbor welcomes many boats each morning and shelters nearby fishing families safely.').join(' ');
 const material = (i: TaskGenerationInput, overrides: Record<string, unknown> = {}): Record<string, unknown> => {
@@ -23,8 +23,9 @@ describe('P6 task material generation', () => {
     const prompt = JSON.parse(buildTaskPrompt(request));
     expect(prompt.outputShape).toMatchObject({ schemaVersion: '1', task: 'ENCODE', wordId: 'w1', content: { word: 'harbor', definition: 'a sheltered place for ships' } });
     expect(prompt.instruction).toContain('do not rename keys');
-    expect(prompt.learnerLevelRule).toContain('learner.level=B1');
-    expect(prompt.learnerLevelRule).toContain('all learner-facing English vocabulary and grammar');
+    expect(prompt.learnerKnowledgeRule).toContain('recognition probabilities');
+    expect(prompt.learnerVocabularyProfile.sourceVersion).toBe('2.0.0');
+    expect(prompt.learnerKnowledgeRule).toContain('Do not convert them to CEFR');
   });
 
   // 给每一种题型准备一份合格材料，确认它们都能走同一个生成入口并通过检查。
@@ -118,7 +119,7 @@ describe('P6 task material generation', () => {
       expect(events[0]).toMatchObject({ provider: 'openai', model: 'test-model', requestId: 'req-1', valid: true });
       expect(events[0].request).toMatchObject({ url: 'https://provider.test', headers: { authorization: '[redacted]', 'content-type': 'application/json' } });
       expect(events[0].request?.body).toContain('test-model');
-      expect(events[0].userPrompt).toContain('learnerLevelRule');
+      expect(events[0].userPrompt).toContain('learnerKnowledgeRule');
       expect(events[0].systemPrompt).toContain('Return only a JSON object');
       expect(events[0].rawResponse).toContain('"choices"');
       expect(JSON.stringify(events)).not.toContain('test-secret');

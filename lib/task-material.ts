@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { logger as appLogger } from './logger';
+import type { VocabularyEstimate } from './vocabulary';
 
 export type Axis = 'R' | 'P';
 export type RetrieveStage = 'choice' | 'cued' | 'free';
@@ -7,7 +8,7 @@ export type TaskType = 'ENCODE' | 'RETRIEVE' | 'FLUENCY';
 export interface TaskGenerationInput {
   word: { id: string; text: string; sense: { id: string; definition: string; partOfSpeech?: string; examples?: string[] } };
   axis: Axis | 'both'; task: TaskType; stage?: RetrieveStage;
-  learner: { level: string; score: number | { R: number; P: number }; language: string };
+  learner: { vocabularyProfile: VocabularyEstimate; contentLevel?: string; score: number | { R: number; P: number }; language: string };
   promptVersion: string;
 }
 export interface RawGenerationResult { provider: string; model: string; rawOutput: string; rawResponse?: string; request?: ProviderRequestLog; requestId?: string }
@@ -75,7 +76,9 @@ export function buildTaskPrompt(input: TaskGenerationInput): string {
     instruction: `Create exactly one ${variant} task. Return ONLY the JSON object. Follow the output shape exactly: do not rename keys, add wrapper objects, add fields, or change schemaVersion from the string "1". wordId must equal the input word.id. Keep answer keys/rubrics in content for server grading.`,
     outputShape: { schemaVersion: '1', task: input.task, wordId: input.word.id, content: contentShape },
     input,
-    learnerLevelRule: `Treat learner.level=${input.learner.level} as a generation constraint, not metadata. Keep all learner-facing English vocabulary and grammar at or below this level. Prefer common, familiar non-target words and sentence patterns; avoid unnecessarily advanced vocabulary, idioms, and complex syntax. Apply this to instructions, examples, options, prompts, passages, and questions wherever they contain English. The supplied target word is the only intended exception.`,
+    learnerVocabularyProfile: input.learner.vocabularyProfile,
+    ...(input.learner.contentLevel ? { contentLevelRule: `Keep learner-facing English vocabulary and grammar within the separately configured content level ${input.learner.contentLevel}. The supplied target word is the only intended exception.` } : {}),
+    learnerKnowledgeRule: 'Use the supplied recognition probabilities by word-family frequency band to favor likely-known non-target vocabulary. They describe population proportions, not a list of words this individual knows. Do not convert them to CEFR levels or infer A1/B1/C1.',
     constraints: input.task === 'FLUENCY' && input.axis === 'R' ? `Write an English passage with 90-120 whitespace-separated words. Include the exact target word "${input.word.text}" at least five times. Include exactly two answerable questions; each evidence value must be an exact quote from passage. targetOccurrences must equal the exact count.` : input.task === 'FLUENCY' && input.axis === 'P' ? 'Write scenario and responseInstruction in Chinese; neither may reveal the target English expression.' : 'Match the supplied word and sense exactly. Return only the requested content shape.',
   });
 }
@@ -165,10 +168,13 @@ function toChatCompletionsEndpoint(baseUrl: string): string {
 }
 
 function validateInput(input: TaskGenerationInput): void {
-  if (!input.word?.id || !input.word.text || !input.word.sense?.id || !input.word.sense.definition || !input.promptVersion || !input.learner?.level || !input.learner.language) throw new TypeError('word, sense, learner, and promptVersion are required');
+  if (!input.word?.id || !input.word.text || !input.word.sense?.id || !input.word.sense.definition || !input.promptVersion || !input.learner?.language || !validVocabularyProfile(input.learner.vocabularyProfile) || (input.learner.contentLevel !== undefined && !input.learner.contentLevel.trim())) throw new TypeError('word, sense, vocabulary profile, learner language, and promptVersion are required');
   if (input.task === 'ENCODE' && input.axis !== 'both') throw new TypeError('ENCODE requires axis both');
   if (input.task !== 'ENCODE' && input.axis === 'both') throw new TypeError('axis-specific tasks require R or P');
   if ((input.task === 'RETRIEVE') !== Boolean(input.stage)) throw new TypeError('stage is required only for RETRIEVE');
+}
+function validVocabularyProfile(value: VocabularyEstimate | undefined): value is VocabularyEstimate {
+  return Boolean(value && Number.isFinite(value.size) && value.size >= 0 && value.listSource?.id && value.listSource.basis && value.sourceVersion && Array.isArray(value.distribution) && value.distribution.length > 0 && value.distribution.every(item => Number.isFinite(item.value) && item.value >= 0 && Number.isFinite(item.probability) && item.probability >= 0) && Math.abs(value.distribution.reduce((sum, item) => sum + item.probability, 0) - 1) < 1e-6 && value.uncertainty && Number.isFinite(value.uncertainty.lower) && Number.isFinite(value.uncertainty.upper));
 }
 function validateMaterial(value: unknown, input: TaskGenerationInput): string[] {
   const errors: string[] = [];

@@ -5,6 +5,7 @@ import { logger as appLogger } from './logger';
 import { schedule, type ScheduleEvent, type WordSchedule } from './schedule';
 import { score, type EventLogger, type ScoreEvent } from './scoring';
 import type { GeneratedTask, ReadingQuestionRole } from './task-material';
+import type { VocabularyEstimate } from './vocabulary';
 
 export type GradingSubmission =
   | { axis: 'R'; answers: Record<ReadingQuestionRole, string> }
@@ -12,7 +13,7 @@ export type GradingSubmission =
 export interface AttemptValidity { timingValid: boolean; interrupted: boolean; materialValid: boolean; speedWpm: number }
 export type FluencyGradingInput = {
   attemptId: string; generationId?: string; task: Extract<GeneratedTask, { task: 'FLUENCY' }>;
-  submission: GradingSubmission; learner: { level: string; language: string };
+  submission: GradingSubmission; learner: { vocabularyProfile: VocabularyEstimate; contentLevel?: string; language: string };
   validity: AttemptValidity; date: string; word: WordSchedule;
 };
 export interface CriterionDecision { passed: boolean; evidence: string }

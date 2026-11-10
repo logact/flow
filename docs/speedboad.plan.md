@@ -299,7 +299,7 @@ Human verification: with a fixed date and small maximum task volume, inspect the
 
 ## P6 AI task generation
 
-Generate task material that matches the selected word and sense, learner level, axis, score, and task type. Follow the P1/P5 task ladder: ENCODE is shared by R/P and is selected only when both initial scores are zero; RETRIEVE uses choice, cued, or free below 60; FLUENCY is axis-specific from 60 onward. Never silently replace unavailable material with an easier task.
+Generate task material that matches the selected word and sense, the learner's P3.1 vocabulary profile, any explicitly configured content-level constraint, axis, score, and task type. The vocabulary profile stores estimated recognition probabilities by word-family frequency band, with sample counts, uncertainty, and source/list version. It is not a CEFR label and must not be converted to A1/B1/C1. `contentLevel` is an optional, separate generation constraint; it is not inferred from the vocabulary profile. Follow the P1/P5 task ladder: ENCODE is shared by R/P and is selected only when both initial scores are zero; RETRIEVE uses choice, cued, or free below 60; FLUENCY is axis-specific from 60 onward. Never silently replace unavailable material with an easier task.
 
 ### Two implementation stages
 
@@ -330,7 +330,8 @@ interface TaskGenerationInput {
   task: TaskType;
   stage?: RetrieveStage; // required only for RETRIEVE
   learner: {
-    level: string;
+    vocabularyProfile: VocabularyProfile; // P3.1 band probabilities, uncertainty, and provenance
+    contentLevel?: string; // optional independent material constraint; never inferred from vocabularyProfile
     score: number | { R: number; P: number };
     language: string;
   };
@@ -433,7 +434,7 @@ type GeneratedTask =
 
 ### Validation rules
 
-1. Validate the discriminant and required fields for the selected task/axis/stage; reject extra or missing task-specific structure and malformed/ambiguous content. Prompt every variant to keep learner-facing English vocabulary and grammar at or below the supplied learner level, with only the target word as an intended exception.
+1. Validate the discriminant and required fields for the selected task/axis/stage; reject extra or missing task-specific structure and malformed/ambiguous content. Supply the P3.1 band probabilities and provenance as learner context, without assigning a CEFR category. When `contentLevel` is provided, prompt every variant to keep learner-facing English vocabulary and grammar within that independent constraint, with only the target word as an intended exception. When it is absent, use the vocabulary profile to favor likely-known non-target vocabulary and flag uncertainty; do not invent a level label.
 2. ENCODE is shared (`axis: 'both'` at input); its material must match the supplied word and sense and include at least one example.
 3. RETRIEVE choice has at least two options, exactly one keyed answer, and a valid `answerOptionId`. R prompts test recognition of the intended English word/sense; P prompts elicit English production from a suitable non-English cue. Cued/free prompts must not disclose the answer in their cue or prompt.
 4. R FLUENCY has an English passage of 90-120 words inclusive, at least five natural occurrences of the target word, and exactly two answerable comprehension questions with fixed answers and evidence found in the passage. `targetOccurrences` must match the validated count.
@@ -442,11 +443,11 @@ type GeneratedTask =
 
 ### Deferred: detecting out-of-level vocabulary
 
-Automatic detection of vocabulary above the learner's level is paused. The project has not chosen a CEFR vocabulary list, grading source, or detection method, and the current prompt instruction is not a guarantee. Resume this work after choosing a vocabulary reference and deciding how fixed input definitions should be handled when they contain words above the learner's level. Until then, level fit requires human review.
+Automatic detection of vocabulary above the learner's expected knowledge is paused. P3.1's band probabilities can inform generation, but do not identify exactly which words an individual knows. No CEFR inference is supported. Decide how to validate fixed input definitions and how to use probability uncertainty before claiming level fit; until then, human review is required.
 
 ### Logging, cache, and verification
 
-Write one structured generation-attempt log containing `generationId`, attempt number, provider/model, prompt version and input, system/user prompts as readable fields, the exact outbound request URL/body, raw HTTP response, extracted model output, parsed output when available, validation status/errors, and retry/failure reason. Redact the Authorization header and never log API keys. Logs are the developer inspection surface; do not create a separate generation-record database/API. Cache only successfully validated material and include schema/prompt version in its cache identity so stale material cannot bypass updated validation. Provide an explicit live-debug command that makes one real request for each task variant at A1, B1, and C1 levels by default (or each level for one selected variant), prints only validated learner-facing material, and points to `logs/app.log` for provider output and validation details.
+Write one structured generation-attempt log containing `generationId`, attempt number, provider/model, prompt version and input, system/user prompts as readable fields, the exact outbound request URL/body, raw HTTP response, extracted model output, parsed output when available, validation status/errors, and retry/failure reason. Preserve the vocabulary profile, its provenance, and any explicit `contentLevel` in the log. Redact the Authorization header and never log API keys. Logs are the developer inspection surface; do not create a separate generation-record database/API. Cache only successfully validated material and include schema/prompt version in its cache identity so stale material cannot bypass updated validation. Provide an explicit live-debug command covering each task variant with representative P3.1 profiles (low, middle, and high recognition probabilities across bands), optionally with or without an explicit `contentLevel`; print only validated learner-facing material and point to `logs/app.log` for provider output and validation details.
 
 Add deterministic fixture tests through the task-generation service boundary, with a dedicated `npm run test:p6` command and TypeScript test files. Cover every schema/task variant, validation and retry paths, unavailable output, no input mutation, no presentation of invalid output, and the same service behavior with fixture and provider adapters. Human verification: generate one example of each task variant, inspect its attempt logs and presented material, verify R passage word/target counts, verify P material does not reveal the English target, and feed invalid output to confirm the rejection and retry reason are logged.
 
@@ -460,7 +461,7 @@ The grader must not fetch or regenerate task material. Its input contains the ex
 
 ### Input and output contract
 
-Use discriminated TypeScript types so reading and production answers cannot be confused. The input should carry a stable `attemptId`, the exact validated `GeneratedTask` for the issued FLUENCY task (including answer keys or grading requirements), the learner's submitted answer, learner level/language, and validity facts such as timing validity, interruption, and material validity. R submissions contain answers to the two issued questions; P submissions contain the learner's spoken/written response and any captured timing/speed evidence. Do not accept a caller-provided pass/fail judgment.
+Use discriminated TypeScript types so reading and production answers cannot be confused. The input should carry a stable `attemptId`, the exact validated `GeneratedTask` for the issued FLUENCY task (including answer keys or grading requirements), the learner's submitted answer, the frozen P3.1 vocabulary profile, optional explicit `contentLevel`, language, and validity facts such as timing validity, interruption, and material validity. Do not accept a CEFR level inferred from vocabulary probabilities or a caller-provided pass/fail judgment. R submissions contain answers to the two issued questions; P submissions contain the learner's spoken/written response and any captured timing/speed evidence.
 
 Return a structured decision with `status: 'graded' | 'invalid' | 'unavailable'`. A graded P result has separate `targetPassed` and `overallPassed` outcomes plus evidence for each. A graded R result has separate target-word-meaning and passage-comprehension outcomes plus evidence tied to each question. Invalid attempts and unavailable grader results carry stable reason codes and no pass/fail score decision. Validate the provider response schema before accepting it; reject ambiguous/missing outcomes and evidence rather than guessing.
 
