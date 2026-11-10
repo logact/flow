@@ -14,12 +14,13 @@ export interface RawGenerationResult { provider: string; model: string; rawOutpu
 export interface TaskMaterialGenerator { generate(input: TaskGenerationInput): Promise<RawGenerationResult> }
 export interface ProviderRequestLog { url: string; headers: { authorization: '[redacted]'; 'content-type': string }; systemPrompt: string; userPrompt: string; body: string }
 export type TaskEnvelope<T extends string, C> = { schemaVersion: '1'; task: T; wordId: string; content: C };
+export type ReadingQuestionRole = 'target_meaning' | 'passage_comprehension';
 export type GeneratedTask =
   | TaskEnvelope<'ENCODE', { word: string; pronunciation?: string; partOfSpeech?: string; definition: string; examples: Array<{ sentence: string; translation?: string }>; instruction: string }>
   | TaskEnvelope<'RETRIEVE', { axis: Axis; stage: 'choice'; prompt: string; options: Array<{ id: string; text: string }>; answerOptionId: string; explanation: string }>
   | TaskEnvelope<'RETRIEVE', { axis: Axis; stage: 'cued'; prompt: string; cue: string; answerKey: { acceptedAnswers: string[]; explanation: string } }>
   | TaskEnvelope<'RETRIEVE', { axis: Axis; stage: 'free'; prompt: string; answerKey: { acceptedAnswers: string[]; explanation: string } }>
-  | TaskEnvelope<'FLUENCY', { axis: 'R'; passage: string; questions: Array<{ prompt: string; answer: string; evidence: string }>; targetOccurrences: number }>
+  | TaskEnvelope<'FLUENCY', { axis: 'R'; passage: string; questions: Array<{ role: ReadingQuestionRole; prompt: string; answer: string; evidence: string }>; targetOccurrences: number }>
   | TaskEnvelope<'FLUENCY', { axis: 'P'; scenario: string; responseInstruction: string; gradingRequirements: { targetExpression: string; targetUseCriteria: string[]; overallExpressionCriteria: string[] } }>;
 export type LearnerTask = TaskEnvelope<'ENCODE', { word: string; pronunciation?: string; partOfSpeech?: string; definition: string; examples: Array<{ sentence: string; translation?: string }>; instruction: string }>
   | TaskEnvelope<'RETRIEVE', { axis: Axis; stage: RetrieveStage; prompt: string; options?: Array<{ id: string; text: string }>; cue?: string }>
@@ -68,7 +69,7 @@ export function buildTaskPrompt(input: TaskGenerationInput): string {
     : input.task === 'RETRIEVE' && input.stage === 'choice' ? { axis: input.axis, stage: 'choice', prompt: '<question>', options: [{ id: 'a', text: '<option>' }, { id: 'b', text: '<option>' }], answerOptionId: 'a', explanation: '<server explanation>' }
       : input.task === 'RETRIEVE' && input.stage === 'cued' ? { axis: input.axis, stage: 'cued', prompt: '<prompt>', cue: '<cue>', answerKey: { acceptedAnswers: [input.word.text], explanation: '<server explanation>' } }
         : input.task === 'RETRIEVE' ? { axis: input.axis, stage: 'free', prompt: '<prompt>', answerKey: { acceptedAnswers: [input.word.text], explanation: '<server explanation>' } }
-          : input.axis === 'R' ? { axis: 'R', passage: '<90-120 English words>', questions: [{ prompt: '<question>', answer: '<fixed answer>', evidence: '<exact evidence quote>' }, { prompt: '<question>', answer: '<fixed answer>', evidence: '<exact evidence quote>' }], targetOccurrences: 5 }
+          : input.axis === 'R' ? { axis: 'R', passage: '<90-120 English words>', questions: [{ role: 'target_meaning', prompt: '<question about target word meaning>', answer: '<fixed answer>', evidence: '<exact evidence quote>' }, { role: 'passage_comprehension', prompt: '<question about passage content>', answer: '<fixed answer>', evidence: '<exact evidence quote>' }], targetOccurrences: 5 }
             : { axis: 'P', scenario: '<Chinese scenario>', responseInstruction: '<Chinese instruction>', gradingRequirements: { targetExpression: input.word.text, targetUseCriteria: ['<criterion>'], overallExpressionCriteria: ['<criterion>'] } };
   return JSON.stringify({
     instruction: `Create exactly one ${variant} task. Return ONLY the JSON object. Follow the output shape exactly: do not rename keys, add wrapper objects, add fields, or change schemaVersion from the string "1". wordId must equal the input word.id. Keep answer keys/rubrics in content for server grading.`,
@@ -200,7 +201,7 @@ function validateMaterial(value: unknown, input: TaskGenerationInput): string[] 
     const occurrences = countOccurrences(String(passage ?? ''), input.word.text);
     if (words.length < 90 || words.length > 120) errors.push('passage_word_count');
     if (occurrences < 5 || c.targetOccurrences !== occurrences) errors.push('target_occurrence_count');
-    if (!Array.isArray(c.questions) || c.questions.length !== 2 || c.questions.some(q => !isObject(q) || !nonempty(q.prompt) || !nonempty(q.answer) || !nonempty(q.evidence) || !String(passage ?? '').toLowerCase().includes(q.evidence.toLowerCase()))) errors.push('invalid_questions');
+    if (!Array.isArray(c.questions) || c.questions.length !== 2 || c.questions.some(q => !isObject(q) || !['target_meaning', 'passage_comprehension'].includes(q.role) || !nonempty(q.prompt) || !nonempty(q.answer) || !nonempty(q.evidence) || !String(passage ?? '').toLowerCase().includes(q.evidence.toLowerCase())) || new Set(Array.isArray(c.questions) ? c.questions.map(q => q?.role) : []).size !== 2) errors.push('invalid_questions');
   } else {
     if (!exactKeys(c, ['axis', 'scenario', 'responseInstruction', 'gradingRequirements'])) errors.push('invalid_production_fluency_schema');
     if (!nonempty(c.scenario) || !nonempty(c.responseInstruction) || !isObject(c.gradingRequirements) || !nonempty(c.gradingRequirements.targetExpression) || !stringArray(c.gradingRequirements.targetUseCriteria) || !stringArray(c.gradingRequirements.overallExpressionCriteria)) errors.push('invalid_production_fluency');

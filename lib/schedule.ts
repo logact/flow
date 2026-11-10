@@ -16,7 +16,7 @@ export interface AxisSchedule {
 
 export interface ScheduleEvent {
   event: 'schedule.updated'; axis: Axis; reason: string; outcome: string;
-  date: string; before: AxisSchedule; after: AxisSchedule;
+  date: string; before: AxisSchedule; after: AxisSchedule; attemptId?: string;
 }
 
 const LEVELS: ReviewLevel[] = [1, 3, 7, 30];

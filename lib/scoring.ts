@@ -3,7 +3,7 @@ export type RetrieveStage = 'choice' | 'cued' | 'free';
 export type TaskType = 'ENCODE' | 'RETRIEVE' | 'FLUENCY';
 export type Outcome = 'pass' | 'fail' | 'invalid';
 export interface ScoreState { R: number; P: number }
-export interface ScoreEvent { task: TaskType; axis: Axis | 'both'; stage?: RetrieveStage; before: Partial<ScoreState>; result: unknown; speedWpm?: number; speedValid?: boolean; branch: string; calculated?: number; after: Partial<ScoreState>; valid: boolean }
+export interface ScoreEvent { task: TaskType; axis: Axis | 'both'; stage?: RetrieveStage; before: Partial<ScoreState>; result: unknown; speedWpm?: number; speedValid?: boolean; branch: string; calculated?: number; after: Partial<ScoreState>; valid: boolean; attemptId?: string }
 export type EventLogger = (event: ScoreEvent) => void;
 import { logger as appLogger } from './logger';
 const defaultEventLogger: EventLogger = event => appLogger.info({ event: 'score.update', ...event }, 'Score updated');

@@ -409,13 +409,70 @@ Add deterministic fixture tests through the task-generation service boundary, wi
 
 ## P7 AI grading for FLUENCY tasks
 
-Use AI to grade submitted FLUENCY answers against requirements frozen when the task was issued. For P, return separate outcomes for correct target-word use and successful overall retelling, with evidence for each. For R, return separate outcomes for the target-word meaning question and passage-comprehension question. Preserve the answer and grading requirements used for every decision.
+### Goal and boundaries
 
-Apply the P1 score rules only after validity checks: invalid timing, interruption, bad material, or an AI/service error must not change scores or schedules. A grading result must not be recalculated from an edited answer; retry a service failure against the saved original answer. Test pass/fail combinations, target-word omission or misuse, semantically valid paraphrases, ambiguous answers, and service failures.
+Grade submitted FLUENCY responses against the task material and rubric frozen when that task was issued. P7 covers R/P FLUENCY only; ENCODE and RETRIEVE grading remain outside this phase. Keep the same two-stage developer workflow as P6: the complete service path works deterministically with fixtures and no API key, and a configured real provider can be exercised for developer debugging using `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`.
 
-Log the model/provider, full grading inputs, submitted answer, structured output, evidence, validity checks, and score/schedule changes. Keep AI generation logs distinct from grading logs so the user can inspect both.
+The grader must not fetch or regenerate task material. Its input contains the exact issued task, its hidden answer/rubric fields, the learner's original submitted answer, and the task-attempt validity metadata. Persist/freeze these at submission so editing a later copy cannot change a grading decision. A retry after provider/service failure reuses the stored original submission and exact same issued material/rubric.
 
-Human verification: submit prepared passing and failing answers for R and P, then compare the saved answer, frozen rubric, AI outcomes/evidence, and score decision with the P1 tables. Submit an invalid-timing answer and simulate a grader error; confirm both records show no score or schedule change. Retry the grader error and verify it uses the original saved answer.
+### Input and output contract
+
+Use discriminated TypeScript types so reading and production answers cannot be confused. The input should carry a stable `attemptId`, the exact validated `GeneratedTask` for the issued FLUENCY task (including answer keys or grading requirements), the learner's submitted answer, learner level/language, and validity facts such as timing validity, interruption, and material validity. R submissions contain answers to the two issued questions; P submissions contain the learner's spoken/written response and any captured timing/speed evidence. Do not accept a caller-provided pass/fail judgment.
+
+Return a structured decision with `status: 'graded' | 'invalid' | 'unavailable'`. A graded P result has separate `targetPassed` and `overallPassed` outcomes plus evidence for each. A graded R result has separate target-word-meaning and passage-comprehension outcomes plus evidence tied to each question. Invalid attempts and unavailable grader results carry stable reason codes and no pass/fail score decision. Validate the provider response schema before accepting it; reject ambiguous/missing outcomes and evidence rather than guessing.
+
+R material must identify the role of each question as `target_meaning` or `passage_comprehension`, exactly one of each, before P7 can grade the two outcomes correctly. Update the P6 material type, prompt, validation, fixtures, and live cases as part of P7's prerequisite work, preserving compatibility for existing generated records by treating records without these roles as invalid for AI grading (never infer a role from question wording).
+
+### Score and schedule integration
+
+1. Check task/answer association, frozen material validity, interruption, and timing before using any AI outcome. Invalid timing, interrupted attempts, invalid material, malformed grader output, and provider/service errors must leave score and schedule unchanged.
+2. Map only a valid structured grade into the existing pure `score()` interface: P FLUENCY maps target-use and overall-expression outcomes to `targetPassed` and `overallPassed`; R FLUENCY maps the target-meaning and passage-comprehension outcomes the same way. Pass the already captured speed and timing-validity facts through unchanged.
+3. Call the existing schedule settlement function only after a valid score result. Keep grading, score, and schedule events separately identifiable and correlate them with the same `attemptId`; do not duplicate or modify P1 score formulas in the AI grader.
+4. Make the orchestration boundary explicit: pure validation/mapping functions return decisions, while the attempt-submission boundary persists the original answer and writes grading/score/schedule events. Retrying a grader service error must not write a second answer or settle score/schedule until a valid grade is obtained.
+
+### Provider, fixtures, and logs
+
+Define a grader adapter boundary analogous to P6's raw-output generator. Fixture adapters should provide deterministic pass, fail, ambiguous, malformed, and provider-error outputs; the common grading service owns parsing, schema validation, retries, and result selection. The configured provider adapter uses the existing three `LLM_*` environment variables and must redact credentials. Only schema-valid grades may flow into scoring.
+
+Write a distinct `task_grading.attempt` structured log for every attempt, separate from `task_generation.attempt`. Include attempt/generation correlation IDs, provider/model, prompt version and prompts, frozen task/rubric, original answer, validity checks, raw request/response, parsed structured grade, evidence, validation errors, retry/failure reason, and whether score/schedule settlement occurred. Never log API keys. Add a P7 log inspection command that shows the full grading record for an optional `attemptId`, following the P6 prompt-viewer pattern. Persist the original answer and frozen task/rubric in the existing application persistence layer; logs are audit/debug records, not the answer store.
+
+### Implementation steps
+
+1. Add explicit R question roles in P6's R FLUENCY schema and update its prompt, validator, fixtures, and live cases; require exactly one target-meaning question and one passage-comprehension question.
+2. Define P7 submission, attempt-validity, provider-result, grade-decision, and grading-event types. Verify that the exact task material and original answer survive persistence/reload without being reconstructed from mutable word or task data.
+3. Implement deterministic answer/material/timing validity checks and pure provider-output parsing/schema validation. Keep model-produced pass/fail and evidence separate by grading criterion.
+4. Implement fixture and OpenAI-compatible provider adapters; route both through one retrying grading service. Retry service/schema failures against the same frozen input, and return unavailable after the finite retry budget.
+5. Add the submission orchestration boundary: persist answer and frozen task once; on a valid grade, call `score()` and then the existing schedule settlement; on invalid/unavailable grade, leave both unchanged. Correlate all events using `attemptId`.
+6. Persist distinct grading-attempt logs and add `npm run logs:p7` (optionally accepting an attempt ID). Add dedicated `npm run test:p7` and `npm run test:p7:live` commands; keep TypeScript tests separate from the default suite where appropriate.
+
+### Tests (大白话：测什么、怎么测)
+
+All automated cases use a fixed issued task, fixed answer, and controlled fixture output; they do not depend on wall-clock time or a live API. Assert the returned decision, the call to `score()`/schedule settlement, and the persisted log record together.
+
+1. **P 轴两个标准分别判**：用一个目标词用对、整体表达也达标的回答，确认两项都通过；再分别构造目标词没用/用错但整体表达不错，以及目标词用对但整体没说清楚，确认两项结果能独立不同，并按 P1 规则更新分数。
+2. **R 轴两道题分别判**：提交目标词义题正确、文章理解题错误的答案，再反过来测试；确认日志和结果分别指出是哪一题通过，不把两个结果合并成一个笼统分数。
+3. **接受意思正确的改写**：答案不用 rubric 中的原句，但意思和目标用法正确；fixture 返回有效语义判定及证据，确认服务接受它而不是只做字符串完全匹配。
+4. **目标词遗漏或误用**：P 回答漏掉目标表达或把词义用错；确认 `targetPassed=false`，整体表达结果仍单独保留，并按既有 P1 规则结算。
+5. **含糊回答不猜**：准备无法确认意思或证据不足的回答，让 fixture 返回缺失/含糊结果；确认被拒绝或标为不可判定，不调用 `score()`，分数和排期不动。
+6. **计时无效或中断不扣分**：使用正确答案但标记计时无效或任务中断；确认不接受 AI 的通过结果，不调用 `score()`/排期函数，日志写明无效原因。
+7. **材料有问题不能结算**：把任务标记为未通过 P6 校验或 R 问题角色缺失/重复；确认不会请求 AI 评分或不会接受其结果，分数和排期保持原样。
+8. **坏 JSON、错误 schema 和证据不合格会重试**：fixture 先给无法解析的 JSON 或缺字段结果，再给正确结构；确认每次尝试各有日志，最后只使用有效结果结算一次。
+9. **重试耗尽不改状态**：连续给坏结果或模拟服务错误；确认最终返回 unavailable，原答案仍可重试，分数和 dueAt 不变。
+10. **重试使用原始提交**：先保存一次答案，再模拟 provider 错误；修改外部展示副本后重试，确认 grader 收到的仍是原始答案和当时冻结的任务/rubric。
+11. **P1 速度规则照常生效**：分别测试有效计时且速度低于门槛、达到门槛、目标词失败、整体失败；确认分数和分支符合现有 `score()` 测试，不复制公式实现。
+12. **有效评分只结算一次**：从持久化答案跑完 grade→score→schedule，确认评分通过后才更新分数和 dueAt，事件按 `attemptId` 关联，重复读取/展示结果不会二次结算。
+13. **日志可复盘且不泄密**：读取持久化 `task_grading.attempt` 记录，确认能看到模型/provider、冻结任务和 rubric、原始答案、输入有效性、原始响应、结构化结果、证据、重试原因及是否结算；确认日志中没有 API key，且不混入 P6 generation 事件。
+14. **无密钥路径跑完整流程**：使用 fixture 完成 P/R 的通过、失败、无效和重试场景；不设置 LLM 环境变量也能运行 `npm run test:p7`。
+
+Live developer command defaults to both R and P FLUENCY with representative pass/fail/ambiguous submissions. It prints only validated grade decisions and points to `logs/app.log` for raw provider details. Live calls are diagnostic evidence, not a deterministic CI test.
+
+### 人工核验
+
+准备 R/P 的通过、失败和含糊回答。检查保存的原答案、冻结的题目/rubric、AI 返回的分项结论与证据，再逐项对照 P1 评分表。对无效计时和 grader 错误各跑一次，确认分数及 `dueAt` 均未变化；随后重试服务错误，确认仍用原答案且只结算一次。最后运行 `npm run logs:p7 -- <attemptId>`，核对完整评分轨迹，并确认日志里没有密钥。
+
+### 当前进度记录
+
+P7 流程验证已完成：自动化测试和真实 provider 调试均确认 R/P 提交能走到评分服务，必要的学习者水平、冻结题目与评分标准、原始答案都传入了 prompt，结构化结果也能进入现有评分和排期流程。真实 provider 的六个样例中，标准答案得到通过、错误答案得到不通过；含糊答案也被模型判为不通过并完成结算。这个结果只证明流程畅通，不代表判分准确；特别是含糊答案是否应拒绝评分、具体判分是否符合教学标准，需要后续用人工标注样本评估和调整。
 
 ## p7.1 the goal set and update logic
 

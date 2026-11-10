@@ -14,7 +14,10 @@
     "test:p5": "jest --runInBand test/task-assignment.jest.test.ts",
     "test:p6": "jest --runInBand test/task-material.jest.test.ts",
     "test:p6:live": "jest --runInBand --testMatch '**/test/task-material.live.test.ts'",
-    "logs:p6:prompt": "node scripts/show-task-generation-prompt.cjs"
+    "logs:p6:prompt": "node scripts/show-task-generation-prompt.cjs",
+    "test:p7": "jest --runInBand test/task-grading.jest.test.ts",
+    "test:p7:live": "jest --runInBand --testMatch '**/test/task-grading.live.test.ts'",
+    "logs:p7": "node scripts/show-task-grading.cjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.0",
