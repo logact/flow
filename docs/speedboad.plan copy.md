@@ -11,6 +11,7 @@ core logic
 3. learner set the goal to achieve ,and set the materials into the goal,system analyze the materials and sepearete into to the knowledge points,and init their fluency score in differnet dimmension according to the user's level and the leanrt words conditions
    1. the goal set the target  fluency score in different dimmension of all the kp in the goals' material
    2. the kp here indentify by word/phase/grammar/other.. + sense
+   3. user select the kp to learn and select the kp not to learn.
 4. system generate the learner tasks according to the specific goals and user's learner's everyday capacity.
 5. user answer the task assign by system ,and system jude the res and modify the fluency of the knowledge point in different dimension and modify the study plan (the cold interval between the simailar word and the review time ),and update the user's level 
 
