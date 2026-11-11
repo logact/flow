@@ -71,45 +71,86 @@ export interface Learner {
 }
 
 /** 一次词汇定级测评及其产生的估计结果。 */
-export interface VocabularyAssessment {
+interface VocabularyAssessmentBase {
   /** 测评记录标识。 */
   id: string;
   /** 参加测评的学习者 ID。 */
   learnerId: string;
   /** 本次测评包含的独立评级任务 ID，数组顺序表示出题顺序。 */
   taskIds: string[];
-  /** 测评生命周期状态。 */
-  status: 'draft' | 'in_progress' | 'completed';
-  /** 根据作答证据生成的词汇估计；测评完成前为空。 */
-  result: VocabularyEstimate | null;
   /** 测评创建时间。 */
   createdAt: ISODateTime;
-  /** 测评完成时间；未完成时为空。 */
-  completedAt: ISODateTime | null;
 }
 
-/** 词汇知识点的一个具体词义；同一单词的不同词义可以独立学习。 */
+export type VocabularyAssessment = VocabularyAssessmentBase & (
+  | {
+      /** 尚未完成的测评没有结果和完成时间。 */
+      status: 'draft' | 'in_progress';
+      result: null;
+      completedAt: null;
+    }
+  | {
+      /** 已完成的测评必须同时具有结果和完成时间。 */
+      status: 'completed';
+      result: VocabularyEstimate;
+      completedAt: ISODateTime;
+    }
+);
+
+/** 知识点的一个具体词义或用法；同一形式的不同词义可以独立学习。 */
 export interface KnowledgePointSense {
   /** 词义的稳定标识。 */
   id: string;
-  /** 当前词义的释义。 */
+  /** 当前词义或用法的释义。 */
   definition: string;
-  /** 当前词义的词性；无法确定时为空。 */
+  /** 当前词义的词性；无法确定或不适用时为空。 */
   partOfSpeech: string | null;
   /** 对用法、语境或词义区别的补充说明；没有时为空。 */
   explanation: string | null;
 }
 
-/** 一个纯词汇知识点，由词元、所属词族和具体词义共同确定。 */
-export interface KnowledgePoint {
-  /** 词汇知识点的稳定标识。 */
+interface KnowledgePointBase {
+  /** 知识点的稳定标识。 */
   id: string;
-  /** 词汇的词元或基本形式，例如 ran 的词元为 run。 */
-  lemma: string;
-  /** 词汇所属的词族，用于按词族统计词汇量和关联相关词形。 */
-  wordFamily: string;
-  /** 当前知识点学习的具体词义。 */
+  /** 当前知识点学习的具体词义或用法。 */
   sense: KnowledgePointSense;
+}
+
+/** 可按词族和词频分类的词汇知识点。 */
+export type VocabularyKnowledgePoint = KnowledgePointBase & (
+  | {
+      kind: 'word';
+      /** 词汇的词元或基本形式，例如 ran 的词元为 run。 */
+      lemma: string;
+      /** 词汇所属的词族。 */
+      wordFamily: string;
+    }
+  | {
+      kind: 'phrase';
+      /** 短语的基本形式。 */
+      lemma: string;
+      /** 可归属词族时记录词族，否则为空。 */
+      wordFamily: string | null;
+    }
+);
+
+/** 学习内容知识点，覆盖计划中的 word/phrase/grammar/other。 */
+export type KnowledgePoint =
+  | VocabularyKnowledgePoint
+  | (KnowledgePointBase & {
+      kind: 'grammar' | 'other';
+      /** 语法点或其他知识点的名称。 */
+      name: string;
+    });
+
+/** 知识点在指定词表版本中的词频分类；未收录时不建立该记录。 */
+export interface KnowledgePointVocabularyClassification {
+  /** 被分类的词汇知识点 ID。 */
+  knowledgePointId: string;
+  /** 分类依据的词表及版本。 */
+  list: VocabularyListReference;
+  /** 知识点所属词族在该词表版本中的词频段。 */
+  band: VocabularyBand;
 }
 
 /** 词汇评级选择题的一个选项。 */
@@ -120,20 +161,36 @@ export interface VocabularyAssessmentOption {
   text: string;
 }
 
-/** 词汇评级使用的独立选择题，不属于日常学习任务。 */
+/** 词汇评级使用的独立选择题，只测量理解维度，不属于日常学习任务。 */
 export interface VocabularyAssessmentTask {
   /** 评级任务标识。 */
   id: string;
   /** 被测词汇所属的词频段，用于分层抽样和分词段估计。 */
   band: VocabularyBand;
   /** 被测的词汇知识点及词义，仅保存在服务端。 */
-  knowledgePoint: KnowledgePoint;
+  knowledgePoint: VocabularyKnowledgePoint;
   /** 不提供定义提示的简单原文语境，用于限定词性和词义。 */
   context: string;
   /** 可供学习者选择的释义选项。 */
   options: VocabularyAssessmentOption[];
   /** 正确选项 ID，仅供服务端判分，不下发给学习者。 */
   answerOptionId: string;
+}
+
+/** 可安全返回给学习者的词汇评级题，不包含词义、答案和服务端解释。 */
+export interface LearnerVocabularyAssessmentTask {
+  /** 评级任务标识。 */
+  id: string;
+  /** 被测词汇所属的词频段。 */
+  band: VocabularyBand;
+  /** 被测词汇知识点 ID。 */
+  knowledgePointId: string;
+  /** 被测词汇的词元。 */
+  lemma: string;
+  /** 不提供定义提示的简单原文语境。 */
+  context: string;
+  /** 可供学习者选择的释义选项。 */
+  options: VocabularyAssessmentOption[];
 }
 
 /** 学习者对一道词汇评级题提交的答案及判分结果。 */
@@ -194,30 +251,52 @@ export interface MaterialAnalysisItem {
   occurrences: Occurrence[];
 }
 
-/** 对一份材料执行的一次版本化词汇分析。 */
-export interface MaterialAnalysis {
+/** 材料分析中未能匹配为知识点的一组原始出现记录。 */
+export interface MaterialUnmatchedItem {
+  /** 无法匹配或归一化的原因。 */
+  reason: string;
+  /** 具有相同未匹配原因的原始出现记录。 */
+  occurrences: Occurrence[];
+}
+
+interface MaterialAnalysisBase {
   /** 分析记录标识。 */
   id: string;
   /** 被分析的材料 ID。 */
   materialId: string;
   /** 分析器名称或版本，用于复现分析结果。 */
   analyzerVersion: string;
-  /** 分析生命周期状态。 */
-  status: 'pending' | 'analyzed' | 'failed';
-  /** 成功识别出的词汇知识点及其材料证据。 */
-  items: MaterialAnalysisItem[];
-  /** 未能匹配为词汇知识点的原始出现记录及其原因。 */
-  unmatchedItems: Array<{
-    /** 无法匹配或归一化的原因。 */
-    reason: string;
-    /** 具有相同未匹配原因的原始出现记录。 */
-    occurrences: Occurrence[];
-  }>;
-  /** 分析过程中产生的错误信息。 */
-  errors: string[];
   /** 本次分析的创建时间。 */
   createdAt: ISODateTime;
 }
+
+/** 对一份材料执行的一次版本化词汇分析。 */
+export type MaterialAnalysis = MaterialAnalysisBase & (
+  | {
+      status: 'pending';
+      items: [];
+      unmatchedItems: [];
+      errors: [];
+      completedAt: null;
+    }
+  | {
+      status: 'analyzed';
+      /** 成功识别出的词汇知识点及其材料证据。 */
+      items: MaterialAnalysisItem[];
+      /** 未能匹配为知识点的原始出现记录及其原因。 */
+      unmatchedItems: MaterialUnmatchedItem[];
+      errors: [];
+      completedAt: ISODateTime;
+    }
+  | {
+      status: 'failed';
+      items: [];
+      unmatchedItems: [];
+      /** 失败分析必须至少记录一个错误。 */
+      errors: [string, ...string[]];
+      completedAt: ISODateTime;
+    }
+);
 
 /** 学习者为一个材料范围设定的词汇流利度目标。 */
 export interface LearningGoal {
@@ -249,15 +328,27 @@ export interface GoalMaterial {
   addedAt: ISODateTime;
 }
 
-/** 学习目标包含的词汇知识点及其来源。 */
+/** 学习目标中的候选知识点及学习者选择状态。 */
 export interface GoalKnowledgePoint {
   /** 学习目标 ID。 */
   goalId: string;
-  /** 纳入目标学习范围的词汇知识点 ID。 */
+  /** 候选词汇知识点 ID。 */
+  knowledgePointId: string;
+  /** 是否被学习者选中学习；只有选中的知识点才能生成该目标任务。 */
+  selected: boolean;
+  /** 候选知识点进入目标的时间。 */
+  addedAt: ISODateTime;
+}
+
+/** 目标知识点的一个材料分析来源；同一知识点可以有多个来源。 */
+export interface GoalKnowledgePointSource {
+  /** 学习目标 ID。 */
+  goalId: string;
+  /** 目标候选知识点 ID。 */
   knowledgePointId: string;
   /** 将该词汇引入目标的材料分析 ID。 */
   sourceAnalysisId: string;
-  /** 词汇知识点加入目标的时间。 */
+  /** 该来源关联的创建时间。 */
   addedAt: ISODateTime;
 }
 
@@ -279,10 +370,20 @@ export interface ReviewSchedule {
 export interface DimensionLearningState {
   /** 当前维度的流利度分数。 */
   fluency: number;
-  /** 是否已经在有效任务中达到流利度要求。 */
-  fluencyPass: boolean;
   /** 当前维度的复习计划。 */
   review: ReviewSchedule;
+}
+
+/** 初始化流利度时使用的证据和推导策略。 */
+export interface LearnerKnowledgePointInitialization {
+  /** 初始化时采用的学习者词汇估计快照。 */
+  sourceVocabulary: VocabularyEstimate;
+  /** 当前知识点在同一词表版本中的分类；词表未收录时为空。 */
+  classification: KnowledgePointVocabularyClassification | null;
+  /** 将词汇估计转换为 R/P 初始分数的策略版本。 */
+  policyVersion: string;
+  /** 定级只直接测量 R，P 由初始化策略推导，不表示具有直接 P 测评证据。 */
+  productionBasis: 'derived_from_receptive';
 }
 
 /** 学习者对一个词汇知识点的初始估计和当前学习状态。 */
@@ -291,9 +392,11 @@ export interface LearnerKnowledgePoint {
   learnerId: string;
   /** 被学习的词汇知识点 ID。 */
   knowledgePointId: string;
-  /** 词汇进入学习范围时，根据测试证据估计的初始 R/P 流利度。 */
+  /** 词汇进入学习范围时估计的初始 R/P 流利度。 */
   initialFluency: FluencyScores;
-  /** 当前各流利度维度的分数和复习状态。 */
+  /** 初始分数采用的词汇证据、词频分类和推导策略。 */
+  initialization: LearnerKnowledgePointInitialization;
+  /** 当前各流利度维度的分数和复习状态；目标达标状态按各目标分数线另行推导。 */
   dimensions: Record<FluencyDimension, DimensionLearningState>;
   /** 开始学习该词汇的时间。 */
   createdAt: ISODateTime;
@@ -423,17 +526,29 @@ export interface FreeRetrieveTaskContent {
   answerKey: RetrieveAnswerKey;
 }
 
-/** 阅读流利度任务中的一道服务端完整问题。 */
-export interface ReadingQuestion {
+interface ReadingQuestionBase {
+  /** 问题稳定标识，作答按该 ID 关联，不依赖数组下标。 */
+  id: string;
   /** 问题考察目标词义还是篇章理解。 */
   role: ReadingQuestionRole;
   /** 问题文本。 */
   prompt: string;
-  /** 服务端参考答案。 */
-  answer: string;
-  /** 原文中支持答案的证据句或片段。 */
+  /** 原文中支持答案的证据句或片段，仅供服务端使用。 */
   evidence: string;
 }
+
+/** 阅读流利度任务中的一道服务端完整问题。 */
+export type ReadingQuestion = ReadingQuestionBase & (
+  | {
+      kind: 'choice';
+      options: RetrieveOption[];
+      answerOptionId: string;
+    }
+  | {
+      kind: 'free';
+      answer: string;
+    }
+);
 
 /** R 维阅读流利度任务的服务端完整内容。 */
 export interface ReadingFluencyTaskContent {
@@ -512,11 +627,25 @@ export interface LearnerFreeRetrieveTaskContent {
   prompt: string;
 }
 
-/** 学习者可见的阅读问题，不包含答案和证据。 */
-export interface LearnerReadingQuestion {
+interface LearnerReadingQuestionBase {
+  /** 问题稳定标识。 */
+  id: string;
+  /** 问题考察目标词义还是篇章理解。 */
+  role: ReadingQuestionRole;
   /** 问题文本。 */
   prompt: string;
 }
+
+/** 学习者可见的阅读问题，不包含答案和证据。 */
+export type LearnerReadingQuestion = LearnerReadingQuestionBase & (
+  | {
+      kind: 'choice';
+      options: RetrieveOption[];
+    }
+  | {
+      kind: 'free';
+    }
+);
 
 /** 学习者可见的阅读流利度内容，不包含答案和证据。 */
 export interface LearnerReadingFluencyTaskContent {
@@ -547,34 +676,106 @@ export type LearnerTask =
   | TaskEnvelope<'FLUENCY', LearnerReadingFluencyTaskContent>
   | TaskEnvelope<'FLUENCY', LearnerProductionFluencyTaskContent>;
 
-/** 分配给学习者的一份不可变任务。 */
-export interface LearningTask {
+/** 任务生命周期及完成时间。 */
+export type LearningTaskLifecycle =
+  | { status: 'issued' | 'expired'; completedAt: null }
+  | { status: 'completed'; completedAt: ISODateTime };
+
+interface LearningTaskBase {
   /** 任务标识。 */
   id: string;
   /** 接收任务的学习者 ID。 */
   learnerId: string;
-  /** 任务针对的词汇知识点 ID，与 content.wordId 一致。 */
-  knowledgePointId: string;
-  /** 任务考察的流利度维度，ENCODE 可同时初始化 R/P。 */
-  dimension: FluencyDimension | 'both';
-  /** 任务行为类型。 */
-  type: TaskType;
-  /** RETRIEVE 的提取阶段；其他任务类型为空。 */
-  stage: RetrieveStage | null;
-  /** 服务端保存的完整任务材料。 */
-  content: GeneratedTask;
-  /** 返回给学习者的脱敏任务材料。 */
-  learnerContent: LearnerTask;
-
-  /** 任务生命周期状态。 */
-  status: 'issued' | 'completed' | 'expired';
+  /** 生成该任务所服务的学习目标 ID。 */
+  goalId: string;
   /** 任务下发时间。 */
   issuedAt: ISODateTime;
 }
 
+/** 分配给学习者的一份不可变服务端任务；不得直接作为公开 API 响应序列化。 */
+export type LearningTask = LearningTaskLifecycle & LearningTaskBase & (
+  | { content: TaskEnvelope<'ENCODE', EncodeTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', ChoiceRetrieveTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', CuedRetrieveTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', FreeRetrieveTaskContent> }
+  | { content: TaskEnvelope<'FLUENCY', ReadingFluencyTaskContent> }
+  | { content: TaskEnvelope<'FLUENCY', ProductionFluencyTaskContent> }
+);
+
+interface LearningTaskViewBase {
+  /** 任务标识。 */
+  id: string;
+  /** 接收任务的学习者 ID。 */
+  learnerId: string;
+  /** 该任务服务的学习目标 ID。 */
+  goalId: string;
+  /** 任务下发时间。 */
+  issuedAt: ISODateTime;
+}
+
+/** 公开 API 使用的学习者任务视图，不包含服务端答案、证据或评分标准。 */
+export type LearningTaskView = LearningTaskLifecycle & LearningTaskViewBase & (
+  | { content: TaskEnvelope<'ENCODE', EncodeTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', LearnerChoiceRetrieveTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', LearnerCuedRetrieveTaskContent> }
+  | { content: TaskEnvelope<'RETRIEVE', LearnerFreeRetrieveTaskContent> }
+  | { content: TaskEnvelope<'FLUENCY', LearnerReadingFluencyTaskContent> }
+  | { content: TaskEnvelope<'FLUENCY', LearnerProductionFluencyTaskContent> }
+);
+
+/** ENCODE 学习任务完成确认。 */
+export interface EncodeTaskSubmission {
+  task: 'ENCODE';
+}
+
+/** 选择式主动提取答案。 */
+export interface ChoiceRetrieveTaskSubmission {
+  task: 'RETRIEVE';
+  stage: 'choice';
+  selectedOptionId: string;
+}
+
+/** 提示式或自由主动提取答案。 */
+export interface TextRetrieveTaskSubmission {
+  task: 'RETRIEVE';
+  stage: 'cued' | 'free';
+  answer: string;
+}
+
+/** 阅读问题答案，按问题 ID 关联。 */
+export type ReadingQuestionSubmission = { questionId: string } & (
+  | { kind: 'choice'; selectedOptionId: string }
+  | { kind: 'free'; answer: string }
+);
+
+/** 阅读流利度任务答案及分阶段计时。 */
+export interface ReadingFluencyTaskSubmission {
+  task: 'FLUENCY';
+  axis: 'R';
+  /** 只计算原文阅读阶段，不包含后续答题时间。 */
+  readingElapsedMs: number;
+  /** 各问题的原始答案。 */
+  answers: ReadingQuestionSubmission[];
+}
+
+/** 场景表达流利度任务答案。 */
+export interface ProductionFluencyTaskSubmission {
+  task: 'FLUENCY';
+  axis: 'P';
+  response: string;
+}
+
+/** 学习者提交原始答案的可判别结构。 */
+export type TaskSubmission =
+  | EncodeTaskSubmission
+  | ChoiceRetrieveTaskSubmission
+  | TextRetrieveTaskSubmission
+  | ReadingFluencyTaskSubmission
+  | ProductionFluencyTaskSubmission;
+
 /** 判断一次作答是否适合用于学习状态结算的有效性信息。 */
 export interface AttemptValidity {
-  /** 从任务呈现到提交所经过的毫秒数。 */
+  /** 从任务呈现到提交所经过的总毫秒数。 */
   elapsedMs: number;
   /** 作答过程是否被中断。 */
   interrupted: boolean;
@@ -632,33 +833,49 @@ export interface TaskSettlement {
   reviewChanges: ReviewScheduleChange[];
   /** 结算前采用的词汇水平估计快照。 */
   vocabularyBefore: VocabularyEstimate;
-  /** 根据本次测试作答更新后的词汇水平估计快照。 */
+  /** 根据本次有效作答更新后的词汇水平估计快照。 */
   vocabularyAfter: VocabularyEstimate;
   /** 学习状态完成结算的时间。 */
   settledAt: ISODateTime;
 }
 
-/** 学习者对一份已下发任务提交的首次作答及其处理状态。 */
-export interface TaskAttempt {
-  /** 作答记录标识，也可作为提交幂等键。 */
+interface TaskAttemptBase {
+  /** 作答记录标识，也可作为客户端重试时保持不变的提交幂等键。 */
   id: string;
-  /** 被回答的任务 ID。 */
+  /** 被回答的任务 ID；同一任务只允许一条首次作答。 */
   taskId: string;
-  /** 提交作答的学习者 ID。 */
+  /** 提交作答的学习者 ID，必须与任务所有者一致。 */
   learnerId: string;
   /** 学习者提交的原始答案，重试评判时不得替换。 */
-  submission: unknown;
+  submission: TaskSubmission;
   /** 用于判断作答能否结算的有效性信息。 */
   validity: AttemptValidity;
-  /** 作答从接收、评判到结算的生命周期状态。 */
-  status: 'received' | 'judging' | 'unavailable' | 'invalid' | 'settled';
-  /** 作答评判结果；尚未完成评判时为空。 */
-  judgement: TaskJudgement | null;
-  /** 学习状态结算结果；未结算时为空。 */
-  settlement: TaskSettlement | null;
   /** 系统首次接收到作答的时间。 */
   receivedAt: ISODateTime;
 }
+
+/** 学习者对一份已下发任务提交的首次作答及其处理状态。 */
+export type TaskAttempt = TaskAttemptBase & (
+  | {
+      status: 'received' | 'judging';
+      judgement: null;
+      settlement: null;
+      statusReason: null;
+    }
+  | {
+      status: 'unavailable' | 'invalid';
+      judgement: null;
+      settlement: null;
+      /** 无法评判或作答无效的原因。 */
+      statusReason: string;
+    }
+  | {
+      status: 'settled';
+      judgement: TaskJudgement;
+      settlement: TaskSettlement;
+      statusReason: null;
+    }
+);
 
 /** 完整学习领域状态，便于纯函数处理或内存持久化。 */
 export interface LearningState {
@@ -680,8 +897,12 @@ export interface LearningState {
   goalMaterials: GoalMaterial[];
   /** 全部规范化词汇知识点。 */
   knowledgePoints: KnowledgePoint[];
-  /** 全部目标与词汇知识点的关联。 */
+  /** 全部知识点在指定词表版本中的词频分类。 */
+  knowledgePointVocabularyClassifications: KnowledgePointVocabularyClassification[];
+  /** 全部目标候选知识点及学习者选择状态。 */
   goalKnowledgePoints: GoalKnowledgePoint[];
+  /** 全部目标知识点的材料分析来源。 */
+  goalKnowledgePointSources: GoalKnowledgePointSource[];
   /** 全部学习者词汇学习状态。 */
   learnerKnowledgePoints: LearnerKnowledgePoint[];
   /** 全部每日学习计划。 */
