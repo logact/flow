@@ -328,16 +328,21 @@ export interface GoalMaterial {
   addedAt: ISODateTime;
 }
 
+/** 学习者对目标候选知识点的选择；未决定与明确不学是不同状态。 */
+export type GoalKnowledgePointSelection = 'undecided' | 'included' | 'excluded';
+
 /** 学习目标中的候选知识点及学习者选择状态。 */
 export interface GoalKnowledgePoint {
   /** 学习目标 ID。 */
   goalId: string;
   /** 候选词汇知识点 ID。 */
   knowledgePointId: string;
-  /** 是否被学习者选中学习；只有选中的知识点才能生成该目标任务。 */
-  selected: boolean;
+  /** 只有 included 可以在选择生效后生成新任务；excluded 不删除既有学习进度。 */
+  selection: GoalKnowledgePointSelection;
   /** 候选知识点进入目标的时间。 */
   addedAt: ISODateTime;
+  /** 最近一次选择变化的时间，用于区分历史任务与排除后新任务。 */
+  selectionUpdatedAt: ISODateTime;
 }
 
 /** 目标知识点的一个材料分析来源；同一知识点可以有多个来源。 */
@@ -678,7 +683,7 @@ export type LearnerTask =
 
 /** 任务生命周期及完成时间。 */
 export type LearningTaskLifecycle =
-  | { status: 'issued' | 'expired'; completedAt: null }
+  | { status: 'issued' | 'expired' | 'cancelled'; completedAt: null }
   | { status: 'completed'; completedAt: ISODateTime };
 
 interface LearningTaskBase {

@@ -149,9 +149,17 @@ function checkTask(task: LearningTask, state: LearningState, path: string, issue
   if (!state.knowledgePoints.some((item) => item.id === task.content.wordId)) {
     issues.push(`${path}.content.wordId 引用了不存在的知识点`);
   }
-  if (!state.goalKnowledgePoints.some((item) => item.goalId === task.goalId
-    && item.knowledgePointId === task.content.wordId && item.selected)) {
-    issues.push(`${path}.content.wordId 不是该目标已选中学习的知识点`);
+  const goalKnowledgePoint = state.goalKnowledgePoints.find((item) => item.goalId === task.goalId
+    && item.knowledgePointId === task.content.wordId);
+  if (!goalKnowledgePoint) {
+    issues.push(`${path}.content.wordId 不是该目标的候选知识点`);
+  } else if (goalKnowledgePoint.selection !== 'included') {
+    const selectionUpdatedAt = Date.parse(goalKnowledgePoint.selectionUpdatedAt);
+    const issuedAt = Date.parse(task.issuedAt);
+    if (Number.isFinite(selectionUpdatedAt) && Number.isFinite(issuedAt)
+      && issuedAt >= selectionUpdatedAt) {
+      issues.push(`${path}.content.wordId 在选择未纳入学习后不能下发新任务`);
+    }
   }
   checkDateTime(task.issuedAt, `${path}.issuedAt`, issues);
   if (task.completedAt !== null) checkDateTime(task.completedAt, `${path}.completedAt`, issues);
@@ -442,6 +450,10 @@ export function validateLearningState(state: LearningState): string[] {
       issues.push(`${path}.knowledgePointId 引用了不存在的知识点`);
     }
     checkDateTime(link.addedAt, `${path}.addedAt`, issues);
+    checkDateTime(link.selectionUpdatedAt, `${path}.selectionUpdatedAt`, issues);
+    if (Date.parse(link.selectionUpdatedAt) < Date.parse(link.addedAt)) {
+      issues.push(`${path}.selectionUpdatedAt 不能早于 addedAt`);
+    }
   });
 
   state.goalKnowledgePointSources.forEach((link, index) => {
