@@ -367,14 +367,16 @@ export interface GoalKnowledgePointSource {
 export interface ReviewSchedule {
   /** 当前相邻两次复习之间的间隔天数。 */
   intervalDays: number;
-  /** 下一次复习到期时间。 */
+  /** 下一次学习或复习到期时间；毕业后保留末次复习的原到期时间，不再派题。 */
   dueAt: ISODateTime;
-  /** 最近一次实际复习时间；从未复习时为空。 */
+  /** 最近一次实际学习或复习时间；从未学习时为空。 */
   lastReviewedAt: ISODateTime | null;
-  /** 连续成功复习的次数。 */
+  /** 连续成功任务次数；达到目标并进入复习时重新计数。 */
   successfulReviewStreak: number;
   /** 复习失败或遗忘的次数。 */
   lapseCount: number;
+  /** 是否已通过最后一次 30 天间隔复习；达到目标分数本身不代表毕业。 */
+  graduated: boolean;
 }
 
 /** 一个词汇知识点在单个流利度维度上的当前学习状态。 */
@@ -763,7 +765,7 @@ export type ReadingQuestionSubmission = { questionId: string } & (
 export interface ReadingFluencyTaskSubmission {
   task: 'FLUENCY';
   axis: 'R';
-  /** 只计算原文阅读阶段，不包含后续答题时间。 */
+  /** 只计算原文阅读阶段，不包含后续答题时间；必须大于 0。 */
   readingElapsedMs: number;
   /** 各问题的原始答案。 */
   answers: ReadingQuestionSubmission[];
@@ -798,6 +800,12 @@ export interface DimensionJudgement {
   outcome: 'correct' | 'partial' | 'incorrect';
   /** 当前维度的评判分数，不是结算后的流利度分数。 */
   score: number;
+  /** FLUENCY 的目标词义或目标表达是否通过；结算 FLUENCY 时必填。 */
+  targetPassed?: boolean;
+  /** FLUENCY 的整体理解或表达是否通过；结算 FLUENCY 时必填。 */
+  overallPassed?: boolean;
+  /** FLUENCY 的阅读或产出速度（词/分钟）；结算 FLUENCY 时必填。 */
+  speedWpm?: number;
 }
 
 /** 对一次任务作答的完整评判结果。 */

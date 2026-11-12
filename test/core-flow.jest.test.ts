@@ -203,6 +203,7 @@ const initialReview: Model.ReviewSchedule = {
   lastReviewedAt: null,
   successfulReviewStreak: 0,
   lapseCount: 0,
+  graduated: false,
 };
 
 const learning: Model.LearnerKnowledgePoint = {
@@ -293,6 +294,7 @@ const nextReview: Model.ReviewSchedule = {
   lastReviewedAt: at.judged,
   successfulReviewStreak: 1,
   lapseCount: 0,
+  graduated: false,
 };
 
 const updatedVocabulary: Model.VocabularyEstimate = {

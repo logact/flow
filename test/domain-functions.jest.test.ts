@@ -288,7 +288,7 @@ describe('真实领域函数', () => {
     const originalLearning = state.learnerKnowledgePoints[0];
     const baseSpecification = { goalId: goal.id, wordId: knowledgePoint.id };
 
-    type DimensionInput = { fluency: number; dueAt?: string };
+    type DimensionInput = { fluency: number; dueAt?: string; graduated?: boolean };
 
     function inputFor(learning: Model.LearnerKnowledgePoint | null): Domain.DecideNextTaskInput {
       return { goal, candidate, knowledgePoint, learning, now: at.planned };
@@ -300,6 +300,7 @@ describe('真实领域函数', () => {
         review: {
           ...originalLearning.dimensions.R.review,
           dueAt: input.dueAt ?? at.created,
+          graduated: input.graduated ?? false,
         },
       });
       return {
@@ -334,9 +335,9 @@ describe('真实领域函数', () => {
 
     test.each([
       {
-        name: 'R/P 都已达目标',
-        r: { fluency: 100, dueAt: at.created },
-        p: { fluency: 100, dueAt: at.created },
+        name: 'R/P 都已毕业',
+        r: { fluency: 100, dueAt: at.created, graduated: true },
+        p: { fluency: 100, dueAt: at.created, graduated: true },
       },
       {
         name: 'R/P 都尚未到复习时间',
@@ -345,6 +346,15 @@ describe('真实领域函数', () => {
       },
     ])('$name时不派发任务', ({ r, p }) => {
       expect(Domain.decideNextTask(inputFor(learningWith(r, p)))).toBeNull();
+    });
+
+    test('达到目标但未毕业时仍派发 FLUENCY 复习', () => {
+      const learning = learningWith({ fluency: 100 }, { fluency: 100 });
+      expect(Domain.decideNextTask(inputFor(learning))).toEqual({
+        ...baseSpecification,
+        task: 'FLUENCY',
+        axis: 'R',
+      });
     });
 
     test('优先选择复习到期更早的维度', () => {
@@ -373,14 +383,404 @@ describe('真实领域函数', () => {
       });
     });
 
-    test('已达目标的维度不参与任务选择', () => {
-      const learning = learningWith({ fluency: 100 }, { fluency: 50 });
+    test('已毕业的维度不参与任务选择', () => {
+      const learning = learningWith({ fluency: 100, graduated: true }, { fluency: 50 });
       expect(Domain.decideNextTask(inputFor(learning))).toEqual({
         ...baseSpecification,
         task: 'RETRIEVE',
         axis: 'P',
         stage: 'free',
       });
+    });
+  });
+
+  describe('达标后复习与毕业', () => {
+    const currentReview: Model.ReviewSchedule = {
+      intervalDays: 30,
+      dueAt: at.planned,
+      lastReviewedAt: at.answered,
+      successfulReviewStreak: 3,
+      lapseCount: 0,
+      graduated: false,
+    };
+
+    test('达到目标时重新从一天后的首次复习开始', () => {
+      const review = Domain.calculateNextReviewSchedule({
+        current: currentReview,
+        nextFluency: 100,
+        judgement: { outcome: 'correct', score: 1 },
+        reviewedAt: at.planned,
+        review: false,
+        targetReached: true,
+      });
+      expect(review).toMatchObject({
+        intervalDays: 1,
+        dueAt: '2026-11-13T00:30:00.000Z',
+        successfulReviewStreak: 1,
+        graduated: false,
+      });
+    });
+
+    test('通过最后一次 30 天间隔复习后才毕业', () => {
+      const review = Domain.calculateNextReviewSchedule({
+        current: currentReview,
+        nextFluency: 100,
+        judgement: { outcome: 'correct', score: 1 },
+        reviewedAt: at.planned,
+        review: true,
+        targetReached: false,
+      });
+      expect(review).toMatchObject({ graduated: true, dueAt: currentReview.dueAt });
+    });
+
+    test('达标结算后的下一次排期是 FLUENCY 复习', () => {
+      const initialized = buildInitializedState();
+      const state: Model.LearningState = {
+        ...initialized.state,
+        goals: [{ ...initialized.state.goals[0], targetFluency: { R: 5, P: 5 } }],
+      };
+      const decision = Domain.planDailyStudy(state, {
+        learnerId: 'learner-1',
+        date: '2026-11-12',
+        now: at.planned,
+      });
+      const position = decision.tasks[0];
+      if (position.source !== 'new') throw new Error('Expected a new task');
+      const generated = Domain.generateLearningTask({
+        specification: position.specification,
+        knowledgePoint: initialized.knowledgePoint,
+        sourceMaterials: [initialized.material],
+      });
+      const task = Domain.createLearningTask({
+        id: 'task-target-review',
+        learnerId: 'learner-1',
+        specification: position.specification,
+        generated,
+        issuedAt: at.planned,
+      });
+      const planned = Domain.applyDailyStudyDecision(state, {
+        planId: 'plan-target-review',
+        decision,
+        newTasks: [task],
+        now: at.planned,
+      });
+      const received = Domain.recordTaskAttempt(planned, {
+        attemptId: 'attempt-target-review',
+        taskId: task.id,
+        submission: { task: 'ENCODE' },
+        validity: { elapsedMs: 5000, interrupted: false },
+        receivedAt: at.judged,
+      });
+      const judging = Domain.startTaskAttemptJudging(received.state, { attemptId: received.attempt.id });
+      const judgement = Domain.judgeTask({ task, submission: received.attempt.submission, judgedAt: at.judged });
+      const settled = Domain.settleTaskAttempt(judging.state, {
+        attemptId: judging.attempt.id,
+        judgement,
+        now: at.judged,
+      });
+      expect(settled.state.learnerKnowledgePoints[0].dimensions.R.review).toMatchObject({
+        intervalDays: 1,
+        graduated: false,
+      });
+      const next = Domain.planDailyStudy(settled.state, {
+        learnerId: 'learner-1',
+        date: '2026-11-13',
+        now: at.nextDay,
+      });
+      expect(next.tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId: initialized.knowledgePoint.id, task: 'FLUENCY', axis: 'R' },
+      }]);
+    });
+  });
+
+  describe('旧版流利度计分', () => {
+    const initialized = buildInitializedState();
+    const base = { goalId: 'goal-1', wordId: initialized.knowledgePoint.id };
+
+    function makeTask(specification: Domain.TaskSpecification): Model.LearningTask {
+      const generated = Domain.generateLearningTask({
+        specification,
+        knowledgePoint: initialized.knowledgePoint,
+        sourceMaterials: [initialized.material],
+      });
+      return Domain.createLearningTask({
+        id: 'task-old-scoring',
+        learnerId: 'learner-1',
+        specification,
+        generated,
+        issuedAt: at.planned,
+      });
+    }
+
+    function correctJudgement(overrides: Partial<Model.DimensionJudgement> = {}): Model.DimensionJudgement {
+      return { outcome: 'correct', score: 1, ...overrides };
+    }
+
+    test('ENCODE 完成时至少达到 5，未完成时保持原分', () => {
+      const task = makeTask({ ...base, task: 'ENCODE' });
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 0,
+        judgement: correctJudgement(),
+      })).toBe(5);
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 7,
+        judgement: correctJudgement(),
+      })).toBe(7);
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 7,
+        judgement: { outcome: 'incorrect', score: 0 },
+      })).toBe(7);
+    });
+
+    test.each([
+      { stage: 'choice', outcome: 'correct', expected: 20 },
+      { stage: 'choice', outcome: 'incorrect', expected: 5 },
+      { stage: 'cued', outcome: 'correct', expected: 40 },
+      { stage: 'cued', outcome: 'incorrect', expected: 5 },
+      { stage: 'free', outcome: 'correct', expected: 60 },
+      { stage: 'free', outcome: 'incorrect', expected: 20 },
+    ] as const)('RETRIEVE $stage $outcome 时设为 $expected', ({ stage, outcome, expected }) => {
+      const task = makeTask({ ...base, task: 'RETRIEVE', axis: 'R', stage });
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 25,
+        judgement: { outcome, score: outcome === 'correct' ? 1 : 0 },
+      })).toBe(expected);
+    });
+
+    test('RETRIEVE partial 按失败赋分', () => {
+      const task = makeTask({ ...base, task: 'RETRIEVE', axis: 'R', stage: 'cued' });
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 25,
+        judgement: { outcome: 'partial', score: 0.5 },
+      })).toBe(5);
+    });
+
+    test.each([
+      { axis: 'R', speedWpm: 150, expected: 60 },
+      { axis: 'R', speedWpm: 225, expected: 80 },
+      { axis: 'R', speedWpm: 300, expected: 100 },
+      { axis: 'P', speedWpm: 25, expected: 60 },
+      { axis: 'P', speedWpm: 42.5, expected: 80 },
+      { axis: 'P', speedWpm: 60, expected: 100 },
+    ] as const)('FLUENCY $axis 速度为 $speedWpm 时设为 $expected', ({ axis, speedWpm, expected }) => {
+      const task = makeTask({ ...base, task: 'FLUENCY', axis });
+      expect(Domain.calculateNextFluency({
+        task,
+        dimension: axis,
+        currentFluency: 75,
+        judgement: correctJudgement({ targetPassed: true, overallPassed: true, speedWpm }),
+      })).toBeCloseTo(expected);
+    });
+
+    test('FLUENCY 目标失败、整体失败、低速和无效速度遵循旧版规则', () => {
+      const task = makeTask({ ...base, task: 'FLUENCY', axis: 'R' });
+      const calculate = (judgement: Model.DimensionJudgement) => Domain.calculateNextFluency({
+        task,
+        dimension: 'R',
+        currentFluency: 77,
+        judgement,
+      });
+      expect(calculate(correctJudgement({ targetPassed: false, overallPassed: true, speedWpm: 225 }))).toBe(40);
+      expect(calculate(correctJudgement({ targetPassed: true, overallPassed: false, speedWpm: 225 }))).toBe(77);
+      expect(calculate(correctJudgement({ targetPassed: true, overallPassed: true, speedWpm: 149 }))).toBe(40);
+      expect(calculate(correctJudgement({ targetPassed: true, overallPassed: true, speedWpm: 0 }))).toBe(77);
+      expect(() => calculate(correctJudgement({ targetPassed: true, overallPassed: true }))).toThrow('speedWpm');
+    });
+
+    test('规则评判生成 R/P 的目标、整体和速度证据', () => {
+      const readingTask = makeTask({ ...base, task: 'FLUENCY', axis: 'R' });
+      if (readingTask.content.task !== 'FLUENCY' || readingTask.content.content.axis !== 'R') {
+        throw new Error('Expected reading task');
+      }
+      const answers: Model.ReadingQuestionSubmission[] = readingTask.content.content.questions.map((question) =>
+        question.kind === 'choice'
+          ? { questionId: question.id, kind: 'choice', selectedOptionId: question.answerOptionId }
+          : { questionId: question.id, kind: 'free', answer: question.answer });
+      const reading = Domain.judgeTask({
+        task: readingTask,
+        submission: { task: 'FLUENCY', axis: 'R', readingElapsedMs: 60000, answers },
+        judgedAt: at.judged,
+      });
+      expect(reading.dimensions.R).toMatchObject({ targetPassed: true, overallPassed: true, speedWpm: 4 });
+
+      const productionTask = makeTask({ ...base, task: 'FLUENCY', axis: 'P' });
+      const production = Domain.judgeTask({
+        task: productionTask,
+        submission: { task: 'FLUENCY', axis: 'P', response: 'I run every morning.' },
+        judgedAt: at.judged,
+        elapsedMs: 60000,
+      });
+      expect(production.dimensions.P).toMatchObject({ targetPassed: true, overallPassed: true, speedWpm: 4 });
+    });
+
+    test('FLUENCY 评判证据进入真实结算并更新为公式分数', () => {
+      const task = makeTask({ ...base, task: 'FLUENCY', axis: 'R' });
+      if (task.content.task !== 'FLUENCY' || task.content.content.axis !== 'R') {
+        throw new Error('Expected reading task');
+      }
+      const originalLearning = initialized.state.learnerKnowledgePoints[0];
+      const state: Model.LearningState = {
+        ...initialized.state,
+        learnerKnowledgePoints: [{
+          ...originalLearning,
+          dimensions: {
+            R: { ...originalLearning.dimensions.R, fluency: 75 },
+            P: {
+              ...originalLearning.dimensions.P,
+              fluency: 100,
+              review: { ...originalLearning.dimensions.P.review, graduated: true },
+            },
+          },
+        }],
+        tasks: [task],
+      };
+      const answers: Model.ReadingQuestionSubmission[] = task.content.content.questions.map((question) =>
+        question.kind === 'choice'
+          ? { questionId: question.id, kind: 'choice', selectedOptionId: question.answerOptionId }
+          : { questionId: question.id, kind: 'free', answer: question.answer });
+      const received = Domain.recordTaskAttempt(state, {
+        attemptId: 'attempt-old-scoring',
+        taskId: task.id,
+        submission: { task: 'FLUENCY', axis: 'R', readingElapsedMs: 1000, answers },
+        validity: { elapsedMs: 1000, interrupted: false },
+        receivedAt: at.judged,
+      });
+      const judging = Domain.startTaskAttemptJudging(received.state, { attemptId: received.attempt.id });
+      const settled = Domain.settleTaskAttempt(judging.state, {
+        attemptId: judging.attempt.id,
+        judgement: {
+          taskId: task.id,
+          dimensions: { R: correctJudgement({ targetPassed: true, overallPassed: true, speedWpm: 225 }) },
+          feedback: 'Correct',
+          judgedBy: 'rule',
+          judgedAt: at.judged,
+        },
+        now: at.judged,
+      });
+      expect(settled.state.learnerKnowledgePoints[0].dimensions.R.fluency).toBe(80);
+    });
+  });
+
+  describe('新词未来容量准入', () => {
+    const planInput = {
+      learnerId: 'learner-1',
+      date: '2026-11-12',
+      now: at.planned,
+    };
+
+    interface CapacityStateOptions {
+      capacity: number;
+      existingCount: number;
+      newWords: Array<{ id: string; band?: Model.VocabularyBand }>;
+      existingDueAt?: string;
+    }
+
+    function capacityState(options: CapacityStateOptions): Model.LearningState {
+      const initialized = buildInitializedState();
+      const existingIds = Array.from({ length: options.existingCount }, (_, index) => `existing-${index}`);
+      const ids = [...existingIds, ...options.newWords.map((word) => word.id)];
+      const originalLearning = initialized.state.learnerKnowledgePoints[0];
+      const vocabulary = initialized.state.learners[0].currentVocabulary!;
+      const commonBand: Model.VocabularyBandEstimate = {
+        band: '1k',
+        wordFamilyCount: 1000,
+        sampleCount: 1,
+        correctCount: 1,
+        knownProbability: 1,
+        interval: null,
+      };
+      const bands = options.newWords.some((word) => word.band === '1k')
+        ? [...vocabulary.bands, commonBand]
+        : vocabulary.bands;
+      const knowledgePointVocabularyClassifications: Model.KnowledgePointVocabularyClassification[] = ids.map((id) => ({
+        ...initialized.state.knowledgePointVocabularyClassifications[0],
+        knowledgePointId: id,
+        band: options.newWords.find((word) => word.id === id)?.band ?? '2k',
+      }));
+      const learnerKnowledgePoints: Model.LearnerKnowledgePoint[] = existingIds.map((id) => {
+        const dimension = (fluency: number, graduated = false): Model.DimensionLearningState => ({
+          fluency,
+          review: {
+            ...originalLearning.dimensions.R.review,
+            dueAt: options.existingDueAt ?? at.nextDay,
+            graduated,
+          },
+        });
+        return {
+          ...originalLearning,
+          knowledgePointId: id,
+          initialization: {
+            ...originalLearning.initialization,
+            classification: originalLearning.initialization.classification
+              ? { ...originalLearning.initialization.classification, knowledgePointId: id }
+              : null,
+          },
+          dimensions: { R: dimension(98), P: dimension(100, true) },
+        };
+      });
+      return {
+        ...emptyState(),
+        learners: [{
+          ...initialized.state.learners[0],
+          dailyTaskCapacity: options.capacity,
+          currentVocabulary: { ...vocabulary, bands },
+        }],
+        goals: initialized.state.goals,
+        knowledgePoints: ids.map((id) => ({ ...initialized.knowledgePoint, id })),
+        knowledgePointVocabularyClassifications,
+        goalKnowledgePoints: ids.map((id) => ({
+          ...initialized.state.goalKnowledgePoints[0],
+          knowledgePointId: id,
+        })),
+        learnerKnowledgePoints,
+      };
+    }
+
+    test('未来到期容量不足时拒绝新词，刚好容纳时准入', () => {
+      const options = { existingCount: 2, newWords: [{ id: 'new-a' }] };
+      const blockedState = capacityState({ ...options, capacity: 3 });
+      const admittedState = capacityState({ ...options, capacity: 4 });
+      expect(validateLearningState(blockedState)).toEqual([]);
+      expect(validateLearningState(admittedState)).toEqual([]);
+      expect(Domain.planDailyStudy(blockedState, planInput).tasks).toEqual([]);
+      expect(Domain.planDailyStudy(admittedState, planInput).tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId: 'new-a', task: 'ENCODE' },
+      }]);
+    });
+
+    test('多个新词依次占用未来容量，首个无法容纳的新词不再引入', () => {
+      const state = capacityState({
+        capacity: 4,
+        existingCount: 2,
+        newWords: [{ id: 'new-a', band: '2k' }, { id: 'new-b', band: '1k' }],
+      });
+      expect(Domain.planDailyStudy(state, planInput).tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId: 'new-a', task: 'ENCODE' },
+      }]);
+    });
+
+    test('容量预测包含第 41 天但不包含第 42 天', () => {
+      const options = { capacity: 2, existingCount: 1, newWords: [{ id: 'new-a' }] };
+      const inside = capacityState({ ...options, existingDueAt: '2026-12-23T00:30:00.000Z' });
+      const outside = capacityState({ ...options, existingDueAt: '2026-12-24T00:30:00.000Z' });
+      expect(Domain.planDailyStudy(inside, planInput).tasks).toEqual([]);
+      expect(Domain.planDailyStudy(outside, planInput).tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId: 'new-a', task: 'ENCODE' },
+      }]);
     });
   });
 });

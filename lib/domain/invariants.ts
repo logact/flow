@@ -95,6 +95,7 @@ function checkReview(review: ReviewSchedule, path: string, issues: string[]): vo
     issues.push(`${path}.successfulReviewStreak 必须是非负整数`);
   }
   if (!isNonNegativeInteger(review.lapseCount)) issues.push(`${path}.lapseCount 必须是非负整数`);
+  if (typeof review.graduated !== 'boolean') issues.push(`${path}.graduated 必须是布尔值`);
   checkDateTime(review.dueAt, `${path}.dueAt`, issues);
   if (review.lastReviewedAt !== null) {
     checkDateTime(review.lastReviewedAt, `${path}.lastReviewedAt`, issues);
