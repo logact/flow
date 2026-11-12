@@ -672,6 +672,189 @@ describe('真实领域函数', () => {
     });
   });
 
+  describe('结算后的当日重排', () => {
+    function buildReplanState(reviewDueAt: Model.ISODateTime = at.nextDay) {
+      const initialized = buildInitializedState();
+      const newA = initialized.knowledgePoint;
+      const newB: Model.KnowledgePoint = {
+        ...newA,
+        id: 'kp-new-b',
+        sense: { ...newA.sense, id: 'sense-new-b' },
+      };
+      const review: Model.KnowledgePoint = {
+        ...newA,
+        id: 'kp-review',
+        sense: { ...newA.sense, id: 'sense-review' },
+      };
+      const originalLearning = initialized.state.learnerKnowledgePoints[0];
+      const unstartedLearning = (knowledgePointId: string): Model.LearnerKnowledgePoint => ({
+        ...originalLearning,
+        knowledgePointId,
+        initialization: { ...originalLearning.initialization, classification: null },
+        dimensions: {
+          R: { fluency: 20, review: { ...originalLearning.dimensions.R.review, dueAt: at.planned } },
+          P: { fluency: 20, review: { ...originalLearning.dimensions.P.review, dueAt: at.nextDay } },
+        },
+      });
+      const reviewLearning: Model.LearnerKnowledgePoint = {
+        ...unstartedLearning(review.id),
+        dimensions: {
+          R: {
+            fluency: 50,
+            review: {
+              ...originalLearning.dimensions.R.review,
+              dueAt: reviewDueAt,
+              lastReviewedAt: at.answered,
+            },
+          },
+          P: {
+            fluency: 100,
+            review: {
+              ...originalLearning.dimensions.P.review,
+              dueAt: at.nextDay,
+              lastReviewedAt: at.answered,
+              graduated: true,
+            },
+          },
+        },
+      };
+      const specification: Domain.TaskSpecification = {
+        goalId: 'goal-1',
+        wordId: newA.id,
+        task: 'RETRIEVE',
+        axis: 'R',
+        stage: 'choice',
+      };
+      const makeTask = (id: string, knowledgePoint: Model.KnowledgePoint): Model.LearningTask => {
+        const taskSpecification = { ...specification, wordId: knowledgePoint.id };
+        const generated = Domain.generateLearningTask({
+          specification: taskSpecification,
+          knowledgePoint,
+          sourceMaterials: [initialized.material],
+        });
+        return Domain.createLearningTask({
+          id,
+          learnerId: 'learner-1',
+          specification: taskSpecification,
+          generated,
+          issuedAt: at.planned,
+        });
+      };
+      const taskA = makeTask('task-new-a', newA);
+      const taskB = makeTask('task-new-b', newB);
+      const state: Model.LearningState = {
+        ...initialized.state,
+        learners: [{ ...initialized.state.learners[0], dailyTaskCapacity: 2 }],
+        knowledgePoints: [newA, newB, review],
+        goalKnowledgePoints: [newA, newB, review].map((knowledgePoint) => ({
+          ...initialized.state.goalKnowledgePoints[0],
+          knowledgePointId: knowledgePoint.id,
+        })),
+        learnerKnowledgePoints: [
+          unstartedLearning(newA.id),
+          unstartedLearning(newB.id),
+          reviewLearning,
+        ],
+        studyPlans: [{
+          id: 'plan-1',
+          learnerId: 'learner-1',
+          date: '2026-11-12',
+          taskCapacity: 2,
+          taskIds: [taskA.id, taskB.id],
+          createdAt: at.planned,
+          updatedAt: at.planned,
+        }],
+        tasks: [taskA, taskB],
+      };
+      return { state, newA, newB, review, taskA, taskB };
+    }
+
+    function settleChoiceAnswer(state: Model.LearningState, task: Model.LearningTask, selectedOptionId: string) {
+      const received = Domain.recordTaskAttempt(state, {
+        attemptId: `attempt-${task.id}`,
+        taskId: task.id,
+        submission: { task: 'RETRIEVE', stage: 'choice', selectedOptionId },
+        validity: { elapsedMs: 5000, interrupted: false },
+        receivedAt: at.judged,
+      });
+      const judging = Domain.startTaskAttemptJudging(received.state, { attemptId: received.attempt.id });
+      const judgement = Domain.judgeTask({
+        task,
+        submission: received.attempt.submission,
+        judgedAt: at.judged,
+      });
+      return Domain.settleTaskAttempt(judging.state, {
+        attemptId: judging.attempt.id,
+        judgement,
+        now: at.judged,
+      });
+    }
+
+    test('答错产生到期复习时取消尚未开始的新词任务', () => {
+      const { state, newA, newB, review, taskA, taskB } = buildReplanState(at.planned);
+      const settled = settleChoiceAnswer(state, taskA, 'b');
+      expect(settled.attempt.judgement.dimensions.R?.outcome).toBe('incorrect');
+      expect(validateLearningState(settled.state)).toEqual([]);
+
+      const decision = Domain.planDailyStudy(settled.state, {
+        learnerId: 'learner-1',
+        date: '2026-11-12',
+        now: at.judged,
+      });
+      expect(decision.tasks).toEqual([
+        {
+          source: 'new',
+          specification: { goalId: 'goal-1', wordId: review.id, task: 'RETRIEVE', axis: 'R', stage: 'free' },
+        },
+        {
+          source: 'new',
+          specification: { goalId: 'goal-1', wordId: newA.id, task: 'RETRIEVE', axis: 'R', stage: 'choice' },
+        },
+      ]);
+      expect(decision.cancelTaskIds).toEqual([taskB.id]);
+
+      const knowledgePoints = new Map([newA, newB, review].map((item) => [item.id, item]));
+      const newTasks = decision.tasks.map((position, index) => {
+        if (position.source !== 'new') throw new Error('Expected a new task');
+        const knowledgePoint = knowledgePoints.get(position.specification.wordId)!;
+        const generated = Domain.generateLearningTask({
+          specification: position.specification,
+          knowledgePoint,
+          sourceMaterials: state.materials,
+        });
+        return Domain.createLearningTask({
+          id: `task-replanned-${index}`,
+          learnerId: 'learner-1',
+          specification: position.specification,
+          generated,
+          issuedAt: at.judged,
+        });
+      });
+      const replanned = Domain.applyDailyStudyDecision(settled.state, {
+        decision,
+        newTasks,
+        now: at.judged,
+      });
+      expect(replanned.tasks.find((task) => task.id === taskB.id)?.status).toBe('cancelled');
+      expect(replanned.studyPlans[0].taskIds).toEqual(['task-replanned-0', 'task-replanned-1']);
+      expect(validateLearningState(replanned)).toEqual([]);
+    });
+
+    test('答对后不产生当天重试并保留其他新词任务', () => {
+      const { state, taskA, taskB } = buildReplanState();
+      const settled = settleChoiceAnswer(state, taskA, 'a');
+      expect(settled.attempt.judgement.dimensions.R?.outcome).toBe('correct');
+
+      const decision = Domain.planDailyStudy(settled.state, {
+        learnerId: 'learner-1',
+        date: '2026-11-12',
+        now: at.judged,
+      });
+      expect(decision.tasks).toEqual([{ source: 'existing', taskId: taskB.id }]);
+      expect(decision.cancelTaskIds).toEqual([]);
+    });
+  });
+
   describe('新词未来容量准入', () => {
     const planInput = {
       learnerId: 'learner-1',

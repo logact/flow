@@ -1028,11 +1028,21 @@ export function planDailyStudy(
       expireTaskIds.push(task.id);
     }
   }
+  const hasLearningEvidence = (learning: LearnerKnowledgePoint | null): boolean => Boolean(learning
+    && (learning.dimensions.R.review.lastReviewedAt !== null
+      || learning.dimensions.P.review.lastReviewedAt !== null));
   const occupied = new Set<string>();
+  const deferredNewTasks: LearningTask[] = [];
   if (currentPlan) {
     for (const id of currentPlan.taskIds) {
       const task = state.tasks.find((item) => item.id === id);
       if (!task || task.status !== 'issued' || !isEligible(task)) continue;
+      const learning = state.learnerKnowledgePoints.find((item) => item.learnerId === learner.id
+        && item.knowledgePointId === task.content.wordId) ?? null;
+      if (!hasLearningEvidence(learning)) {
+        deferredNewTasks.push(task);
+        continue;
+      }
       if (tasks.length >= learner.dailyTaskCapacity) {
         cancelTaskIds.push(id);
         continue;
@@ -1062,6 +1072,7 @@ export function planDailyStudy(
     specification: TaskSpecification;
     dueAt: number;
     isNew: boolean;
+    isNewWord: boolean;
     scope: (typeof scopes)[number];
   }> = [];
   for (const scope of scopes) {
@@ -1084,16 +1095,37 @@ export function planDailyStudy(
       ? Math.min(...(['R', 'P'] as FluencyDimension[]).map((dimension) =>
         Date.parse(learning.dimensions[dimension].review.dueAt)))
       : Number.POSITIVE_INFINITY;
-    candidates.push({ specification, dueAt, isNew: learning === null, scope });
+    candidates.push({
+      specification,
+      dueAt,
+      isNew: learning === null,
+      isNewWord: !hasLearningEvidence(learning),
+      scope,
+    });
   }
-  candidates.sort((a, b) => Number(a.isNew) - Number(b.isNew)
+  candidates.sort((a, b) => Number(a.isNewWord) - Number(b.isNewWord)
     || a.dueAt - b.dueAt
     || a.specification.goalId.localeCompare(b.specification.goalId)
     || a.specification.wordId.localeCompare(b.specification.wordId));
+  const deferredKeys = new Set(deferredNewTasks.map((task) => taskSpecificationKey(task.goalId, task.content)));
+  let deferredRetained = false;
+  const retainDeferredNewTasks = (): void => {
+    if (deferredRetained) return;
+    deferredRetained = true;
+    for (const task of deferredNewTasks) {
+      if (tasks.length >= learner.dailyTaskCapacity) {
+        cancelTaskIds.push(task.id);
+        continue;
+      }
+      tasks.push({ source: 'existing', taskId: task.id });
+      occupied.add(taskSpecificationKey(task.goalId, task.content));
+    }
+  };
   for (const candidate of candidates) {
-    if (tasks.length >= learner.dailyTaskCapacity) break;
     const key = taskSpecificationKey(candidate.specification.goalId, candidate.specification);
-    if (occupied.has(key)) continue;
+    if (deferredKeys.has(key) || occupied.has(key)) continue;
+    if (candidate.isNewWord) retainDeferredNewTasks();
+    if (tasks.length >= learner.dailyTaskCapacity) break;
     if (candidate.isNew) {
       const { goal, knowledgePoint } = candidate.scope;
       const proposedDemand = mergeCapacityDemand(futureDemand, forecastSuccessfulPath(
@@ -1110,6 +1142,7 @@ export function planDailyStudy(
     occupied.add(key);
     tasks.push({ source: 'new', specification: candidate.specification });
   }
+  retainDeferredNewTasks();
   return {
     learnerId: learner.id,
     date: input.date,
