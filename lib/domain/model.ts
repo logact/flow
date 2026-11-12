@@ -84,8 +84,14 @@ interface VocabularyAssessmentBase {
 
 export type VocabularyAssessment = VocabularyAssessmentBase & (
   | {
-      /** 尚未完成的测评没有结果和完成时间。 */
-      status: 'draft' | 'in_progress';
+      /** 草稿测评没有结果和完成时间。 */
+      status: 'draft';
+      result: null;
+      completedAt: null;
+    }
+  | {
+      /** 进行中的测评没有结果和完成时间。 */
+      status: 'in_progress';
       result: null;
       completedAt: null;
     }
@@ -796,6 +802,8 @@ export interface DimensionJudgement {
 
 /** 对一次任务作答的完整评判结果。 */
 export interface TaskJudgement {
+  /** 被评判的任务 ID，用于异步评判和结算时核对归属。 */
+  taskId: string;
   /** 任务实际考察的各流利度维度的评判结果。 */
   dimensions: Partial<Record<FluencyDimension, DimensionJudgement>>;
   /** 返回给学习者的反馈；没有反馈时为空。 */
@@ -862,7 +870,13 @@ interface TaskAttemptBase {
 /** 学习者对一份已下发任务提交的首次作答及其处理状态。 */
 export type TaskAttempt = TaskAttemptBase & (
   | {
-      status: 'received' | 'judging';
+      status: 'received';
+      judgement: null;
+      settlement: null;
+      statusReason: null;
+    }
+  | {
+      status: 'judging';
       judgement: null;
       settlement: null;
       statusReason: null;

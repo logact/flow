@@ -211,6 +211,9 @@ function checkAttempt(
   if (attempt.status === 'settled' && task.status !== 'completed') {
     issues.push(`${path} 已结算时任务必须为 completed`);
   }
+  if (attempt.status === 'settled' && attempt.judgement.taskId !== task.id) {
+    issues.push(`${path}.judgement.taskId 与作答任务不一致`);
+  }
   if (attempt.status === 'settled' && attempt.validity.interrupted) {
     issues.push(`${path} 中断的作答不能结算`);
   }
