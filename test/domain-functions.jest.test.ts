@@ -64,7 +64,7 @@ function buildInitializedState() {
     assessment,
     task: assessmentTasks[0],
     previousAttempts: [],
-    selectedOptionId: 'b',
+    known: false,
     answeredAt: at.answered,
   });
   const completed = Domain.completeVocabularyAssessment({
@@ -227,12 +227,16 @@ describe('真实领域函数', () => {
     expect(decision.tasks).toEqual([]);
   });
 
-  test('公开视图脱敏，重复定级作答和中断学习作答不会进入评判', () => {
+  test('公开自评视图脱敏，重复定级作答和中断学习作答不会进入评判', () => {
     const { state } = buildInitializedState();
     const assessmentTask = state.vocabularyAssessmentTasks[0];
     const publicAssessment = Domain.toLearnerVocabularyAssessmentTask(assessmentTask);
-    expect(publicAssessment).not.toHaveProperty('answerOptionId');
-    expect(publicAssessment).not.toHaveProperty('knowledgePoint');
+    expect(publicAssessment).toEqual({
+      id: assessmentTask.id,
+      band: assessmentTask.band,
+      knowledgePointId: assessmentTask.knowledgePoint.id,
+      lemma: assessmentTask.knowledgePoint.lemma,
+    });
     const assessment: Extract<Model.VocabularyAssessment, { status: 'in_progress' }> = {
       ...state.vocabularyAssessments[0],
       status: 'in_progress',
@@ -244,7 +248,7 @@ describe('真实领域函数', () => {
       assessment,
       task: assessmentTask,
       previousAttempts: state.vocabularyAssessmentAttempts,
-      selectedOptionId: 'a',
+      known: true,
       answeredAt: at.answered,
     })).toThrow('already been answered');
 
@@ -879,7 +883,7 @@ describe('真实领域函数', () => {
         band: '1k',
         wordFamilyCount: 1000,
         sampleCount: 1,
-        correctCount: 1,
+        knownCount: 1,
         knownProbability: 1,
         interval: null,
       };

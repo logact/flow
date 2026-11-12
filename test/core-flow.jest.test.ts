@@ -59,12 +59,6 @@ const assessmentTask: Model.VocabularyAssessmentTask = {
   id: 'assessment-task-1',
   band: assessmentSample.band,
   knowledgePoint,
-  context: 'I run every morning.',
-  options: [
-    { id: 'a', text: '快速移动' },
-    { id: 'b', text: '保持静止' },
-  ],
-  answerOptionId: 'a',
 };
 
 const publicAssessmentTask: Model.LearnerVocabularyAssessmentTask = {
@@ -72,8 +66,6 @@ const publicAssessmentTask: Model.LearnerVocabularyAssessmentTask = {
   band: assessmentTask.band,
   knowledgePointId: knowledgePoint.id,
   lemma: assessmentTask.knowledgePoint.lemma,
-  context: assessmentTask.context,
-  options: assessmentTask.options,
 };
 
 const vocabulary: Model.VocabularyEstimate = {
@@ -83,7 +75,7 @@ const vocabulary: Model.VocabularyEstimate = {
     wordFamilyCount: 2000,
     knownProbability: 0.8,
     sampleCount: 1,
-    correctCount: 1,
+    knownCount: 1,
     interval: null,
   }],
   estimatedAt: at.assessed,
@@ -118,8 +110,7 @@ const assessmentAttempt: Model.VocabularyAssessmentAttempt = {
   id: 'assessment-attempt-1',
   assessmentId: inProgressAssessment.id,
   taskId: assessmentTask.id,
-  selectedOptionId: 'a',
-  isCorrect: true,
+  known: true,
   answeredAt: at.assessed,
 };
 
@@ -423,7 +414,7 @@ const stateAfterSettlement: Model.LearningState = {
 describe('核心流程接口契约模拟', () => {
   /**
    * 测试 1：完整主流程，位于当前 test 块。
-   * 路径：创建学习者 → 词表分层抽样 → 生成评级题 → 创建测评 → 材料分析 →
+   * 路径：创建学习者 → 词表分层抽样 → 生成自评任务 → 创建测评 → 材料分析 →
    * 目标选词 → 初始化 → 排期 → 生成日常任务 → 校验与下发 → received → judging → 评判 → settled → 次日复习。
    * 确认：接口输入输出可衔接，模拟公开视图不含答案，各阶段预置状态通过真实约束校验。
    * 不确认：抽样、题目生成、定级、分析、排期、评判、结算等业务算法；这些函数均为桩。
@@ -509,7 +500,7 @@ describe('核心流程接口契约模拟', () => {
       sampleCounts: { '2k': 1 },
       seed: 'assessment-fixture-seed',
     });
-    // 3. 为样本分配任务 ID，并生成服务端评级题；这里只模拟生成器的返回契约。
+    // 3. 为样本分配任务 ID，并生成服务端自评任务；这里只模拟生成器的返回契约。
     const generatedAssessmentTasks = generateAssessmentTasks({
       samples,
       taskIds: [assessmentTask.id],
@@ -521,17 +512,17 @@ describe('核心流程接口契约模拟', () => {
       tasks: generatedAssessmentTasks,
       now: at.created,
     });
-    // 5. 生成题转换为公开视图，作答和完成测评也都使用同一道生成题。
+    // 5. 生成自评任务并转换为公开视图，自评和完成测评都使用同一项任务。
     const learnerAssessmentTask = toAssessmentView(generatedAssessmentTasks[0]);
     const vocabularyAttempt = recordAssessment({
       attemptId: assessmentAttempt.id,
       assessment,
       task: generatedAssessmentTasks[0],
       previousAttempts: [],
-      selectedOptionId: 'a',
+      known: true,
       answeredAt: at.assessed,
     });
-    // 6. 作答结果进入测评完成接口，产出词汇估计和更新后的学习者。
+    // 6. 自评结果进入测评完成接口，产出词汇估计和更新后的学习者。
     const assessmentResult = completeAssessment({
       learner,
       assessment,
@@ -602,7 +593,8 @@ describe('核心流程接口契约模拟', () => {
     // 生成器必须消费抽样结果，创建测评必须消费生成器输出。
     expect(generateAssessmentTasks).toHaveBeenCalledWith({ samples, taskIds: [assessmentTask.id] });
     expect(createAssessment).toHaveBeenCalledWith(expect.objectContaining({ tasks: generatedAssessmentTasks }));
-    // 公开定级题不能包含正确答案或服务端完整知识点。
+    // 公开自评任务只呈现词汇，不包含选项、正确答案或服务端完整知识点。
+    expect(learnerAssessmentTask).not.toHaveProperty('options');
     expect(learnerAssessmentTask).not.toHaveProperty('answerOptionId');
     expect(learnerAssessmentTask).not.toHaveProperty('knowledgePoint');
     expect(selected).toBe(includedCandidate);

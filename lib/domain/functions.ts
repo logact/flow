@@ -162,7 +162,6 @@ export function generateVocabularyAssessmentTasks(
     const taskId = input.taskIds[index];
     requireText(taskId, 'taskId');
     requireText(sample.lemma, 'sample.lemma');
-    const definition = `The meaning of ${sample.lemma}`;
     return {
       id: taskId,
       band: sample.band,
@@ -173,17 +172,11 @@ export function generateVocabularyAssessmentTasks(
         wordFamily: sample.wordFamily,
         sense: {
           id: `assessment-sense:${sample.familyId}`,
-          definition,
+          definition: `The meaning of ${sample.lemma}`,
           partOfSpeech: null,
           explanation: null,
         },
       },
-      context: `Choose the meaning of “${sample.lemma}”.`,
-      options: [
-        { id: 'a', text: definition },
-        { id: 'b', text: 'An unrelated meaning' },
-      ],
-      answerOptionId: 'a',
     };
   });
 }
@@ -222,8 +215,6 @@ export function toLearnerVocabularyAssessmentTask(
     band: task.band,
     knowledgePointId: task.knowledgePoint.id,
     lemma: task.knowledgePoint.lemma,
-    context: task.context,
-    options: task.options.map((option) => ({ ...option })),
   };
 }
 
@@ -232,7 +223,7 @@ export interface RecordVocabularyAssessmentAttemptInput {
   assessment: VocabularyAssessment;
   task: VocabularyAssessmentTask;
   previousAttempts: VocabularyAssessmentAttempt[];
-  selectedOptionId: string;
+  known: boolean;
   answeredAt: ISODateTime;
 }
 
@@ -248,16 +239,13 @@ export function recordVocabularyAssessmentAttempt(
     && attempt.taskId === input.task.id)) {
     throw new Error(`Task has already been answered: ${input.task.id}`);
   }
-  if (!input.task.options.some((option) => option.id === input.selectedOptionId)) {
-    throw new RangeError(`Unknown option: ${input.selectedOptionId}`);
-  }
+  if (typeof input.known !== 'boolean') throw new RangeError('known must be a boolean');
   assertDateTime(input.answeredAt, 'answeredAt');
   return {
     id: input.attemptId,
     assessmentId: input.assessment.id,
     taskId: input.task.id,
-    selectedOptionId: input.selectedOptionId,
-    isCorrect: input.selectedOptionId === input.task.answerOptionId,
+    known: input.known,
     answeredAt: input.answeredAt,
   };
 }
@@ -288,25 +276,23 @@ export function estimateVocabulary(input: EstimateVocabularyInput): VocabularyEs
     assertUnique(evidence.tasks.map((task) => task.id), `task IDs for ${evidence.band}`);
     assertUnique(evidence.attempts.map((attempt) => attempt.taskId), `attempt task IDs for ${evidence.band}`);
     const attempts = new Map(evidence.attempts.map((attempt) => [attempt.taskId, attempt]));
-    let correctCount = 0;
+    let knownCount = 0;
     for (const task of evidence.tasks) {
       if (task.band !== evidence.band) throw new Error(`Task ${task.id} belongs to another band`);
       const attempt = attempts.get(task.id);
       if (!attempt) throw new Error(`Missing attempt for task ${task.id}`);
-      if (attempt.isCorrect !== (attempt.selectedOptionId === task.answerOptionId)) {
-        throw new Error(`Attempt correctness does not match task ${task.id}`);
-      }
-      if (attempt.isCorrect) correctCount++;
+      if (typeof attempt.known !== 'boolean') throw new Error(`Attempt self-report is invalid for task ${task.id}`);
+      if (attempt.known) knownCount++;
     }
     if (attempts.size !== evidence.tasks.length) throw new Error(`Unexpected attempts for ${evidence.band}`);
     const sampleCount = evidence.tasks.length;
     return {
       band: evidence.band,
       wordFamilyCount: evidence.wordFamilyCount,
-      knownProbability: sampleCount === 0 ? 0 : correctCount / sampleCount,
+      knownProbability: sampleCount === 0 ? 0 : knownCount / sampleCount,
       sampleCount,
-      correctCount,
-      interval: sampleCount === 0 ? null : wilsonInterval(correctCount, sampleCount),
+      knownCount,
+      interval: sampleCount === 0 ? null : wilsonInterval(knownCount, sampleCount),
     };
   });
   return { list: { ...input.list }, bands, estimatedAt: input.estimatedAt };
@@ -1594,9 +1580,9 @@ export function updateVocabularyEstimate(input: UpdateVocabularyEstimateInput): 
   const judgement = input.judgement.dimensions.R ?? input.judgement.dimensions.P;
   if (!band || !judgement) return after;
   band.sampleCount++;
-  if (judgement.outcome === 'correct') band.correctCount++;
-  band.knownProbability = band.correctCount / band.sampleCount;
-  band.interval = wilsonInterval(band.correctCount, band.sampleCount);
+  if (judgement.outcome === 'correct') band.knownCount++;
+  band.knownProbability = band.knownCount / band.sampleCount;
+  band.interval = wilsonInterval(band.knownCount, band.sampleCount);
   return after;
 }
 

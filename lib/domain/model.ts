@@ -38,8 +38,8 @@ export interface VocabularyBandEstimate {
   knownProbability: number;
   /** 本次估计实际使用的测试词族数量。 */
   sampleCount: number;
-  /** 测试样本中回答正确的词族数量。 */
-  correctCount: number;
+  /** 样本中被估计为认识的词族数量；首次定级时来自学习者自报。 */
+  knownCount: number;
   /** 掌握概率的不确定区间；无法可靠计算时为空。 */
   interval: ProbabilityInterval | null;
 }
@@ -159,15 +159,7 @@ export interface KnowledgePointVocabularyClassification {
   band: VocabularyBand;
 }
 
-/** 词汇评级选择题的一个选项。 */
-export interface VocabularyAssessmentOption {
-  /** 选项稳定标识，例如 a、b、c、d。 */
-  id: string;
-  /** 选项中的释义或翻译。 */
-  text: string;
-}
-
-/** 词汇评级使用的独立选择题，只测量理解维度，不属于日常学习任务。 */
+/** 用于词汇自评的独立任务，只呈现词汇，不提供释义或正确答案。 */
 export interface VocabularyAssessmentTask {
   /** 评级任务标识。 */
   id: string;
@@ -175,15 +167,9 @@ export interface VocabularyAssessmentTask {
   band: VocabularyBand;
   /** 被测的词汇知识点及词义，仅保存在服务端。 */
   knowledgePoint: VocabularyKnowledgePoint;
-  /** 不提供定义提示的简单原文语境，用于限定词性和词义。 */
-  context: string;
-  /** 可供学习者选择的释义选项。 */
-  options: VocabularyAssessmentOption[];
-  /** 正确选项 ID，仅供服务端判分，不下发给学习者。 */
-  answerOptionId: string;
 }
 
-/** 可安全返回给学习者的词汇评级题，不包含词义、答案和服务端解释。 */
+/** 可安全返回给学习者的词汇自评任务，不包含服务端词义。 */
 export interface LearnerVocabularyAssessmentTask {
   /** 评级任务标识。 */
   id: string;
@@ -191,27 +177,21 @@ export interface LearnerVocabularyAssessmentTask {
   band: VocabularyBand;
   /** 被测词汇知识点 ID。 */
   knowledgePointId: string;
-  /** 被测词汇的词元。 */
+  /** 需要学习者自评是否认识的词元。 */
   lemma: string;
-  /** 不提供定义提示的简单原文语境。 */
-  context: string;
-  /** 可供学习者选择的释义选项。 */
-  options: VocabularyAssessmentOption[];
 }
 
-/** 学习者对一道词汇评级题提交的答案及判分结果。 */
+/** 学习者对一个词汇是否认识的自评记录。 */
 export interface VocabularyAssessmentAttempt {
   /** 作答记录标识，也可作为提交幂等键。 */
   id: string;
   /** 本次作答所属的词汇测评 ID。 */
   assessmentId: string;
-  /** 被回答的词汇评级任务 ID。 */
+  /** 被自评的词汇评级任务 ID。 */
   taskId: string;
-  /** 学习者选择的选项 ID。 */
-  selectedOptionId: string;
-  /** 所选选项是否为本题正确答案。 */
-  isCorrect: boolean;
-  /** 学习者提交本题答案的时间。 */
+  /** 学习者自报是否认识该词汇。 */
+  known: boolean;
+  /** 学习者提交自评的时间。 */
   answeredAt: ISODateTime;
 }
 
@@ -910,9 +890,9 @@ export interface LearningState {
   learners: Learner[];
   /** 全部词汇测评记录。 */
   vocabularyAssessments: VocabularyAssessment[];
-  /** 全部独立词汇评级任务。 */
+  /** 全部独立词汇自评任务。 */
   vocabularyAssessmentTasks: VocabularyAssessmentTask[];
-  /** 全部词汇评级题的作答及判分记录。 */
+  /** 全部词汇是否认识的自评记录。 */
   vocabularyAssessmentAttempts: VocabularyAssessmentAttempt[];
   /** 全部已导入材料。 */
   materials: Material[];

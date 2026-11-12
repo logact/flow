@@ -49,7 +49,17 @@ core logic
 - 返回保存后的 `Learner`；新学习者的 `currentVocabulary = null`。
 - 更新容量不直接重写历史计划；下一次执行 S07～S09 时才应用新容量并处理任务取消。
 
-### S02：开始词汇定级
+### AI Provider 统一配置
+
+后续 S04、S08、S11 使用的 AI Provider 需要支持 OpenAI、DeepSeek、Kimi；API key、baseURL、model 通过环境变量读取，默认使用 DeepSeek。AI Provider 由应用层/基础设施层实现，API 密钥、超时和重试不进入 Domain。
+
+```bash
+export LLM_API_KEY=
+export LLM_BASE_URL=https://api.deepseek.com
+export LLM_MODEL=deepseek-chat
+```
+
+### S02：开始词汇自评定级
 
 **输入**
 
@@ -59,41 +69,33 @@ core logic
 
 1. 加载学习者，通过词表 Repository 读取指定版本的词族。
 2. 调用 `sampleVocabularyForAssessment` 得到样本。
-3. **应用层调用 AI Provider，根据样本生成语境、选项和正确答案，组装服务端 `VocabularyAssessmentTask[]`。Domain 不直接调用 AI；当前 `generateVocabularyAssessmentTasks` 只是本地规则生成路径，不代表本用例的 AI 生成路径。**
-4. 应用层校验 AI 输出的题目结构、选项 ID 和正确答案引用，再调用 `createVocabularyAssessment` 创建进行中的测评。
-5. 在同一写入中保存测评及全部评级题。
-6. AI Provider 需要支持多种供应商 OpenAI、DeepSeek、Kimi；API key、baseURL、model 通过环境变量读取，默认使用 DeepSeek：
-
-   ```bash
-   export LLM_API_KEY=
-   export LLM_BASE_URL=https://api.deepseek.com
-   export LLM_MODEL=deepseek-chat
-   ```
+3. 调用 `generateVocabularyAssessmentTasks` 为样本创建词汇自评任务；任务只包含被测词汇，不生成语境、释义选项或正确答案，也不调用 AI。
+4. 调用 `createVocabularyAssessment` 创建进行中的测评。
+5. 在同一写入中保存测评及全部自评任务。
 
 **输出与边界**
 
-- 返回 `assessmentId` 和按顺序执行 `toLearnerVocabularyAssessmentTask` 得到的公开题。
-- AI 请求、输出解析或结构校验失败时，不保存半成品测评；公开响应不包含答案和服务端词义。
-- AI Provider 由应用层/基础设施层实现，API 密钥、超时和重试不进入 Domain。
+- 返回 `assessmentId` 和按顺序执行 `toLearnerVocabularyAssessmentTask` 得到的公开任务；每项只呈现 `lemma` 等自评所需信息。
+- 公开响应不包含服务端词义、选项或正确答案；界面提供“认识 / 不认识”两种自评操作。
 
-### S03：提交定级答案并完成测评
+### S03：提交词汇自评并完成测评
 
 **输入**
 
-`assessmentId`、`taskId`、`attemptId`、`selectedOptionId`、`answeredAt`，以及完成测评所需的 `list` 和各词段词族总数。
+`assessmentId`、`taskId`、`attemptId`、`known: boolean`、`answeredAt`，以及完成测评所需的 `list` 和各词段词族总数。
 
 **应用层编排**
 
-1. 加载学习者、测评、当前评级题和已有评级作答。
+1. 加载学习者、测评、当前自评任务和已有自评记录。
 2. 若 `attemptId` 已存在，返回已有结果，不重复追加。
-3. 调用 `recordVocabularyAssessmentAttempt` 评判并记录当前题。
-4. 保存本次评级作答；若仍有未作答题，测评保持 `in_progress` 并结束本次用例。
-5. 若全部题目已完成，调用 `completeVocabularyAssessment`。
-6. 在同一写入中保存最后一条作答、已完成测评和更新后的学习者。
+3. 调用 `recordVocabularyAssessmentAttempt` 原样记录学习者的 `known` 自评，不进行客观对错判定。
+4. 保存本次自评；若仍有未自评词汇，测评保持 `in_progress` 并结束本次用例。
+5. 若全部词汇已自评，调用 `completeVocabularyAssessment`，按各词段 `knownCount / sampleCount` 估计掌握概率并计算 Wilson 区间。
+6. 在同一写入中保存最后一条自评、已完成测评和更新后的学习者。
 
 **输出与边界**
 
-- 未完成时返回测评进度；完成时返回 `VocabularyEstimate`。
+- 未完成时返回测评进度；完成时返回 `VocabularyEstimate`，各词段证据使用 `knownCount`，不再使用 `correctCount`。
 - 测评未完成时不能向 S06 提供伪造的词汇估计。
 
 ### S04：导入并分析材料
@@ -189,7 +191,7 @@ core logic
 2. **应用层调用 AI Provider，根据 `TaskSpecification`、知识点和 `sourceMaterials` 生成 `GeneratedTask`。Domain 不直接调用 AI；当前 `generateLearningTask` 是本地模板生成路径，不代替本用例的 AI 生成路径。**
 3. 应用层解析 AI 输出后调用 `validateGeneratedTask`，核对任务类型、知识点、R/P 维度和提取阶段。
 4. 校验通过后调用 `createLearningTask`，生成服务端完整 `LearningTask`。
-5. AI 生成使用 S02 所述的统一多供应商配置；外部调用期间不持有数据库事务。
+5. AI 生成使用 AI Provider 统一配置；外部调用期间不持有数据库事务。
 
 **输出与边界**
 
@@ -249,7 +251,7 @@ core logic
 2. 若已经 `settled`，返回已有结果；若处于 `received`，调用 `startTaskAttemptJudging` 并保存 `judging` 状态。
 3. 选择题及其他答案完全确定的题目调用 Domain `judgeTask` 进行规则评判。
 4. **需要语义判断的非选择题由应用层调用 AI Provider 评判，包括 `RETRIEVE` 的 `cued/free`、阅读 `free` 问题和 P 场景表达。应用层将原始 `submission`、题目、答案或评分要求交给 AI，并把结果构造为 `judgedBy = 'ai'` 的 `TaskJudgement`；Domain `judgeTask` 不负责发起 AI 请求。**
-5. AI 评判使用 S02 所述的统一多供应商配置。应用层校验 `taskId`、评判维度、结果结构和 `judgedAt`，再调用 `settleTaskAttempt`。
+5. AI 评判使用 AI Provider 统一配置。应用层校验 `taskId`、评判维度、结果结构和 `judgedAt`，再调用 `settleTaskAttempt`。
 6. 在同一写入中保存结算返回的完整状态。
 
 **输出与边界**
@@ -296,8 +298,8 @@ core logic
 | 步骤 | 应用用例 | 应用层动作 | 产物 |
 | --- | --- | --- | --- |
 | 1 | S01 | 创建小林，容量设为 5 | 持久化 `Learner` |
-| 2 | S02 | 读取词表、抽样，**由应用层调用 AI 生成评级题**并保存测评 | 测评及服务端评级题 |
-| 3 | S03 | 提交全部定级答案并完成测评 | 完成的测评、评级作答、`currentVocabulary = V0` |
+| 2 | S02 | 读取词表、抽样，创建不含选项和答案的词汇自评任务并保存测评 | 测评及服务端自评任务 |
+| 3 | S03 | 提交全部 `known` 自评并完成测评 | 完成的测评、自评记录、`currentVocabulary = V0` |
 | 4 | S04 | 提取材料文本并完成分析 | `Material`、`MaterialAnalysis` |
 | 5 | S05 | 创建目标并加入固定分析版本 | 目标、材料关联、候选和来源 |
 | 6 | S06 | 纳入四个重点候选并初始化 | 选择结果、四条学习状态 |
@@ -315,7 +317,7 @@ core logic
 
 1. 同一套用例契约可以先在内存 Repository 上运行，再切换到 SQLite Repository 运行，不需要修改用例流程。
 2. 每个写用例只使用前序用例持久化后的 ID 和状态，不依赖内存对象引用；每次写入后重新加载，`validateLearningState` 不返回约束错误。
-3. S02、S04、S08 的外部能力失败时，不出现部分写入的测评、分析或每日计划。
+3. S04、S08 的外部能力失败时，不出现部分写入的分析或每日计划；S02 不调用外部 AI，只保存完整的自评任务和测评。
 4. S07 不创建任务或计划；S08 不持久化孤立任务；只有 S09 能将完整计划和任务集合一起写入。
 5. S10 重试使用同一 `attemptId` 不会增加首次作答；S11 重试不会重复结算。
 6. 五项任务结算后均为 `completed`，答错项也保留真实评判；流利度、复习计划和词汇估计来自各自结算快照。

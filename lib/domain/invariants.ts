@@ -117,9 +117,9 @@ function checkVocabularyEstimate(
       issues.push(`${bandPath}.wordFamilyCount 必须是正整数`);
     }
     if (!isNonNegativeInteger(band.sampleCount)) issues.push(`${bandPath}.sampleCount 必须是非负整数`);
-    if (!isNonNegativeInteger(band.correctCount)) issues.push(`${bandPath}.correctCount 必须是非负整数`);
-    if (band.correctCount > band.sampleCount || band.sampleCount > band.wordFamilyCount) {
-      issues.push(`${bandPath} 必须满足 correctCount <= sampleCount <= wordFamilyCount`);
+    if (!isNonNegativeInteger(band.knownCount)) issues.push(`${bandPath}.knownCount 必须是非负整数`);
+    if (band.knownCount > band.sampleCount || band.sampleCount > band.wordFamilyCount) {
+      issues.push(`${bandPath} 必须满足 knownCount <= sampleCount <= wordFamilyCount`);
     }
     if (!isProbability(band.knownProbability)) issues.push(`${bandPath}.knownProbability 必须在 0～1 之间`);
     if (band.interval !== null) {
@@ -342,10 +342,6 @@ export function validateLearningState(state: LearningState): string[] {
   state.vocabularyAssessmentTasks.forEach((task, index) => {
     const path = `vocabularyAssessmentTasks[${index}]`;
     if (!isVocabularyBand(task.band)) issues.push(`${path}.band 不是有效词频段`);
-    checkOptionIds(task.options, `${path}.options`, issues);
-    if (!task.options.some((option) => option.id === task.answerOptionId)) {
-      issues.push(`${path}.answerOptionId 不在选项中`);
-    }
   });
 
   state.vocabularyAssessments.forEach((assessment, index) => {
@@ -375,15 +371,8 @@ export function validateLearningState(state: LearningState): string[] {
     } else if (!assessment.taskIds.includes(attempt.taskId)) {
       issues.push(`${path}.taskId 不属于该测评`);
     }
-    if (!task) {
-      issues.push(`${path}.taskId 引用了不存在的评级任务`);
-    } else {
-      const option = task.options.find((item) => item.id === attempt.selectedOptionId);
-      if (!option) issues.push(`${path}.selectedOptionId 不在选项中`);
-      if (attempt.isCorrect !== (attempt.selectedOptionId === task.answerOptionId)) {
-        issues.push(`${path}.isCorrect 与服务端答案不一致`);
-      }
-    }
+    if (!task) issues.push(`${path}.taskId 引用了不存在的评级任务`);
+    if (typeof attempt.known !== 'boolean') issues.push(`${path}.known 必须是布尔值`);
     checkDateTime(attempt.answeredAt, `${path}.answeredAt`, issues);
   });
 
