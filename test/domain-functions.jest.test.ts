@@ -977,4 +977,136 @@ describe('真实领域函数', () => {
       }]);
     });
   });
+
+  describe('同词族分散', () => {
+    function buildDuplicateWordState(otherCount: number, distinctFamilyWords = false) {
+      const initialized = buildInitializedState();
+      const originalLearning = initialized.state.learnerKnowledgePoints[0];
+      // 有学习证据且暂不到期：全部作为既有任务保留，不产生新规格。
+      const withEvidence = (knowledgePointId: string): Model.LearnerKnowledgePoint => ({
+        ...originalLearning,
+        knowledgePointId,
+        initialization: { ...originalLearning.initialization, classification: null },
+        dimensions: {
+          R: {
+            fluency: 19,
+            review: { ...originalLearning.dimensions.R.review, dueAt: at.nextDay, lastReviewedAt: at.answered },
+          },
+          P: {
+            fluency: 100,
+            review: {
+              ...originalLearning.dimensions.P.review,
+              dueAt: at.nextDay,
+              lastReviewedAt: at.answered,
+              graduated: true,
+            },
+          },
+        },
+      });
+      const dup = initialized.knowledgePoint;
+      // distinctFamilyWords 时第二道任务换成同族不同词（run → running），词族不变。
+      const dupB = distinctFamilyWords
+        ? { ...dup, id: 'kp-dup-b', lemma: 'running', sense: { ...dup.sense, id: 'sense-dup-b' } }
+        : dup;
+      // 垫档词分属不同词族，只有 dup/dupB 共享词族。
+      const others = Array.from({ length: otherCount }, (_, index) => ({
+        ...dup,
+        id: `kp-other-${index}`,
+        lemma: `other-${index}`,
+        wordFamily: `family-other-${index}`,
+        sense: { ...dup.sense, id: `sense-other-${index}` },
+      }));
+      const goalB: Model.LearningGoal = { ...initialized.state.goals[0], id: 'goal-2' };
+      const makeTask = (id: string, goalId: string, knowledgePoint: Model.KnowledgePoint): Model.LearningTask => {
+        const specification: Domain.TaskSpecification = {
+          goalId,
+          wordId: knowledgePoint.id,
+          task: 'RETRIEVE',
+          axis: 'R',
+          stage: 'choice',
+        };
+        const generated = Domain.generateLearningTask({
+          specification,
+          knowledgePoint,
+          sourceMaterials: [initialized.material],
+        });
+        return Domain.createLearningTask({
+          id,
+          learnerId: 'learner-1',
+          specification,
+          generated,
+          issuedAt: at.planned,
+        });
+      };
+      const taskDupA = makeTask('task-dup-a', 'goal-1', dup);
+      const taskDupB = makeTask('task-dup-b', 'goal-2', dupB);
+      const otherTasks = others.map((knowledgePoint, index) => makeTask(`task-other-${index}`, 'goal-1', knowledgePoint));
+      const allTasks = [taskDupA, taskDupB, ...otherTasks];
+      const state: Model.LearningState = {
+        ...initialized.state,
+        learners: [{ ...initialized.state.learners[0], dailyTaskCapacity: allTasks.length }],
+        goals: [initialized.state.goals[0], goalB],
+        knowledgePoints: distinctFamilyWords ? [dup, dupB, ...others] : [dup, ...others],
+        goalKnowledgePoints: [
+          ...initialized.state.goalKnowledgePoints,
+          { ...initialized.state.goalKnowledgePoints[0], goalId: 'goal-2', knowledgePointId: dupB.id },
+          ...others.map((knowledgePoint) => ({
+            ...initialized.state.goalKnowledgePoints[0],
+            knowledgePointId: knowledgePoint.id,
+          })),
+        ],
+        learnerKnowledgePoints: [
+          withEvidence(dup.id),
+          ...(distinctFamilyWords ? [withEvidence(dupB.id)] : []),
+          ...others.map((knowledgePoint) => withEvidence(knowledgePoint.id)),
+        ],
+        studyPlans: [{
+          id: 'plan-dup',
+          learnerId: 'learner-1',
+          date: '2026-11-12',
+          taskCapacity: allTasks.length,
+          taskIds: allTasks.map((task) => task.id),
+          createdAt: at.planned,
+          updatedAt: at.planned,
+        }],
+        tasks: allTasks,
+      };
+      return { state, taskDupA, taskDupB, otherTasks };
+    }
+
+    const planInput = { learnerId: 'learner-1', date: '2026-11-12', now: at.judged };
+    const existing = (taskId: string) => ({ source: 'existing', taskId }) as const;
+
+    test('同词两道任务拉开到至少 5 个其它任务之后', () => {
+      const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(5);
+      expect(validateLearningState(state)).toEqual([]);
+      const decision = Domain.planDailyStudy(state, planInput);
+      expect(decision.tasks).toEqual([
+        existing(taskDupA.id),
+        ...otherTasks.map((task) => existing(task.id)),
+        existing(taskDupB.id),
+      ]);
+    });
+
+    test('任务总数不足以拉开时保持原计划顺序', () => {
+      const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(4);
+      const decision = Domain.planDailyStudy(state, planInput);
+      expect(decision.tasks).toEqual([
+        existing(taskDupA.id),
+        existing(taskDupB.id),
+        ...otherTasks.map((task) => existing(task.id)),
+      ]);
+    });
+
+    test('同族不同词的任务同样拉开', () => {
+      const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(5, true);
+      expect(validateLearningState(state)).toEqual([]);
+      const decision = Domain.planDailyStudy(state, planInput);
+      expect(decision.tasks).toEqual([
+        existing(taskDupA.id),
+        ...otherTasks.map((task) => existing(task.id)),
+        existing(taskDupB.id),
+      ]);
+    });
+  });
 });

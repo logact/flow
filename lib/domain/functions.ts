@@ -1087,6 +1087,15 @@ export interface DailyStudyDecision {
   cancelTaskIds: string[];
 }
 
+/**
+ * S07：生成每日排期决策。纯函数，只产出暂态决策，不修改状态、不创建任务。
+ * 流程：① 清理已签发任务（范围失效的取消、历史日期的过期，既有任务不顺延）
+ * → ② 今日计划中的既有任务优先保留 → ③ 收集 active 目标 included 候选的下一任务规格
+ * → ④ 排序并填充新位置，其中新词需通过未来 42 天容量准入检查
+ * → ⑤ 同词族任务（无词族信息时按词本身）在不打破优先级顺序的前提下拉开位置间隔，
+ * 任务不足时保持原顺序。
+ * 到期复习与新词引入共用本决策：调用方只传新的 date/now，复习间隔不在此处计算。
+ */
 export function planDailyStudy(
   state: Readonly<LearningState>,
   input: PlanDailyStudyInput,
@@ -1102,12 +1111,14 @@ export function planDailyStudy(
   const currentIds = new Set(currentPlan?.taskIds ?? []);
   const oldTaskIds = new Set(state.studyPlans.filter((plan) => plan.learnerId === learner.id
     && plan.date < input.date).flatMap((plan) => plan.taskIds));
+  // 任务是否仍属于有效学习范围：目标 active 且候选 included。
   const isEligible = (task: LearningTask): boolean => {
     const goal = state.goals.find((item) => item.id === task.goalId);
     const candidate = state.goalKnowledgePoints.find((item) => item.goalId === task.goalId
       && item.knowledgePointId === task.content.wordId);
     return goal?.status === 'active' && candidate?.selection === 'included';
   };
+  // ① 清理已签发任务：范围失效的进取消；来自历史日期且不在今日计划中的进过期。
   for (const task of state.tasks.filter((item) => item.learnerId === learner.id && item.status === 'issued')) {
     if (!isEligible(task)) {
       cancelTaskIds.push(task.id);
@@ -1119,8 +1130,11 @@ export function planDailyStudy(
   const hasLearningEvidence = (learning: LearnerKnowledgePoint | null): boolean => Boolean(learning
     && (learning.dimensions.R.review.lastReviewedAt !== null
       || learning.dimensions.P.review.lastReviewedAt !== null));
+  // 已占用的规格键：既有任务落位后，同规格的新候选不再重复生成。
   const occupied = new Set<string>();
+  // 今日计划中尚无学习证据的任务先延迟，确认引入新词时再优先落位。
   const deferredNewTasks: LearningTask[] = [];
+  // ② 既有任务优先：按今日计划顺序保留；容量缩减时溢出部分由决策给出取消。
   if (currentPlan) {
     for (const id of currentPlan.taskIds) {
       const task = state.tasks.find((item) => item.id === id);
@@ -1139,6 +1153,7 @@ export function planDailyStudy(
       occupied.add(taskSpecificationKey(task.goalId, task.content));
     }
   }
+  // ③ 候选范围：所有 active 目标下 selection 为 included 的知识点。
   const scopes: Array<{
     goal: LearningGoal;
     candidate: GoalKnowledgePoint;
@@ -1155,6 +1170,7 @@ export function planDailyStudy(
       scopes.push({ goal, candidate, knowledgePoint, learning });
     }
   }
+  // 既有学习路径的全成功预测，构成新词准入的容量基线。
   let futureDemand = new Map<LocalDate, number>();
   const candidates: Array<{
     specification: TaskSpecification;
@@ -1191,11 +1207,13 @@ export function planDailyStudy(
       scope,
     });
   }
+  // ④ 排序：复习（有学习证据）优先于新词；再按到期时间、goalId、wordId 稳定排序。
   candidates.sort((a, b) => Number(a.isNewWord) - Number(b.isNewWord)
     || a.dueAt - b.dueAt
     || a.specification.goalId.localeCompare(b.specification.goalId)
     || a.specification.wordId.localeCompare(b.specification.wordId));
   const deferredKeys = new Set(deferredNewTasks.map((task) => taskSpecificationKey(task.goalId, task.content)));
+  // 延迟新任务只整体落位一次；容量不足时同样由决策给出取消。
   let deferredRetained = false;
   const retainDeferredNewTasks = (): void => {
     if (deferredRetained) return;
@@ -1209,12 +1227,14 @@ export function planDailyStudy(
       occupied.add(taskSpecificationKey(task.goalId, task.content));
     }
   };
+  // 按排序填充新位置；延迟新任务与已占用规格被跳过。
   for (const candidate of candidates) {
     const key = taskSpecificationKey(candidate.specification.goalId, candidate.specification);
     if (deferredKeys.has(key) || occupied.has(key)) continue;
     if (candidate.isNewWord) retainDeferredNewTasks();
     if (tasks.length >= learner.dailyTaskCapacity) break;
     if (candidate.isNew) {
+      // 新词准入：合并该词全成功路径后，任何未来日期超容量即停止引入（含后续新词）。
       const { goal, knowledgePoint } = candidate.scope;
       const proposedDemand = mergeCapacityDemand(futureDemand, forecastSuccessfulPath(
         goal,
@@ -1230,17 +1250,79 @@ export function planDailyStudy(
     occupied.add(key);
     tasks.push({ source: 'new', specification: candidate.specification });
   }
+  // 当天没有新词候选时，延迟新任务也要在此落位。
   retainDeferredNewTasks();
   return {
     learnerId: learner.id,
     date: input.date,
     taskCapacity: learner.dailyTaskCapacity,
-    tasks,
+    tasks: spreadSameWordTasks(tasks, (position) => plannedTaskGroupKey(state, position)),
     expireTaskIds: [...new Set(expireTaskIds)],
     cancelTaskIds: [...new Set(cancelTaskIds)],
   };
 }
 
+/** 同一词族的相邻两次练习之间至少间隔的其它任务数。 */
+const SAME_WORD_TASK_GAP = 5;
+
+/** 分散的分组键：有词族信息时按词族，否则按词本身。 */
+function plannedTaskGroupKey(state: Readonly<LearningState>, position: PlannedTask): string {
+  const wordId = position.source === 'new'
+    ? position.specification.wordId
+    : state.tasks.find((task) => task.id === position.taskId)?.content.wordId ?? '';
+  const knowledgePoint = state.knowledgePoints.find((item) => item.id === wordId);
+  const wordFamily = knowledgePoint && 'wordFamily' in knowledgePoint ? knowledgePoint.wordFamily : null;
+  return wordFamily ? `family:${wordFamily}` : `word:${wordId}`;
+}
+
+/**
+ * ⑤ 同词族分散：同一词族的任务位置至少间隔 5 个其它任务。
+ * 只把重复任务向后顺延、不提前任何任务，优先级顺序不被打破；
+ * 任务总数不足以拉开时整体保持原顺序。
+ */
+function spreadSameWordTasks(
+  tasks: PlannedTask[],
+  groupKeyOf: (task: PlannedTask) => string,
+): PlannedTask[] {
+  const placedAt = new Map<string, number>();
+  const result: PlannedTask[] = [];
+  const pending: PlannedTask[] = [];
+  const allowed = (wordId: string): boolean => {
+    const last = placedAt.get(wordId);
+    return last === undefined || result.length - last > SAME_WORD_TASK_GAP;
+  };
+  const flushPending = (): void => {
+    let index = 0;
+    while (index < pending.length) {
+      const wordId = groupKeyOf(pending[index]);
+      if (!allowed(wordId)) {
+        index++;
+        continue;
+      }
+      const [task] = pending.splice(index, 1);
+      placedAt.set(wordId, result.length);
+      result.push(task);
+    }
+  };
+  for (const task of tasks) {
+    flushPending();
+    const wordId = groupKeyOf(task);
+    if (allowed(wordId)) {
+      placedAt.set(wordId, result.length);
+      result.push(task);
+    } else {
+      pending.push(task);
+    }
+  }
+  flushPending();
+  return pending.length > 0 ? tasks : result;
+}
+
+/**
+ * 按“全部成功”路径推演一个知识点从给定维度状态出发的复习序列，
+ * 产出未来各本地日期的任务需求（不含今天，含第 41 天），用于新词准入的容量预测。
+ * startsWithEncode 表示该词尚未学习，路径从今天的 ENCODE 开始。
+ */
 function forecastSuccessfulPath(
   goal: LearningGoal,
   knowledgePoint: KnowledgePoint,
@@ -1307,6 +1389,10 @@ function forecastSuccessfulPath(
   return demand;
 }
 
+/**
+ * 新词准入预测用的初始维度：学习者已定级时按词表分类派生初始流利度，否则从 0 开始；
+ * 复习 dueAt 视为 now，即今天即到期、今天就要派第一个任务。
+ */
 function initialDimensionsForNewWord(
   state: Readonly<LearningState>,
   learner: Learner,
@@ -1339,6 +1425,7 @@ function initialDimensionsForNewWord(
   };
 }
 
+/** 合并两组按本地日期计数的容量需求。 */
 function mergeCapacityDemand(
   base: ReadonlyMap<LocalDate, number>,
   added: ReadonlyMap<LocalDate, number>,
