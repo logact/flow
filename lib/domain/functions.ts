@@ -652,6 +652,21 @@ export interface DerivedInitialFluency {
   initialization: LearnerKnowledgePointInitialization;
 }
 
+/**
+ * 词段认识概率到初始 R 分数的离散档位映射。
+ * 自评“认识”只有接受性证据，初始分只落到练习区档位，最高 50（free 档），
+ * 任何词在产生真实练习证据前都进不了 FLUENCY 区（>=60）。
+ */
+function mapInitialReceptiveTier(probability: number): number {
+  if (probability <= 0) return 0;
+  if (probability < 0.4) return 10;
+  if (probability < 0.7) return 30;
+  return 50;
+}
+
+/** P 没有直接证据，在 R 的基础上自动退一个练习区档次，最低封底 0。 */
+const PRODUCTION_ONE_TIER_DOWN: Record<number, number> = { 0: 0, 10: 0, 30: 10, 50: 30 };
+
 export function deriveInitialFluency(input: DeriveInitialFluencyInput): DerivedInitialFluency {
   requireText(input.policyVersion, 'policyVersion');
   const classification = input.classification;
@@ -662,8 +677,8 @@ export function deriveInitialFluency(input: DeriveInitialFluencyInput): DerivedI
   const probability = classification
     ? input.vocabulary.bands.find((band) => band.band === classification.band)?.knownProbability ?? 0
     : 0;
-  const receptive = Math.round(clamp(probability, 0, 1) * 100);
-  const initialFluency = { R: receptive, P: Math.round(receptive * 0.8) };
+  const receptive = mapInitialReceptiveTier(clamp(probability, 0, 1));
+  const initialFluency = { R: receptive, P: PRODUCTION_ONE_TIER_DOWN[receptive] ?? 0 };
   return {
     initialFluency,
     initialization: {

@@ -4,7 +4,9 @@ import type {
   GoalKnowledgePointSource,
   GoalMaterial,
   KnowledgePoint,
+  KnowledgePointVocabularyClassification,
   Learner,
+  LearnerKnowledgePoint,
   LearningGoal,
   Material,
   MaterialAnalysis,
@@ -142,4 +144,31 @@ export interface GoalMaterialRepository {
   loadAnalysis(analysisId: string): Promise<MaterialAnalysis | null>;
   loadGoalScope(goalId: string): Promise<GoalScope>;
   saveGoalMaterial(payload: SaveGoalMaterialPayload): Promise<void>;
+}
+
+/** S06 选择知识点并初始化所需的加载视图，用例不自行拼装跨表查询。 */
+export interface KnowledgePointSelectionContext {
+  learner: Learner;
+  goal: LearningGoal;
+  candidates: GoalKnowledgePoint[];
+  knowledgePoints: KnowledgePoint[];
+  classifications: KnowledgePointVocabularyClassification[];
+  learnerKnowledgePoints: LearnerKnowledgePoint[];
+}
+
+/** S06 同批保存的负载：选择变更与新增学习状态要么全部保存，要么全部不保存。 */
+export interface SaveKnowledgePointSelectionPayload {
+  /** 本次选择发生变化的候选记录。 */
+  updatedCandidates: GoalKnowledgePoint[];
+  /** 本次新初始化的学习状态记录。 */
+  newLearnerKnowledgePoints: LearnerKnowledgePoint[];
+}
+
+/**
+ * S06 读写端口：测试使用内存实现，实际运行切换 SQLite。
+ * 选择变更与新增学习状态在同一次写入中一起保存。
+ */
+export interface KnowledgePointSelectionRepository {
+  loadSelectionContext(goalId: string): Promise<KnowledgePointSelectionContext | null>;
+  saveKnowledgePointSelection(payload: SaveKnowledgePointSelectionPayload): Promise<void>;
 }
