@@ -169,6 +169,8 @@ export interface SaveKnowledgePointSelectionPayload {
   updatedCandidates: GoalKnowledgePoint[];
   /** 本次新初始化的学习状态记录。 */
   newLearnerKnowledgePoints: LearnerKnowledgePoint[];
+  /** 本次新写入的词频分类记录；已有记录不重复写入。 */
+  newClassifications: KnowledgePointVocabularyClassification[];
 }
 
 /**

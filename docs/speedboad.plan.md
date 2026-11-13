@@ -147,14 +147,15 @@ export LLM_MODEL=deepseek-chat
 1. 加载学习者、目标候选、知识点、词频分类及已有 `LearnerKnowledgePoint`。
 2. 对每个候选调用 `setGoalKnowledgePointSelection`。
 3. 对新变为 `included` 且尚无学习状态的知识点，要求学习者已有 `currentVocabulary`。
-4. 调用 `deriveInitialFluency`，再将返回的 `derived` 原样传给 `initializeLearnerKnowledgePoint`。
-5. 保存选择变化及新增学习状态。
+4. 尚无词频分类记录的词汇知识点，通过词表端口查询所属词族频段并新建 `knowledgePointVocabularyClassifications` 记录（分类依据学习者当前词汇估计的词表及版本）；词表未收录的词与非词汇类知识点不建记录，初始流利度按 0 处理。
+5. 调用 `deriveInitialFluency`（传入新建或已有的分类记录），再将返回的 `derived` 原样传给 `initializeLearnerKnowledgePoint`。
+6. 保存选择变化、新增学习状态及新词频分类记录。
 
 **输出与边界**
 
 - 返回更新后的候选和新增学习状态。
 - `excluded` 不删除历史学习状态或任务；需要取消的任务由后续 S07 决定。
-- 已有学习状态不重复初始化；未完成定级时返回前置条件错误，本批变更不部分写入。
+- 已有学习状态不重复初始化；已有词频分类记录不重复写入；未完成定级时返回前置条件错误，本批变更不部分写入。
 
 ### S07：生成每日排期决策
 
@@ -292,9 +293,11 @@ export LLM_MODEL=deepseek-chat
 - 目标：`读懂并谈论团队如何应对变化`，`targetFluency = { R: 80, P: 80 }`。
 - 材料：`how-teams-adapt.md`：
 
-> Contemporary teams work in a world where digital tools are ubiquitous. When a project changes, a deliberate response is more useful than a rushed one. A resilient team learns from the setback, adjusts its plan, and keeps moving.
+> Contemporary teams work in a world where digital tools are ubiquitous. When a project changes, a deliberate response is more useful than a rushed one. A resilient team learns from the setback, adjusts its plan, and keeps moving. Teams that adapt quickly treat every pivot as a chance to learn. Honest feedback protects morale and builds momentum, because people do their best work when they feel heard.
 
-本场景将 `contemporary`、`ubiquitous`、`deliberate`、`resilient` 四个候选设为 `included`，其他候选保持 `undecided` 或设为 `excluded`。`deliberate` 使用“深思熟虑的”这一独立词义。
+本场景将材料中的 `contemporary`、`ubiquitous`、`deliberate`、`resilient`、`adapt`、`setback`、`pivot`、`feedback`、`morale`、`momentum` 十个候选全部设为 `included`。`deliberate` 使用“深思熟虑的”这一独立词义。
+
+**循环退出条件**：学习循环（步骤 12）一直推进，直到目标内全部十个知识点的 R、P 两个维度都达到 `targetFluency`（≥80）。达到目标分数不等于复习毕业，达标后的到期任务仍按 `FLUENCY` 固定派题直到 30 天间隔复习毕业，但本场景在全部达标后即退出，不等毕业。
 
 ### 调用顺序与状态传递
 
@@ -305,16 +308,16 @@ export LLM_MODEL=deepseek-chat
 | 3 | S03 | 提交全部 `known` 自评并完成测评 | 完成的测评、自评记录、`currentVocabulary = V0` |
 | 4 | S04 | 提取材料文本并完成分析 | `Material`、`MaterialAnalysis` |
 | 5 | S05 | 创建目标并加入固定分析版本 | 目标、材料关联、候选和来源 |
-| 6 | S06 | 纳入四个重点候选并初始化 | 选择结果、四条学习状态 |
-| 7 | S07 | 生成容量为 5 的排期决策 | 暂态 `DailyStudyDecision` |
-| 8 | S08 × 5 | **由应用层调用 AI**，为五个 `new` 规格分别生成任务 | 五项暂态服务端 `LearningTask` |
-| 9 | S09 | 一次性应用决策及全部新任务 | 持久化计划、五项 `issued` 任务 |
-| 10 | S10 × 5 | 分别提交五项任务，其中 `ubiquitous` 有效但答错 | 五条首次作答 |
-| 11 | S11 × 5 | 选择题使用规则评判；**非选择题由应用层调用 AI 评判**；阅读混合题合并规则与 AI 结果后统一结算 | 五个 `settled` 作答、五个完成任务、更新后的学习状态和 `V1` |
-| 12 | S07 → S08 → S09 | 时间推进到 `ubiquitous` 的实际 `dueAt` 后重新排期，**由应用层调用 AI 生成复习任务**并保存计划 | 包含到期复习的新计划 |
+| 6 | S06 | 纳入十个候选并初始化 | 选择结果、十条学习状态 |
+| 7 | S07 | 对 S06 后的真实状态排期：included 候选按到期与新词准入产出一批 `new` 规格，首批不超过每日容量 5 | 暂态 `DailyStudyDecision` |
+| 8 | S08 × N | **由应用层调用 AI**，N 为决策中 `new` 位置数，按各规格生成任务 | N 项暂态服务端 `LearningTask` |
+| 9 | S09 | 一次性应用决策及全部新任务 | 持久化计划、N 项 `issued` 任务 |
+| 10 | S10 × N | 分别提交 N 项作答；`ubiquitous` 首次出现的 RETRIEVE 选择题有效但答错 | N 条首次作答 |
+| 11 | S11 × N | ENCODE 与选择题规则评判；**RETRIEVE cued/free、阅读 free 问题、P 场景表达由应用层调用 AI 评判**；阅读混合题合并规则与 AI 结果后统一结算 | N 个 `settled` 作答、N 个完成任务、更新后的学习状态和 `V1` |
+| 12 | 学习循环：每日重复 7～11 | 每个后续学习日把 `now` 推进到当前状态最早 `dueAt` 之后重新排期，**直到全部十个知识点的 R、P 维度都达到 `targetFluency`**；未引入的新词按容量准入陆续首批，答错的 `ubiquitous` 次日重练，验证失败路径与到期复习驱动 | 逐日计划与结算链、全部达标的学习状态 |
 | 13 | S12 → S07～S09 | 归档目标后再次请求计划 | 保留历史，不再生成该目标的新任务 |
 
-第 7 步的五个 `new` 规格依次用于：`resilient / ENCODE`、`ubiquitous / RETRIEVE-R-choice`、`deliberate / RETRIEVE-P-cued`、`contemporary / FLUENCY-R`、`resilient / FLUENCY-P`。S07 只产生这些规格，S08 才通过应用层 AI Provider 生成具体题目，S09 才将任务和计划一起持久化。
+第 7 步的决策由真实 `planDailyStudy` 对 S06 后的状态计算，不由场景预设：无学习状态的候选产出 `ENCODE`；已有初始学习状态的候选按初始流利度产出 RETRIEVE（<20 `choice`、<40 `cued`、<60 `free`）。FLUENCY 任务只在循环推进、某维度流利度练到 60 以上后出现。当前实现下词频分类记录尚无写入方，初始流利度一律为 0，首轮排期为 `ENCODE` 规格；十个新词受每日容量 5 限制，按 42 天准入预测分批引入，首日最多 5 个，其余词在后续有剩余容量时陆续首批。分类写入补齐后首轮可能直接出现 RETRIEVE 各档。两种情形本场景编排一致，测试只断言结构属性：`new` 数不超过每日容量、每词至多一个规格、首轮不含 FLUENCY（初始分上限 50，低于 FLUENCY 门槛 60）。S07 只产生这些规格，S08 才通过应用层 AI Provider 生成具体题目，S09 才将任务和计划一起持久化。
 
 ### 大场景验收
 
@@ -323,10 +326,12 @@ export LLM_MODEL=deepseek-chat
 3. S04、S08 的外部能力失败时，不出现部分写入的分析或每日计划；S02 不调用外部 AI，只保存完整的自评任务和测评。
 4. S07 不创建任务或计划；S08 不持久化孤立任务；只有 S09 能将完整计划和任务集合一起写入。
 5. S10 重试使用同一 `attemptId` 不会增加首次作答；S11 重试不会重复结算。
-6. 五项任务结算后均为 `completed`，答错项也保留真实评判；流利度、复习计划和词汇估计来自各自结算快照。
+6. 每个学习日结算后当日任务均为 `completed`，答错项（`ubiquitous` 首次出现的 RETRIEVE 选择题）保留真实 `incorrect` 评判而非伪造结果；流利度、复习计划和词汇估计来自各自结算快照。
 7. S09 的公开任务响应不包含答案、阅读证据或场景表达评分标准。
 8. 到期复习由新的 S07～S09 调用产生；归档后历史仍可加载，但不再出现该目标的新任务。
 9. 应用用例测试使用可控的 Fake AI Provider 返回固定题目和评判，验证编排、失败与幂等；真实供应商调用单独做 Live 验证。非选择题的 AI 评判必须以 `judgedBy = 'ai'` 进入同一 Domain 结算路径。
+10. 循环在有限天数内退出，退出时目标内全部十个知识点的 R、P 流利度均 ≥ `targetFluency`，且每个知识点至少经历过一次结算；退出前 RETRIEVE `choice`/`cued`/`free` 与 `FLUENCY-R`、`FLUENCY-P` 均实际出现过。
+11. 新词准入生效：首日计划不超过每日容量，未在首日引入的新词在后续学习日陆续出现在计划中。
 
 ## 四、组合编排用例
 
@@ -375,5 +380,7 @@ export LLM_MODEL=deepseek-chat
 
 ## Prototype 边界
 
+- 词频分类记录（`knowledgePointVocabularyClassifications`）曾长期没有任何环节写入，导致初始流利度恒按 0 派生、词汇估计不随作答更新、新词准入预测失真；现由 S06 在初始化时经词表端口写入，词表未收录的词不建记录。
 - 实现顺序为：Repository 契约 → AI Provider 契约 → 各环节小用例 → 大场景集成验证 → 组合编排用例（R1、R2），不在应用层复制领域算法。
+- 词频分类记录（`knowledgePointVocabularyClassifications`）的写入由独立变更补齐；大场景描述不依赖其是否落地——首轮排期可能是 4 个 ENCODE（分类缺失，初始流利度恒为 0）或 RETRIEVE 各档（分类已写入），场景的结构性断言两种情形都成立。
 - 当前 Domain 已有本地规则生成和 `judgeTask` 规则评判，但没有 AI Provider 调用能力；`test/core-flow.jest.test.ts` 使用桩，`test/domain-functions.jest.test.ts` 执行真实领域函数。本文描述的 AI Provider、应用用例和 Repository 仍属于待实现的应用层设计。

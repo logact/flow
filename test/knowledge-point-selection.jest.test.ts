@@ -5,6 +5,7 @@ import type {
   KnowledgePointSelectionContext,
   KnowledgePointSelectionRepository,
   SaveKnowledgePointSelectionPayload,
+  VocabularyIndex,
 } from '../lib/application/ports';
 import * as Domain from '../lib/domain/functions';
 import { validateLearningState } from '../lib/domain/invariants';
@@ -89,6 +90,7 @@ class MemorySelectionRepository implements KnowledgePointSelectionRepository {
       if (index >= 0) this.context.candidates[index] = updated;
     }
     this.context.learnerKnowledgePoints.push(...payload.newLearnerKnowledgePoints);
+    this.context.classifications.push(...payload.newClassifications);
   }
 }
 
@@ -113,9 +115,10 @@ function run(repo: MemorySelectionRepository, input: {
   selections: Array<{ knowledgePointId: string; selection: Model.GoalKnowledgePointSelection }>;
   policyVersion?: string;
   goalId?: string;
+  vocabularyIndex?: VocabularyIndex;
 }) {
   return selectKnowledgePointsUseCase(
-    { repository: repo, logger: silentLogger },
+    { repository: repo, vocabularyIndex: input.vocabularyIndex, logger: silentLogger },
     { goalId: input.goalId ?? 'goal-1', policyVersion: input.policyVersion ?? 'initial-v2', now: at.selected, selections: input.selections },
   );
 }
@@ -410,5 +413,88 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
     expect(nextSpecs.map((spec) => spec?.task)).toEqual(['RETRIEVE', 'RETRIEVE', 'RETRIEVE', 'RETRIEVE']);
     expect(nextSpecs.map((spec) => (spec?.task === 'RETRIEVE' ? spec.stage : null)))
       .toEqual(['choice', 'cued', 'free', 'free']);
+  });
+
+  test('7. 词表端口补建分类：命中建记录并参与初始分，未收录与非词汇类不建', async () => {
+    const kpHit = wordKP('word:ubiquitous:s1', 'ubiquitous');
+    const kpMiss = wordKP('word:jargon:s1', 'jargon');
+    const kpGrammar: Model.KnowledgePoint = {
+      id: 'grammar:present-perfect',
+      kind: 'grammar',
+      name: 'present perfect',
+      sense: { id: 'sense:present-perfect', definition: '现在完成时', partOfSpeech: null, explanation: null },
+    };
+    const lookups: string[] = [];
+    const vocabularyIndex: VocabularyIndex = {
+      lookup: (lemma) => {
+        lookups.push(lemma);
+        return lemma === 'ubiquitous' ? { band: '5k', totalFrequency: 1200 } : null;
+      },
+    };
+    const repo = makeRepo({
+      vocab: vocabulary([bandEstimate('5k', 0.5)]),
+      candidates: [candidate(kpHit.id), candidate(kpMiss.id), candidate(kpGrammar.id)],
+      knowledgePoints: [kpHit, kpMiss, kpGrammar],
+    });
+
+    const result = await run(repo, {
+      selections: [
+        { knowledgePointId: kpHit.id, selection: 'included' },
+        { knowledgePointId: kpMiss.id, selection: 'included' },
+        { knowledgePointId: kpGrammar.id, selection: 'included' },
+      ],
+      vocabularyIndex,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 命中 5k 词族：分类记录写入并按 0.5 概率派生 R=30/P=10；未收录与非词汇类从 0 起步。
+    expect(result.initialized.map((item) => item.initialFluency)).toEqual([
+      { R: 30, P: 10 },
+      { R: 0, P: 0 },
+      { R: 0, P: 0 },
+    ]);
+    expect(lookups).toEqual(['ubiquitous', 'jargon']);
+    const [hit, miss, grammar] = result.initialized;
+    expect(hit.initialization.classification).toEqual({ knowledgePointId: kpHit.id, list, band: '5k' });
+    expect(miss.initialization.classification).toBeNull();
+    expect(grammar.initialization.classification).toBeNull();
+    // 新分类记录随选择变更与学习状态同批写入，重新加载后可读到。
+    expect(repo.saved[0].newClassifications).toEqual([{ knowledgePointId: kpHit.id, list, band: '5k' }]);
+    const reloaded = await repo.loadSelectionContext('goal-1');
+    expect(reloaded?.classifications).toEqual([{ knowledgePointId: kpHit.id, list, band: '5k' }]);
+    expect(validateLearningState(toState(repo))).toEqual([]);
+  });
+
+  test('8. 已有分类记录不重复写入：词表端口不会覆盖既有分类', async () => {
+    const kp = wordKP('word:resilient:s1', 'resilient');
+    const existing = { knowledgePointId: kp.id, list, band: '9k' as const };
+    const lookups: string[] = [];
+    const vocabularyIndex: VocabularyIndex = {
+      lookup: (lemma) => {
+        lookups.push(lemma);
+        return { band: '2k', totalFrequency: 9000 };
+      },
+    };
+    const repo = makeRepo({
+      vocab: vocabulary([bandEstimate('9k', 0.9)]),
+      candidates: [candidate(kp.id)],
+      knowledgePoints: [kp],
+      classifications: [existing],
+    });
+
+    const result = await run(repo, {
+      selections: [{ knowledgePointId: kp.id, selection: 'included' }],
+      vocabularyIndex,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 既有 9k 分类优先，不查词表、不新建记录，初始分仍按 9k 的 0.9 派生。
+    expect(lookups).toEqual([]);
+    expect(result.initialized[0].initialFluency).toEqual({ R: 50, P: 30 });
+    expect(result.initialized[0].initialization.classification).toEqual(existing);
+    expect(repo.saved[0].newClassifications).toEqual([]);
+    expect(repo.context.classifications).toEqual([existing]);
   });
 });

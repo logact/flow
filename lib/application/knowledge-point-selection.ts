@@ -7,10 +7,12 @@ import type {
   GoalKnowledgePoint,
   GoalKnowledgePointSelection,
   ISODateTime,
+  KnowledgePointVocabularyClassification,
   LearnerKnowledgePoint,
+  VocabularyBand,
 } from '../domain/model';
 import { logger as defaultLogger, type AppLogger } from './logger';
-import type { KnowledgePointSelectionRepository } from './ports';
+import type { KnowledgePointSelectionRepository, VocabularyIndex } from './ports';
 
 export interface SelectKnowledgePointsUseCaseInput {
   /** 目标 ID，候选范围由 Repository 按目标加载。 */
@@ -40,14 +42,17 @@ const VALID_SELECTIONS: readonly GoalKnowledgePointSelection[] = ['undecided', '
  * S06：设置知识点选择并初始化新增学习项。
  * 对每个候选调用 setGoalKnowledgePointSelection；
  * 对新变为 included 且尚无学习状态的知识点，要求学习者已完成定级（currentVocabulary 非空），
+ * 尚无词频分类记录的词汇知识点经词表端口查询词族频段并新建分类记录（词表未收录或非词汇类不建），
  * 再按 deriveInitialFluency 的离散档位映射初始化 R/P 分数（初始分永远低于 FLUENCY 区），
  * P 维度在 R 基础上自动退一个练习区档次；
- * 选择变更与新增学习状态在同一次写入中保存，任一步失败整批不写入；
+ * 选择变更、新增学习状态与新分类记录在同一次写入中保存，任一步失败整批不写入；
  * excluded 不删除历史学习状态，需要取消的任务由后续 S07 决定。
  */
 export async function selectKnowledgePointsUseCase(
   deps: {
     repository: KnowledgePointSelectionRepository;
+    /** 词频词表端口；提供时对尚无分类记录的词汇知识点补建分类。 */
+    vocabularyIndex?: VocabularyIndex;
     logger?: AppLogger;
   },
   input: SelectKnowledgePointsUseCaseInput,
@@ -75,6 +80,7 @@ export async function selectKnowledgePointsUseCase(
   );
   const updatedByKnowledgePoint = new Map<string, GoalKnowledgePoint>();
   const initialized: LearnerKnowledgePoint[] = [];
+  const newClassifications: KnowledgePointVocabularyClassification[] = [];
 
   try {
     for (const item of input.selections) {
@@ -99,8 +105,20 @@ export async function selectKnowledgePointsUseCase(
         logger.warn({ goalId: input.goalId, knowledgePointId: item.knowledgePointId }, '知识点选择：失败（测评未完成）');
         return { ok: false, reason: 'assessment_incomplete' };
       }
-      const classification = context.classifications
+      let classification = context.classifications
         .find((entry) => entry.knowledgePointId === item.knowledgePointId) ?? null;
+      if (!classification && deps.vocabularyIndex
+        && (knowledgePoint.kind === 'word' || knowledgePoint.kind === 'phrase')) {
+        const family = deps.vocabularyIndex.lookup(knowledgePoint.lemma);
+        if (family) {
+          classification = {
+            knowledgePointId: knowledgePoint.id,
+            list: vocabulary.list,
+            band: family.band as VocabularyBand,
+          };
+          newClassifications.push(classification);
+        }
+      }
       const derived = deriveInitialFluency({
         vocabulary,
         classification,
@@ -124,6 +142,7 @@ export async function selectKnowledgePointsUseCase(
   await deps.repository.saveKnowledgePointSelection({
     updatedCandidates: [...updatedByKnowledgePoint.values()],
     newLearnerKnowledgePoints: initialized,
+    newClassifications,
   });
   const candidates = context.candidates.map(
     (candidate) => updatedByKnowledgePoint.get(candidate.knowledgePointId) ?? candidate,
