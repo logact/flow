@@ -11,10 +11,11 @@
  * - expectSense：lemma 在材料内应有的唯一义项；expectedSenseId 为 null 表示
  *   义项混合/候选过近，只观察打印、不计分。
  * - expectExcluded：lemma 不应生成知识点，reason 记录被哪道闸门拦下。
- * 未配置 key 时整个套件跳过。整份材料约 57 次 AI 调用、两分钟以内。
+ * 未配置 key 时整个套件跳过；材料 PDF 未放入 data/ 时跳过并提示，不会报错。
+ * 整份材料约 57 次 AI 调用、两分钟以内。
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveSenseAssignments } from '../lib/application/material-sense-resolution';
 import { createSenseDisambiguatorFromEnv } from '../lib/application/sense-disambiguator';
@@ -48,7 +49,14 @@ describeLive('S04 端到端 lemma+sense golden（Live：真实材料 + 真实 LL
       readFileSync(join(root, 'data', 'gold', 'material-sense.json'), 'utf8'),
     ) as GoldFile;
 
-    const data = readFileSync(join(root, gold.source));
+    const sourcePath = join(root, gold.source);
+    if (!existsSync(sourcePath)) {
+      console.log(`材料文件缺失：${gold.source}（版权归 Paul Nation 所有，未随仓库分发；`
+        + '将 PDF 放入 data/ 后重跑本套件）');
+      return;
+    }
+
+    const data = readFileSync(sourcePath);
     const extracted = await extractTextFromFile('pdf', data);
     const material = {
       id: 'golden-eval',
