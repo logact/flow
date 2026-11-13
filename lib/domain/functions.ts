@@ -2184,7 +2184,7 @@ function taskSpecificationKey(goalId: string, task: TaskSpecification | Generate
   return `${goalId}:${task.wordId}:${axis}`;
 }
 
-function localDateFor(value: ISODateTime, timezone: string): string {
+export function localDateFor(value: ISODateTime, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
     year: 'numeric',
