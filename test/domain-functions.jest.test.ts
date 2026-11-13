@@ -505,6 +505,107 @@ describe('真实领域函数', () => {
     });
   });
 
+  describe('规格漂移失效', () => {
+    const initialized = buildInitializedState();
+    const wordId = initialized.knowledgePoint.id;
+    const replanInput = { learnerId: 'learner-1', date: '2026-11-12', now: at.planned };
+
+    function tuneFluency(state: Model.LearningState, fluency: number, dueAt: string): Model.LearningState {
+      const learning = state.learnerKnowledgePoints[0];
+      const tune = (dimension: Model.DimensionLearningState): Model.DimensionLearningState => ({
+        ...dimension,
+        fluency,
+        review: { ...dimension.review, dueAt, lastReviewedAt: at.answered },
+      });
+      return {
+        ...state,
+        learnerKnowledgePoints: [{
+          ...learning,
+          dimensions: { R: tune(learning.dimensions.R), P: tune(learning.dimensions.P) },
+        }],
+      };
+    }
+
+    function issueCuedTask(state: Model.LearningState): Model.LearningState {
+      const decision = Domain.planDailyStudy(state, replanInput);
+      const position = decision.tasks[0];
+      if (position.source !== 'new') throw new Error('Expected a new task');
+      const task = Domain.createLearningTask({
+        id: 'task-drift',
+        learnerId: 'learner-1',
+        specification: position.specification,
+        generated: Domain.generateLearningTask({
+          specification: position.specification,
+          knowledgePoint: initialized.knowledgePoint,
+          sourceMaterials: [initialized.material],
+        }),
+        issuedAt: at.planned,
+      });
+      return Domain.applyDailyStudyDecision(state, {
+        planId: 'plan-drift',
+        decision,
+        newTasks: [task],
+        now: at.planned,
+      });
+    }
+
+    test('结算改变规格后，已签发任务取消并在同位置按最新规格重新生成', () => {
+      const state = tuneFluency(initialized.state, 20, at.planned);
+      const decision = Domain.planDailyStudy(state, replanInput);
+      expect(decision.tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId, task: 'RETRIEVE', axis: 'R', stage: 'cued' },
+      }]);
+      const planned = issueCuedTask(state);
+
+      // 模拟同词在其他目标的结算把 R 流利度从 20 推到 40：已签发的 cued 任务规格漂移。
+      const drifted = tuneFluency(planned, 40, at.planned);
+      const refresh = Domain.planDailyStudy(drifted, replanInput);
+      expect(refresh.cancelTaskIds).toEqual(['task-drift']);
+      expect(refresh.tasks).toEqual([{
+        source: 'new',
+        specification: { goalId: 'goal-1', wordId, task: 'RETRIEVE', axis: 'R', stage: 'free' },
+      }]);
+
+      const position = refresh.tasks[0];
+      if (position.source !== 'new') throw new Error('Expected a new task');
+      const regenerated = Domain.createLearningTask({
+        id: 'task-drift-2',
+        learnerId: 'learner-1',
+        specification: position.specification,
+        generated: Domain.generateLearningTask({
+          specification: position.specification,
+          knowledgePoint: initialized.knowledgePoint,
+          sourceMaterials: [initialized.material],
+        }),
+        issuedAt: at.judged,
+      });
+      const reapplied = Domain.applyDailyStudyDecision(drifted, {
+        decision: refresh,
+        newTasks: [regenerated],
+        now: at.judged,
+      });
+      expect(reapplied.tasks.find((item) => item.id === 'task-drift')?.status).toBe('cancelled');
+      expect(reapplied.tasks.find((item) => item.id === 'task-drift-2')?.status).toBe('issued');
+      expect(validateLearningState(reapplied)).toEqual([]);
+    });
+
+    test('规格未漂移时既有任务原样保留，不触发重生成', () => {
+      const planned = issueCuedTask(tuneFluency(initialized.state, 20, at.planned));
+      const refresh = Domain.planDailyStudy(planned, replanInput);
+      expect(refresh.cancelTaskIds).toEqual([]);
+      expect(refresh.tasks).toEqual([{ source: 'existing', taskId: 'task-drift' }]);
+    });
+
+    test('当前无到期规格时不视为漂移，既有任务保留', () => {
+      const planned = issueCuedTask(tuneFluency(initialized.state, 20, at.planned));
+      const notDue = tuneFluency(planned, 20, at.nextDay);
+      const refresh = Domain.planDailyStudy(notDue, replanInput);
+      expect(refresh.cancelTaskIds).toEqual([]);
+      expect(refresh.tasks).toEqual([{ source: 'existing', taskId: 'task-drift' }]);
+    });
+  });
+
   describe('旧版流利度计分', () => {
     const initialized = buildInitializedState();
     const base = { goalId: 'goal-1', wordId: initialized.knowledgePoint.id };

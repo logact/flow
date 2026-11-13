@@ -1216,12 +1216,29 @@ export interface DailyStudyDecision {
 /**
  * S07：生成每日排期决策。纯函数，只产出暂态决策，不修改状态、不创建任务。
  * 流程：① 清理已签发任务（范围失效的取消、历史日期的过期，既有任务不顺延）
- * → ② 今日计划中的既有任务优先保留 → ③ 收集 active 目标 included 候选的下一任务规格
+ * → ② 今日计划中的既有任务优先保留（规格漂移的转取消）→ ③ 收集 active 目标 included 候选的下一任务规格
  * → ④ 排序并填充新位置，其中新词需通过未来 42 天容量准入检查
  * → ⑤ 同词族任务（无词族信息时按词本身）在不打破优先级顺序的前提下拉开位置间隔，
  * 任务不足时保持原顺序。
  * 到期复习与新词引入共用本决策：调用方只传新的 date/now，复习间隔不在此处计算。
  */
+function hasSpecificationDrifted(
+  state: Readonly<LearningState>,
+  learner: Learner,
+  task: LearningTask,
+  learning: LearnerKnowledgePoint,
+  input: PlanDailyStudyInput,
+): boolean {
+  const goal = state.goals.find((item) => item.id === task.goalId);
+  const candidate = state.goalKnowledgePoints.find((item) => item.goalId === task.goalId
+    && item.knowledgePointId === task.content.wordId);
+  const knowledgePoint = state.knowledgePoints.find((item) => item.id === task.content.wordId);
+  if (!goal || !candidate || !knowledgePoint) return false;
+  const current = decideNextTask({ goal, candidate, knowledgePoint, learning, now: input.now });
+  if (!current) return false;
+  return !validateGeneratedTask(current, task.content);
+}
+
 export function planDailyStudy(
   state: Readonly<LearningState>,
   input: PlanDailyStudyInput,
@@ -1269,6 +1286,12 @@ export function planDailyStudy(
         && item.knowledgePointId === task.content.wordId) ?? null;
       if (!hasLearningEvidence(learning)) {
         deferredNewTasks.push(task);
+        continue;
+      }
+      // 规格漂移失效：已签发任务的规格不再等于当前学习状态算出的规格时取消，
+      // 让后面的 new 位置按最新状态重新生成同一位置；无到期规格时不视为漂移。
+      if (learning && hasSpecificationDrifted(state, learner, task, learning, input)) {
+        cancelTaskIds.push(id);
         continue;
       }
       if (tasks.length >= learner.dailyTaskCapacity) {
