@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "jest --runInBand",
+    "test:s11": "jest --runInBand test/judge-settle-task-attempt.jest.test.ts",
     "test:p2": "jest --runInBand test/schedule.jest.test.ts",
     "test:p3": "jest --runInBand test/vocabulary.jest.test.ts test/vocabulary-reference.jest.test.ts test/vocabulary-capacity-test.jest.test.ts test/scoring.jest.test.ts",
     "test:p4": "jest --runInBand test/capacity.jest.test.ts",
@@ -17,7 +18,13 @@
     "logs:p6:prompt": "node scripts/show-task-generation-prompt.cjs",
     "test:p7": "jest --runInBand test/task-grading.jest.test.ts",
     "test:p7:live": "jest --runInBand --testMatch '**/test/task-grading.live.test.ts'",
-    "logs:p7": "node scripts/show-task-grading.cjs"
+    "logs:p7": "node scripts/show-task-grading.cjs",
+    "test:s4": "jest --runInBand test/material-import.jest.test.ts",
+    "test:s4:live": "jest --runInBand --testMatch '**/test/wsd-eval.live.test.ts'",
+    "logs:s4:prompt": "jest --runInBand test/wsd-prompt.jest.test.ts",
+    "test:s5": "jest --runInBand test/goal-add-material.jest.test.ts",
+    "test:s8": "jest --runInBand test/task-generation.jest.test.ts",
+    "test:s8:live": "jest --runInBand --testMatch '**/test/task-generation.live.test.ts'"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.0",
@@ -41,6 +48,8 @@
     "@types/react-dom": "^19.3.0",
     "jest": "^30.5.2",
     "pdfkit": "^0.20.2",
-    "typescript": "^7.0.2"
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "wordnet-db": "^3.1.14"
   }
 }

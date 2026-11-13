@@ -1,0 +1,151 @@
+{
+  "source": "data/foreign-language_1125.pdf",
+  "description": "端到端 lemma+sense golden set：对真实材料（Paul Nation《What do you need to know to learn a foreign language?》56 页 PDF）跑完整管线（解析 → 词表过滤 → 词义库 → AI 采样投票），人工标注每个 lemma 在该材料内应有的义项。由 test/material-sense-eval.live.test.ts 消费（需 LLM_API_KEY）。expectedSenseId 为 null 表示该词在材料中义项混合或候选过近，只观察打印、不计分。expectExcluded 断言 lemma 不生成知识点且以指定原因记录在排除清单中，reason 取值：band:1k=基础频段 / not-in-word-family=词族表无此词 / out-of-inventory=词义库未收录 / ordinal-fragment=序号碎片规则（解析层即丢弃，只断言不出现）。标注日期 2026-11-13。",
+  "expectSense": [
+    {
+      "lemma": "deliberate",
+      "expectedSenseId": "wn31:a:01341128",
+      "note": "deliberate study/learning = 有意识目的的设计（语言学技术术语，与 incidental learning 相对；非事先深思熟虑）"
+    },
+    {
+      "lemma": "principle",
+      "expectedSenseId": "wn31:n:05922132",
+      "note": "the four strands principle / principle to follow = 指导行为的根本准则"
+    },
+    {
+      "lemma": "technique",
+      "expectedSenseId": "wn31:n:05672990",
+      "note": "keyword technique = 完成特定任务的实用方法"
+    },
+    {
+      "lemma": "strand",
+      "expectedSenseId": "wn31:n:05940848",
+      "note": "the four strands = 更大整体中的一部分/线索"
+    },
+    {
+      "lemma": "input",
+      "expectedSenseId": "wn31:n:05836008",
+      "note": "meaning-focused input / learning through input = 语言输入（刺激信息）"
+    },
+    {
+      "lemma": "extensive",
+      "expectedSenseId": "wn31:a:01389168",
+      "note": "extensive reading = 量大的（原书定义即 large quantities of reading；非 broad in scope）"
+    },
+    {
+      "lemma": "intensive",
+      "expectedSenseId": "wn31:a:01516027",
+      "note": "intensive reading = 高密度的（非农业义）"
+    },
+    {
+      "lemma": "repetition",
+      "expectedSenseId": "wn31:n:01020572",
+      "note": "spaced repetition = 重复这一行为"
+    },
+    {
+      "lemma": "motivation",
+      "expectedSenseId": "wn31:n:00023953",
+      "note": "keep your motivation high = 驱使行动的心理特征"
+    },
+    {
+      "lemma": "retrieval",
+      "expectedSenseId": "wn31:n:05769377",
+      "note": "retrieval (recall) = 从记忆中提取信息的认知操作"
+    },
+    {
+      "lemma": "function",
+      "expectedSenseId": "wn31:n:05156572",
+      "note": "function words = 词的用途/功能"
+    },
+    {
+      "lemma": "content",
+      "expectedSenseId": null,
+      "note": "观察项：what has been perceived/learned 与 what a communication is about 两名词义项在 content words/content knowledge 语境几乎不可分"
+    },
+    {
+      "lemma": "literal",
+      "expectedSenseId": "wn31:a:01421662",
+      "note": "literal meaning = 限于字面显义"
+    },
+    {
+      "lemma": "parrot",
+      "expectedSenseId": "wn31:n:01819528",
+      "note": "关键词法例句中的鹦鹉（鸟类名词，非动词机械重复）"
+    },
+    {
+      "lemma": "tongue",
+      "expectedSenseId": "wn31:n:05308571",
+      "note": "tip of the tongue / tongue twisters = 口腔器官；两次采样易分票，平票取最早出现"
+    },
+    {
+      "lemma": "tense",
+      "expectedSenseId": "wn31:n:06340499",
+      "note": "the tense system of English = 动词时态语法范畴"
+    },
+    {
+      "lemma": "cell",
+      "expectedSenseId": "wn31:n:02995984",
+      "note": "cell phone = 手持移动电话"
+    },
+    {
+      "lemma": "practice",
+      "expectedSenseId": "wn31:n:00896250",
+      "note": "spelling/listening practice = 多次重复的系统训练（名词）"
+    },
+    {
+      "lemma": "motivate",
+      "expectedSenseId": "wn31:v:01653541",
+      "note": "单义词条直接选定路径"
+    },
+    {
+      "lemma": "grammar",
+      "expectedSenseId": "wn31:n:06184139",
+      "note": "单义词条直接选定路径"
+    },
+    {
+      "lemma": "fluency",
+      "expectedSenseId": null,
+      "note": "观察项：两个近义候选（facile in speech / skillfulness in speaking）在语言学语境几乎不可分"
+    },
+    {
+      "lemma": "narrow",
+      "expectedSenseId": null,
+      "note": "观察项：limited in size or scope 与 very limited in degree 过近"
+    },
+    {
+      "lemma": "output",
+      "expectedSenseId": null,
+      "note": "观察项：production of a certain amount / what is produced / final product 三候选过近"
+    },
+    {
+      "lemma": "delay",
+      "expectedSenseId": null,
+      "note": "观察项：delayed copying 中名词两候选（拖延行为/等待时间）都讲得通"
+    },
+    {
+      "lemma": "visualise",
+      "expectedSenseId": null,
+      "note": "观察项：imagine 与 form a mental picture 过近"
+    },
+    {
+      "lemma": "flash",
+      "expectedSenseId": null,
+      "note": "观察项：flash card 中 flash 的义项不确定（瞬间/闪光），且作定语"
+    },
+    {
+      "lemma": "article",
+      "expectedSenseId": null,
+      "note": "观察项：材料内 5 次出现分属 artifact/grammar/publication 三义，采样恰一义一票必平票"
+    }
+  ],
+  "expectExcluded": [
+    { "lemma": "school", "reason": "band:1k" },
+    { "lemma": "study", "reason": "band:1k" },
+    { "lemma": "feedback", "reason": "not-in-word-family" },
+    { "lemma": "keyword", "reason": "not-in-word-family" },
+    { "lemma": "english", "reason": "not-in-word-family" },
+    { "lemma": "concordancer", "reason": "out-of-inventory" },
+    { "lemma": "per", "reason": "out-of-inventory" },
+    { "lemma": "th", "reason": "ordinal-fragment" }
+  ]
+}

@@ -108,8 +108,9 @@ export LLM_MODEL=deepseek-chat
 
 1. 若收到原始文件，由应用层完成格式解析和文本提取。
 2. 调用 `createMaterial` 创建材料。
-3. 调用 `analyzeMaterial` 分析 `extractedText`。
-4. 保存材料及固定版本的分析结果。
+3. 调用 `extractMaterialTerms` 本地提取术语（分句、分词、词形归并），按词义库确定义项：单义词条直接选定，多义词条由应用层 AI Provider 逐出现消歧（按 item 数与 prompt 字符预算分批请求，失败批次仅回退该批次词条），库外或消歧失败回退占位义项。
+4. 调用 `analyzeMaterial` 传入义项归属组装分析，知识点 ID 为 `word:{lemma}:{senseId}`。
+5. 保存材料及固定版本的分析结果。
 
 **输出与边界**
 

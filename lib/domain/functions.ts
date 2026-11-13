@@ -24,6 +24,11 @@ import type {
   LocalDate,
   Material,
   MaterialAnalysis,
+  MaterialAnalysisItem,
+  MaterialUnmatchedItem,
+  Occurrence,
+  ReadingFluencyTaskContent,
+  ReadingFluencyTaskSubmission,
   RetrieveStage,
   ReviewSchedule,
   TaskAttempt,
@@ -375,61 +380,143 @@ export function createMaterial(input: CreateMaterialInput): Material {
   };
 }
 
+/** 材料中按词元归并后的一组原始出现。 */
+export interface MaterialTerm {
+  /** 归一化后的词元。 */
+  lemma: string;
+  /** 该词元在材料中的全部出现记录。 */
+  occurrences: Occurrence[];
+}
+
+const SENTENCE_PATTERN = /[^.!?…\n]+[.!?…]+|[^.!?…\n]+$/g;
+const TOKEN_PATTERN = /[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu;
+/** PDF 序号上标被拆出的游离碎片（4th → th），不是真实用词。 */
+const ORDINAL_FRAGMENT_PATTERN = /^(?:st|nd|rd|th)$/;
+
+/**
+ * 本地术语提取：分句、分词、词形归并，产出按 lemma 分组的原始出现记录。
+ * 纯确定性处理，不含词义判断；词义由应用层消歧后以 assignments 交给 analyzeMaterial。
+ */
+export function extractMaterialTerms(material: Material): MaterialTerm[] {
+  const text = material.extractedText ?? '';
+  const groups = new Map<string, Occurrence[]>();
+  const sentences = (text.match(SENTENCE_PATTERN) ?? [])
+    .map((raw) => raw.trim())
+    .filter((sentence) => sentence.length > 0);
+  sentences.forEach((sentence, index) => {
+    const context = [sentences[index - 1], sentences[index + 1]]
+      .filter((item): item is string => item !== undefined);
+    for (const match of sentence.normalize('NFKC').matchAll(TOKEN_PATTERN)) {
+      const rawForm = match[0];
+      const normalized = rawForm.toLocaleLowerCase('en');
+      if (ORDINAL_FRAGMENT_PATTERN.test(normalized)) continue;
+      const lemma = [lemmatizer.verb(normalized), lemmatizer.noun(normalized), lemmatizer.adjective(normalized)]
+        .find((candidate) => candidate !== normalized) ?? normalized;
+      let occurrences = groups.get(lemma);
+      if (!occurrences) {
+        occurrences = [];
+        groups.set(lemma, occurrences);
+      }
+      occurrences.push({ rawForm, sentence, context });
+    }
+  });
+  return [...groups.entries()].map(([lemma, occurrences]) => ({ lemma, occurrences }));
+}
+
+/** 一个 lemma 的一个义项及其分到的原始出现记录。 */
+export interface TermSenseAssignment {
+  /** 词元。 */
+  lemma: string;
+  /** 义项稳定标识；未匹配到词义库时为占位 'placeholder:1'。 */
+  senseId: string;
+  /** 义项词性；占位义项为 null。 */
+  partOfSpeech: string | null;
+  /** 义项释义。 */
+  definition: string;
+  /** 归入该义项的原始出现记录。 */
+  occurrences: Occurrence[];
+}
+
 export interface AnalyzeMaterialInput {
   analysisId: string;
   material: Material;
   analyzerVersion: string;
   now: ISODateTime;
+  /** 全部出现记录的义项归属；由应用层按词义库与消歧结果（或其兜底策略）生成。 */
+  assignments: TermSenseAssignment[];
+  /**
+   * 被排除的词及其原因（词表过滤、词义库未收录）；
+   * 逐词记入 unmatchedItems，在分析结果中可见但不生成知识点。
+   */
+  excludedTerms?: ExcludedTermInput[];
 }
 
+/** 被排除词的输入形态：词元、原因与全部出现记录。 */
+export interface ExcludedTermInput {
+  lemma: string;
+  reason: string;
+  occurrences: Occurrence[];
+}
+
+/**
+ * 由义项归属组装固定版本的材料分析。
+ * 同一 (lemma, senseId) 只构造一个知识点，ID 为 word:{lemma}:{senseId}，跨材料可稳定合并。
+ */
 export function analyzeMaterial(
   input: AnalyzeMaterialInput,
 ): Extract<MaterialAnalysis, { status: 'analyzed' }> {
   requireText(input.analysisId, 'analysisId');
   requireText(input.analyzerVersion, 'analyzerVersion');
   assertDateTime(input.now, 'now');
-  const groups = new Map<string, {
-    knowledgePoint: KnowledgePoint;
-    occurrences: Array<{ rawForm: string; sentence: string }>;
-  }>();
-  const text = input.material.extractedText ?? '';
-  for (const rawSentence of text.match(/[^.!?…\n]+[.!?…]+|[^.!?…\n]+$/g) ?? []) {
-    const sentence = rawSentence.trim();
-    if (!sentence) continue;
-    for (const match of sentence.normalize('NFKC').matchAll(/[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu)) {
-      const rawForm = match[0];
-      const normalized = rawForm.toLocaleLowerCase('en');
-      const lemma = [lemmatizer.verb(normalized), lemmatizer.noun(normalized), lemmatizer.adjective(normalized)]
-        .find((candidate) => candidate !== normalized) ?? normalized;
-      let group = groups.get(lemma);
-      if (!group) {
-        group = {
-          knowledgePoint: {
-            id: `word:${lemma}`,
-            kind: 'word',
-            lemma,
-            wordFamily: lemma,
-            sense: {
-              id: `sense:${lemma}:1`,
-              definition: `Meaning of ${lemma} in the source material`,
-              partOfSpeech: null,
-              explanation: null,
-            },
-          },
-          occurrences: [],
-        };
-        groups.set(lemma, group);
-      }
-      group.occurrences.push({ rawForm, sentence });
+  if (!Array.isArray(input.assignments)) throw new Error('assignments must be an array');
+  const unmatchedItems: MaterialUnmatchedItem[] = [];
+  for (const excluded of input.excludedTerms ?? []) {
+    requireText(excluded.lemma, 'excludedTerm.lemma');
+    requireText(excluded.reason, 'excludedTerm.reason');
+    if (!Array.isArray(excluded.occurrences) || excluded.occurrences.length === 0) {
+      throw new Error('excludedTerm.occurrences must be a non-empty array');
     }
+    unmatchedItems.push({ lemma: excluded.lemma, reason: excluded.reason, occurrences: [...excluded.occurrences] });
+  }
+  const items: MaterialAnalysisItem[] = [];
+  const itemByKey = new Map<string, MaterialAnalysisItem>();
+  for (const assignment of input.assignments) {
+    requireText(assignment.lemma, 'assignment.lemma');
+    requireText(assignment.senseId, 'assignment.senseId');
+    requireText(assignment.definition, 'assignment.definition');
+    if (!Array.isArray(assignment.occurrences) || assignment.occurrences.length === 0) {
+      throw new Error('assignment.occurrences must be a non-empty array');
+    }
+    const key = `${assignment.lemma}::${assignment.senseId}`;
+    let item = itemByKey.get(key);
+    if (!item) {
+      item = {
+        knowledgePoint: {
+          id: `word:${assignment.lemma}:${assignment.senseId}`,
+          kind: 'word',
+          lemma: assignment.lemma,
+          wordFamily: assignment.lemma,
+          sense: {
+            id: assignment.senseId,
+            definition: assignment.definition,
+            partOfSpeech: assignment.partOfSpeech,
+            explanation: null,
+          },
+        },
+        occurrences: [],
+      };
+      itemByKey.set(key, item);
+      items.push(item);
+    }
+    item.occurrences.push(...assignment.occurrences);
   }
   return {
     id: input.analysisId,
     materialId: input.material.id,
     analyzerVersion: input.analyzerVersion,
     status: 'analyzed',
-    items: [...groups.values()],
-    unmatchedItems: [],
+    items,
+    unmatchedItems,
     errors: [],
     createdAt: input.now,
     completedAt: input.now,
@@ -1417,23 +1504,21 @@ export function judgeTask(input: JudgeTaskInput): TaskJudgement {
     feedback = correct ? 'Correct' : 'Incorrect';
   } else if (generated.content.axis === 'R') {
     if (input.submission.task !== 'FLUENCY' || input.submission.axis !== 'R') throw new Error('Submission axis mismatch');
-    const answers = new Map(input.submission.answers.map((answer) => [answer.questionId, answer]));
-    const isCorrect = (question: (typeof generated.content.questions)[number]): boolean => {
-      const answer = answers.get(question.id);
-      if (!answer) return false;
-      return question.kind === 'choice' && answer.kind === 'choice'
-        ? answer.selectedOptionId === question.answerOptionId
-        : question.kind === 'free' && answer.kind === 'free'
-          && normalizeAnswer(answer.answer) === normalizeAnswer(question.answer);
-    };
-    const targetQuestions = generated.content.questions.filter((question) => question.role === 'target_meaning');
-    const targetPassed = targetQuestions.length > 0 && targetQuestions.every(isCorrect);
-    const correct = generated.content.questions.filter(isCorrect).length;
-    const overallPassed = correct === generated.content.questions.length;
-    const score = correct / generated.content.questions.length;
-    const speedWpm = countWords(generated.content.passage) * 60000 / input.submission.readingElapsedMs;
-    dimensions = { R: { ...dimensionJudgement(score), targetPassed, overallPassed, speedWpm } };
-    feedback = `${correct}/${generated.content.questions.length} answers correct`;
+    const answers = input.submission.answers;
+    const exactVerdicts: ReadingFreeQuestionVerdict[] = generated.content.questions
+      .filter((question) => question.kind === 'free')
+      .map((question) => ({
+        questionId: question.id,
+        correct: (() => {
+          const answer = answers.find((item) => item.questionId === question.id);
+          return question.kind === 'free' && answer?.kind === 'free'
+            && normalizeAnswer(answer.answer) === normalizeAnswer(question.answer);
+        })(),
+      }));
+    const dimension = judgeReadingFluencyAnswers(generated.content, input.submission, exactVerdicts);
+    dimensions = { R: dimension };
+    const total = generated.content.questions.length;
+    feedback = `${Math.round(dimension.score * total)}/${total} answers correct`;
   } else {
     if (input.submission.task !== 'FLUENCY' || input.submission.axis !== 'P') throw new Error('Submission axis mismatch');
     if (!Number.isFinite(input.elapsedMs) || input.elapsedMs! <= 0) {
@@ -1442,11 +1527,57 @@ export function judgeTask(input: JudgeTaskInput): TaskJudgement {
     const targetPassed = normalizeAnswer(input.submission.response)
       .includes(normalizeAnswer(generated.content.gradingRequirements.targetExpression));
     const overallPassed = targetPassed;
-    const speedWpm = countWords(input.submission.response) * 60000 / input.elapsedMs!;
+    const speedWpm = productionSpeedWpm(input.submission.response, input.elapsedMs!);
     dimensions = { P: { ...dimensionJudgement(targetPassed ? 1 : 0), targetPassed, overallPassed, speedWpm } };
     feedback = targetPassed ? 'Target expression used' : 'Target expression was not used correctly';
   }
   return { taskId: input.task.id, dimensions, feedback, judgedBy: 'rule', judgedAt: input.judgedAt };
+}
+
+/** 阅读自由问题的语义正误；由调用方通过规则精确匹配或 AI 语义评判得出。 */
+export interface ReadingFreeQuestionVerdict {
+  questionId: string;
+  correct: boolean;
+}
+
+/**
+ * 汇总阅读流利度任务各题正误为 R 维度评判证据：选择题按提交答案规则判定，
+ * 自由题采用调用方给出的正误，并计算目标/整体通过与阅读速度。
+ */
+export function judgeReadingFluencyAnswers(
+  content: ReadingFluencyTaskContent,
+  submission: ReadingFluencyTaskSubmission,
+  freeQuestionVerdicts: ReadingFreeQuestionVerdict[],
+): DimensionJudgement {
+  const answers = new Map(submission.answers.map((answer) => [answer.questionId, answer]));
+  const freeVerdicts = new Map(freeQuestionVerdicts.map((verdict) => [verdict.questionId, verdict.correct]));
+  const freeQuestionIds = new Set<string>();
+  for (const question of content.questions) {
+    if (question.kind !== 'free') continue;
+    if (!answers.has(question.id)) throw new Error(`Missing answer for question: ${question.id}`);
+    if (!freeVerdicts.has(question.id)) throw new Error(`Missing verdict for free question: ${question.id}`);
+    freeQuestionIds.add(question.id);
+  }
+  for (const questionId of freeVerdicts.keys()) {
+    if (!freeQuestionIds.has(questionId)) throw new Error(`Verdict does not match a free question: ${questionId}`);
+  }
+  const isCorrect = (question: (typeof content.questions)[number]): boolean => {
+    if (question.kind === 'free') return freeVerdicts.get(question.id) === true;
+    const answer = answers.get(question.id);
+    return answer?.kind === 'choice' && answer.selectedOptionId === question.answerOptionId;
+  };
+  const targetQuestions = content.questions.filter((question) => question.role === 'target_meaning');
+  const targetPassed = targetQuestions.length > 0 && targetQuestions.every(isCorrect);
+  const correct = content.questions.filter(isCorrect).length;
+  const overallPassed = correct === content.questions.length;
+  const score = content.questions.length === 0 ? 0 : correct / content.questions.length;
+  const speedWpm = countWords(content.passage) * 60000 / submission.readingElapsedMs;
+  return { ...dimensionJudgement(score), targetPassed, overallPassed, speedWpm };
+}
+
+/** 按产出词数与作答总耗时计算 P 维速度（词/分钟）。 */
+export function productionSpeedWpm(response: string, elapsedMs: number): number {
+  return countWords(response) * 60000 / elapsedMs;
 }
 
 export interface CalculateNextFluencyInput {

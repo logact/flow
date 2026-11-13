@@ -1,0 +1,74 @@
+[
+  {
+    "lemma": "run",
+    "sentence": "I run every morning before work.",
+    "context": [],
+    "senseId": "wn31:v:01930264"
+  },
+  {
+    "lemma": "run",
+    "sentence": "She scored the winning run in the ninth inning.",
+    "context": [],
+    "senseId": "wn31:n:00190414"
+  },
+  {
+    "lemma": "bank",
+    "sentence": "We sat on the bank of the river and watched the water.",
+    "context": [],
+    "senseId": "wn31:n:09236472"
+  },
+  {
+    "lemma": "bank",
+    "sentence": "The bank approved our loan application.",
+    "context": [],
+    "senseId": "wn31:n:08437235"
+  },
+  {
+    "lemma": "light",
+    "sentence": "Please light the candles before dinner.",
+    "context": [],
+    "senseId": "wn31:v:02765572"
+  },
+  {
+    "lemma": "work",
+    "sentence": "They work hard to support their family.",
+    "context": [],
+    "senseId": "wn31:v:02418610"
+  },
+  {
+    "lemma": "work",
+    "sentence": "She loves her work as a teacher.",
+    "context": [],
+    "senseId": "wn31:n:00585404"
+  },
+  {
+    "lemma": "deliberate",
+    "sentence": "When a project changes, a deliberate response is more useful than a rushed one.",
+    "context": [],
+    "senseId": "wn31:a:01340892"
+  },
+  {
+    "lemma": "resilient",
+    "sentence": "A resilient team learns from the setback and keeps moving.",
+    "context": [],
+    "senseId": "wn31:a:02288300"
+  },
+  {
+    "lemma": "change",
+    "sentence": "He gave me change for a twenty-dollar bill.",
+    "context": [],
+    "senseId": "wn31:n:13408652"
+  },
+  {
+    "lemma": "change",
+    "sentence": "The change in leadership surprised everyone.",
+    "context": [],
+    "senseId": "wn31:n:07311046"
+  },
+  {
+    "lemma": "present",
+    "sentence": "They gave her a present for her birthday.",
+    "context": [],
+    "senseId": "wn31:n:13289865"
+  }
+]

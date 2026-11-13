@@ -94,6 +94,13 @@ function buildInitializedState() {
     material,
     analyzerVersion: 'test-v1',
     now: at.answered,
+    assignments: Domain.extractMaterialTerms(material).map((term) => ({
+      lemma: term.lemma,
+      senseId: 'placeholder:1',
+      partOfSpeech: null,
+      definition: `Meaning of ${term.lemma} in the source material`,
+      occurrences: term.occurrences,
+    })),
   });
   const goal = Domain.createLearningGoal({
     id: 'goal-1',

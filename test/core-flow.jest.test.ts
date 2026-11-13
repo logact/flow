@@ -142,7 +142,7 @@ const analysis: Extract<Model.MaterialAnalysis, { status: 'analyzed' }> = {
   status: 'analyzed',
   items: [{
     knowledgePoint,
-    occurrences: [{ rawForm: 'run', sentence: 'I run every morning.' }],
+    occurrences: [{ rawForm: 'run', sentence: 'I run every morning.', context: [] }],
   }],
   unmatchedItems: [],
   errors: [],
@@ -551,6 +551,13 @@ describe('核心流程接口契约模拟', () => {
       material: importedMaterial,
       analyzerVersion: analysis.analyzerVersion,
       now: at.analyzed,
+      assignments: [{
+        lemma: 'run',
+        senseId: 'placeholder:1',
+        partOfSpeech: null,
+        definition: 'Meaning of run in the source material',
+        occurrences: [{ rawForm: 'run', sentence: 'I run every morning.', context: [] }],
+      }],
     });
     // 8. 将目标、材料和已完成分析组合为目标学习范围。
     const learningGoal = createGoal({

@@ -227,6 +227,8 @@ export interface Occurrence {
   rawForm: string;
   /** 包含该词汇的原始句子。 */
   sentence: string;
+  /** 该句前后相邻的句子（不含本句），分析时捕获，供词义消歧等语境判断使用。 */
+  context: string[];
 }
 
 /** 材料分析结果中的一个词汇知识点及其全部原始出现记录。 */
@@ -239,6 +241,8 @@ export interface MaterialAnalysisItem {
 
 /** 材料分析中未能匹配为知识点的一组原始出现记录。 */
 export interface MaterialUnmatchedItem {
+  /** 按词元归并后的词；无法归并到具体词元时为空。 */
+  lemma?: string;
   /** 无法匹配或归一化的原因。 */
   reason: string;
   /** 具有相同未匹配原因的原始出现记录。 */
