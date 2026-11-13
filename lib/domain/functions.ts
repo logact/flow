@@ -1912,9 +1912,13 @@ export function calculateNextReviewSchedule(
     } else if (input.targetReached) {
       successfulReviewStreak = 1;
       intervalDays = 1;
-    } else {
+    } else if (input.review) {
+      // 达标后的间隔复习按连对 streak 推进 1/3/7/30 天。
       successfulReviewStreak++;
       intervalDays = [1, 3, 7, 30][Math.min(successfulReviewStreak - 1, 3)];
+    } else {
+      // 未达标答对：当天升级到下一级任务，不进入间隔复习。
+      intervalDays = 0;
     }
   } else if (input.judgement.outcome === 'incorrect') {
     successfulReviewStreak = 0;

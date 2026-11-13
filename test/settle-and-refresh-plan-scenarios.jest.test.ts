@@ -22,7 +22,6 @@ const day = {
   planned: at.planned,
   answered: '2026-11-13T04:30:00.000Z',
   settled: '2026-11-13T05:00:00.000Z',
-  review3Later: '2026-11-16T06:00:00.000Z',
   review30Later: '2026-12-13T06:00:00.000Z',
 };
 
@@ -228,34 +227,30 @@ function withContemporaryReview(review: {
 }
 
 describe('结算完自动更新计划场景', () => {
-  test('答对（毕业前）：当天让位给新词，下次复习时计划升级为更高级任务', async () => {
+  test('答对（毕业前）：当天计划升级为更高级任务，优先级高于新词', async () => {
     const h = harness();
     const first = await refresh(h, '2026-11-13', day.planned);
     if (!first.ok) throw new Error(`expected ok, got ${first.reason}`);
     const choiceTask = taskByWord(h, first.plan.taskIds, 'kp-ubiquitous');
     expect(choiceTask.content).toMatchObject({ task: 'RETRIEVE', content: { stage: 'choice' } });
 
-    // 答对选择题：流利度 10 → 20，进入 cued 段；streak 1→2，复习间隔 1→3 天。
+    // 答对选择题：流利度 10 → 20，进入 cued 段；未达标答对当天到期升级。
     receiveAttempt(h.repository, choiceTask, choiceSubmission(choiceTask, true), 'attempt-ubi-ok', day.answered);
     const result = await settleAndRefresh(h, 'attempt-ubi-ok', day.settled);
     expect(result.settlement.fluencyChanges).toEqual(expect.arrayContaining([
       expect.objectContaining({ knowledgePointId: 'kp-ubiquitous', dimension: 'R', before: 10, after: 20 }),
     ]));
     expect(learningOf(h, 'kp-ubiquitous').dimensions.R.review).toMatchObject({
-      intervalDays: 3,
-      dueAt: '2026-11-16T05:00:00.000Z',
+      intervalDays: 0,
+      dueAt: day.settled,
     });
     if (!result.refresh.ok) throw new Error(`expected refresh ok, got ${result.refresh.reason}`);
-    // 当天重排：该词 3 天后才到期，让出名额给等待中的新词 setback。
-    expect(planWords(h, result.refresh.plan.taskIds)).not.toContain('kp-ubiquitous');
-    expect(planWords(h, result.refresh.plan.taskIds)).toContain('kp-setback');
-    expect(result.refresh.plan.taskIds).toHaveLength(5);
-
-    // 时间推进到到期后重排：同一词以更高级的 cued 任务回到计划。
-    const second = await refresh(h, '2026-11-16', day.review3Later);
-    if (!second.ok) throw new Error(`expected ok, got ${second.reason}`);
-    const upgraded = taskByWord(h, second.plan.taskIds, 'kp-ubiquitous');
+    // 当天重排：升级任务压过新词优先落位，占满容量，等待中的新词 setback 让位。
+    const upgraded = taskByWord(h, result.refresh.plan.taskIds, 'kp-ubiquitous');
+    expect(upgraded.id).not.toBe(choiceTask.id);
     expect(upgraded.content).toMatchObject({ task: 'RETRIEVE', content: { axis: 'R', stage: 'cued' } });
+    expect(result.refresh.plan.taskIds).toHaveLength(5);
+    expect(planWords(h, result.refresh.plan.taskIds)).not.toContain('kp-setback');
   });
 
   test('答对 7 天间隔复习：下次复习排到 30 天后', async () => {

@@ -952,8 +952,8 @@ describe('真实领域函数', () => {
       expect(validateLearningState(replanned)).toEqual([]);
     });
 
-    test('答对后不产生当天重试并保留其他新词任务', () => {
-      const { state, taskA, taskB } = buildReplanState();
+    test('答对后当天升级到更高级任务并保留其他新词任务', () => {
+      const { state, newA, taskA, taskB } = buildReplanState();
       const settled = settleChoiceAnswer(state, taskA, 'a');
       expect(settled.attempt.judgement.dimensions.R?.outcome).toBe('correct');
 
@@ -962,7 +962,14 @@ describe('真实领域函数', () => {
         date: '2026-11-12',
         now: at.judged,
       });
-      expect(decision.tasks).toEqual([{ source: 'existing', taskId: taskB.id }]);
+      // 未达标答对当天到期：升级任务优先于新词任务，占满容量时排在新词之前。
+      expect(decision.tasks).toEqual([
+        {
+          source: 'new',
+          specification: { goalId: 'goal-1', wordId: newA.id, task: 'RETRIEVE', axis: 'R', stage: 'cued' },
+        },
+        { source: 'existing', taskId: taskB.id },
+      ]);
       expect(decision.cancelTaskIds).toEqual([]);
     });
   });
