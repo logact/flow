@@ -211,3 +211,62 @@ button:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+
+/* ── 文档型页面（材料/目标/测评/我的）与状态卡 ───────────────────── */
+
+.doc-shell { width: min(100%, 560px); height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; background: #111; }
+.doc-topbar { flex-shrink: 0; height: 57px; display: flex; align-items: center; justify-content: space-between; padding: max(5px, env(safe-area-inset-top)) 17px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+.doc-topbar h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.doc-body { flex: 1; overflow-y: auto; padding: 16px 17px calc(70px + env(safe-area-inset-bottom)); }
+.doc-card { margin-bottom: 16px; padding: 15px; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.045); }
+.doc-card h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.doc-muted { color: rgba(255,255,255,.55); font-size: 11px; line-height: 1.7; }
+.doc-error { color: #ff819a; font-size: 11px; line-height: 1.6; }
+.doc-notice { color: var(--cyan); font-size: 11px; line-height: 1.6; }
+.doc-input, .doc-textarea { width: 100%; margin-top: 9px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.16); border-radius: 7px; background: rgba(255,255,255,.07); color: #fff; font-size: 13px; }
+.doc-input:focus, .doc-textarea:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+select.doc-input { appearance: none; }
+.doc-textarea { resize: vertical; font-family: Georgia, serif; line-height: 1.6; }
+.doc-form-row { display: flex; gap: 12px; margin-top: 9px; }
+.doc-form-row label { flex: 1; display: flex; flex-direction: column; gap: 6px; color: rgba(255,255,255,.6); font-size: 11px; }
+.doc-form-row input { padding: 9px 12px; border: 1px solid rgba(255,255,255,.16); border-radius: 7px; background: rgba(255,255,255,.07); color: #fff; font-size: 13px; }
+.doc-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.doc-actions .primary-button { margin-left: 0; }
+.doc-secondary-button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 17px; border: 1px solid rgba(255,255,255,.22); border-radius: 6px; background: transparent; color: #fff; font-size: 12px; }
+.doc-file-button { cursor: pointer; }
+.doc-list { margin: 0; padding: 0; list-style: none; }
+.doc-list li { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 12px; line-height: 1.7; }
+.doc-list li:last-child { border-bottom: 0; }
+.doc-list em { color: rgba(255,255,255,.5); font-size: 10px; }
+.doc-list-link { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 0; border: 0; background: none; color: #fff; text-align: left; }
+.doc-tag { display: inline-block; margin: 0 5px; padding: 1px 6px; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; color: rgba(255,255,255,.6); font-size: 9px; }
+.doc-table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 11px; }
+.doc-table th, .doc-table td { padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
+.doc-table th { color: rgba(255,255,255,.5); font-weight: 500; }
+
+.assessment-card { text-align: center; }
+.assessment-word { margin: 18px 0 10px; font-family: Georgia, serif; font-size: 44px; font-weight: 400; letter-spacing: -1.5px; }
+.assessment-card .doc-actions { justify-content: center; }
+
+.candidate-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.candidate-info { flex: 1; }
+.candidate-info p { margin: 3px 0 0; }
+.candidate-toggle { flex-shrink: 0; display: flex; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; overflow: hidden; }
+.candidate-toggle button { padding: 6px 10px; border: 0; background: transparent; color: rgba(255,255,255,.55); font-size: 10px; }
+.candidate-toggle button.active { background: var(--red); color: #fff; }
+
+.status-card { display: flex; align-items: center; background: radial-gradient(circle at 85% 15%, rgba(37,244,238,.14), transparent 34%), linear-gradient(150deg, #17211f, #0d1211 70%); }
+.status-body { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 79px 24px 90px; }
+.status-body h1 { margin: 0; font-family: Georgia, serif; font-size: 34px; line-height: 1.25; font-weight: 400; letter-spacing: -1px; }
+.status-body p { margin: 0; color: rgba(255,255,255,.6); font-size: 12px; line-height: 1.8; }
+.status-body .primary-button { margin-left: 0; align-self: flex-start; }
+.status-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.status-actions .primary-button { margin-left: 0; }
+
+.rail-icon-text { color: #fff; font-size: 15px; }
+.review-badge.visible { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 9px; }
+
+.reading-question { margin-bottom: 18px; }
+.reading-question h1 { margin: 13px 0 12px; color: #fff; font-size: 15px; line-height: 1.5; font-weight: 500; }
+.reading-free-input { width: 100%; min-height: 74px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.18); border-radius: 7px; background: rgba(255,255,255,.07); color: #fff; font-family: Georgia, serif; font-size: 12px; line-height: 1.6; resize: vertical; }
+.writing-feedback-block { margin-top: 14px; }
