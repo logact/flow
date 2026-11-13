@@ -901,55 +901,181 @@ export function generateLearningTask(input: GenerateLearningTaskInput): Generate
   };
 }
 
+/**
+ * 任务校验的详细结果：reasons 为空表示通过。
+ * malformed 表示输出连 GeneratedTask 的基本形状都不具备（缺字段/类型错误），
+ * 应用层应将其归为 invalid_ai_output；纯值层面的违规则归为 spec_mismatch。
+ */
+export interface GeneratedTaskInspection {
+  malformed: boolean;
+  /** 未通过的具体原因（中文），供日志与 AI 重试反馈使用。 */
+  reasons: string[];
+}
+
+/**
+ * 校验 AI 生成的任务是否符合规格，并给出可读的失败原因。
+ * targetLemma 为目标词形；传入时额外校验 FLUENCY-R 短文质量
+ * （词数 80~100、目标词至少出现 3 次、声明次数与实际一致），不传则跳过该质量检查。
+ */
+export function inspectGeneratedTask(
+  specification: TaskSpecification,
+  generated: GeneratedTask,
+  targetLemma?: string,
+): GeneratedTaskInspection {
+  const reasons: string[] = [];
+  let malformed = false;
+  const fail = (reason: string, isMalformed = false) => {
+    reasons.push(reason);
+    if (isMalformed) malformed = true;
+  };
+
+  if (!generated || typeof generated !== 'object' || generated.schemaVersion !== '1'
+    || generated.task !== specification.task || generated.wordId !== specification.wordId
+    || !generated.content || typeof generated.content !== 'object') {
+    fail('顶层结构不符合规格（schemaVersion/task/wordId/content）');
+    return { malformed, reasons };
+  }
+
+  if (specification.task === 'ENCODE') {
+    if (generated.task !== 'ENCODE') return { malformed: true, reasons: ['task 与 content 结构不一致'] };
+    const content = generated.content;
+    if (typeof content.word !== 'string') fail('ENCODE 缺少 word 字段', true);
+    else if (!content.word.trim()) fail('ENCODE word 不能为空');
+    if (typeof content.definition !== 'string') fail('ENCODE 缺少 definition 字段', true);
+    else if (!content.definition.trim()) fail('ENCODE definition 不能为空');
+    if (typeof content.instruction !== 'string') fail('ENCODE 缺少 instruction 字段', true);
+    else if (!content.instruction.trim()) fail('ENCODE instruction 不能为空');
+    if (!Array.isArray(content.examples)) fail('ENCODE 缺少 examples 数组', true);
+    else if (content.examples.length === 0) fail('ENCODE 至少需要一个例句');
+    else if (!content.examples.every((example) => typeof example?.sentence === 'string' && example.sentence.trim())) {
+      fail('ENCODE 例句不能为空');
+    }
+    return { malformed, reasons };
+  }
+
+  if (generated.task === 'ENCODE') return { malformed: true, reasons: ['task 与 content 结构不一致'] };
+  if (generated.content.axis !== specification.axis) {
+    fail(`axis 必须为 "${specification.axis}"`);
+    return { malformed, reasons };
+  }
+  if (specification.task === 'RETRIEVE') {
+    if (generated.task !== 'RETRIEVE') return { malformed: true, reasons: ['task 与 content 结构不一致'] };
+    const content = generated.content;
+    if (content.stage !== specification.stage) {
+      fail(`stage 必须为 "${specification.stage}"`);
+      return { malformed, reasons };
+    }
+    if (typeof content.prompt !== 'string' || !content.prompt.trim()) fail('RETRIEVE prompt 不能为空');
+    if (content.stage === 'choice') {
+      if (!Array.isArray(content.options)) fail('RETRIEVE-choice 缺少 options 数组', true);
+      else if (content.options.length < 2) fail('RETRIEVE-choice 至少需要 2 个选项');
+      else if (new Set(content.options.map((option) => option?.id)).size !== content.options.length) {
+        fail('RETRIEVE-choice 选项 id 必须唯一');
+      }
+      else if (!content.options.every((option) => typeof option?.id === 'string' && option.id.trim()
+        && typeof option?.text === 'string' && option.text.trim())) {
+        fail('RETRIEVE-choice 选项 id 与 text 不能为空');
+      }
+      else if (!content.options.some((option) => option?.id === content.answerOptionId)) {
+        fail('RETRIEVE-choice answerOptionId 必须指向一个存在的选项');
+      }
+      if (typeof content.explanation !== 'string' || !content.explanation.trim()) {
+        fail('RETRIEVE-choice explanation 不能为空');
+      }
+      return { malformed, reasons };
+    }
+    if (!content.answerKey || typeof content.answerKey !== 'object') {
+      fail('RETRIEVE 缺少 answerKey 对象', true);
+    } else {
+      if (!Array.isArray(content.answerKey.acceptedAnswers)) {
+        fail('RETRIEVE 缺少 acceptedAnswers 数组', true);
+      } else if (content.answerKey.acceptedAnswers.length === 0) {
+        fail('RETRIEVE 至少需要一个可接受答案');
+      } else if (!content.answerKey.acceptedAnswers.every((answer) => typeof answer === 'string' && answer.trim())) {
+        fail('RETRIEVE 可接受答案不能为空');
+      }
+      if (typeof content.answerKey.explanation !== 'string' || !content.answerKey.explanation.trim()) {
+        fail('RETRIEVE explanation 不能为空');
+      }
+    }
+    if (content.stage === 'cued' && (typeof content.cue !== 'string' || !content.cue.trim())) {
+      fail('RETRIEVE-cued cue 不能为空');
+    }
+    return { malformed, reasons };
+  }
+
+  if (generated.task !== 'FLUENCY') return { malformed: true, reasons: ['task 与 content 结构不一致'] };
+  const content = generated.content;
+  if (content.axis === 'R') {
+    if (typeof content.passage !== 'string') fail('FLUENCY-R 缺少 passage 字段', true);
+    else if (!content.passage.trim()) fail('FLUENCY-R passage 不能为空');
+    else if (targetLemma) {
+      const wordCount = content.passage.trim().split(/\s+/).length;
+      if (wordCount < FLUENCY_PASSAGE_MIN_WORDS || wordCount > FLUENCY_PASSAGE_MAX_WORDS) {
+        fail(`FLUENCY-R 短文必须为 ${FLUENCY_PASSAGE_MIN_WORDS}~${FLUENCY_PASSAGE_MAX_WORDS} 词（当前 ${wordCount} 词）`);
+      }
+      const actualOccurrences = countOccurrences(content.passage, targetLemma);
+      if (actualOccurrences < FLUENCY_PASSAGE_MIN_TARGET_OCCURRENCES) {
+        fail(`目标词 "${targetLemma}" 在短文中至少出现 ${FLUENCY_PASSAGE_MIN_TARGET_OCCURRENCES} 次（当前 ${actualOccurrences} 次）`);
+      }
+      if (content.targetOccurrences !== actualOccurrences) {
+        fail(`targetOccurrences 与实际不符（声明 ${content.targetOccurrences} 次，实际 ${actualOccurrences} 次）`);
+      }
+    }
+    if (!Array.isArray(content.questions)) fail('FLUENCY-R 缺少 questions 数组', true);
+    else if (content.questions.length === 0) fail('FLUENCY-R 至少需要一个问题');
+    else if (new Set(content.questions.map((question) => question?.id)).size !== content.questions.length) {
+      fail('FLUENCY-R 问题 id 必须唯一');
+    } else if (!content.questions.every((question) => question && typeof question === 'object'
+      && typeof question.prompt === 'string' && question.prompt.trim()
+      && typeof question.evidence === 'string' && question.evidence.trim()
+      && typeof content.passage === 'string' && content.passage.includes(question.evidence)
+      && (question.kind === 'choice'
+        ? Array.isArray(question.options) && question.options.length >= 2
+          && question.options.some((option) => option?.id === question.answerOptionId)
+        : typeof question.answer === 'string' && Boolean(question.answer.trim())))) {
+      fail('FLUENCY-R 问题字段不完整：prompt/evidence 非空且 evidence 逐字来自短文；选择题选项与答案有效，自由题答案非空');
+    }
+    if (!Number.isInteger(content.targetOccurrences) || content.targetOccurrences < 0) {
+      fail('FLUENCY-R targetOccurrences 必须是非负整数');
+    }
+    return { malformed, reasons };
+  }
+  if (!content.gradingRequirements || typeof content.gradingRequirements !== 'object') {
+    fail('FLUENCY-P 缺少 gradingRequirements 对象', true);
+    return { malformed, reasons };
+  }
+  const requirements = content.gradingRequirements;
+  if (typeof content.scenario !== 'string' || !content.scenario.trim()) fail('FLUENCY-P scenario 不能为空');
+  if (typeof content.responseInstruction !== 'string' || !content.responseInstruction.trim()) {
+    fail('FLUENCY-P responseInstruction 不能为空');
+  }
+  if (typeof requirements.targetExpression !== 'string') fail('FLUENCY-P 缺少 targetExpression 字段', true);
+  else if (!requirements.targetExpression.trim()) fail('FLUENCY-P targetExpression 不能为空');
+  if (!Array.isArray(requirements.targetUseCriteria)) fail('FLUENCY-P 缺少 targetUseCriteria 数组', true);
+  else if (requirements.targetUseCriteria.length === 0) fail('FLUENCY-P 至少需要一个目标表达使用标准');
+  if (!Array.isArray(requirements.overallExpressionCriteria)) fail('FLUENCY-P 缺少 overallExpressionCriteria 数组', true);
+  else if (requirements.overallExpressionCriteria.length === 0) fail('FLUENCY-P 至少需要一个整体表达标准');
+  if (Array.isArray(requirements.targetUseCriteria) && Array.isArray(requirements.overallExpressionCriteria)
+    && ![...requirements.targetUseCriteria, ...requirements.overallExpressionCriteria]
+      .every((criterion) => typeof criterion === 'string' && criterion.trim())) {
+    fail('FLUENCY-P 评分标准不能为空');
+  }
+  return { malformed, reasons };
+}
+
+/** FLUENCY-R 短文词数下限/上限。 */
+export const FLUENCY_PASSAGE_MIN_WORDS = 80;
+export const FLUENCY_PASSAGE_MAX_WORDS = 100;
+/** FLUENCY-R 短文中目标词至少出现的次数。 */
+export const FLUENCY_PASSAGE_MIN_TARGET_OCCURRENCES = 3;
+
 export function validateGeneratedTask(
   specification: TaskSpecification,
   generated: GeneratedTask,
+  targetLemma?: string,
 ): boolean {
-  if (!generated || generated.schemaVersion !== '1' || generated.task !== specification.task
-    || generated.wordId !== specification.wordId || !generated.content) return false;
-  if (specification.task === 'ENCODE') {
-    if (generated.task !== 'ENCODE') return false;
-    const content = generated.content;
-    return Boolean(content.word.trim() && content.definition.trim() && content.instruction.trim()
-      && content.examples.length > 0 && content.examples.every((example) => example.sentence.trim()));
-  }
-  if (generated.task === 'ENCODE') return false;
-  if (generated.content.axis !== specification.axis) return false;
-  if (specification.task === 'RETRIEVE') {
-    if (generated.task !== 'RETRIEVE' || generated.content.stage !== specification.stage) return false;
-    const content = generated.content;
-    if (!content.prompt.trim()) return false;
-    if (content.stage === 'choice') {
-      return content.options.length >= 2
-        && new Set(content.options.map((option) => option.id)).size === content.options.length
-        && content.options.every((option) => option.id.trim() && option.text.trim())
-        && content.options.some((option) => option.id === content.answerOptionId)
-        && Boolean(content.explanation.trim());
-    }
-    return content.answerKey.acceptedAnswers.length > 0
-      && content.answerKey.acceptedAnswers.every((answer) => Boolean(answer.trim()))
-      && Boolean(content.answerKey.explanation.trim())
-      && (content.stage !== 'cued' || Boolean(content.cue.trim()));
-  }
-  if (generated.task !== 'FLUENCY') return false;
-  const content = generated.content;
-  if (content.axis === 'R') {
-    return Boolean(content.passage.trim())
-      && content.questions.length > 0
-      && new Set(content.questions.map((question) => question.id)).size === content.questions.length
-      && content.questions.every((question) => question.prompt.trim() && question.evidence.trim()
-        && content.passage.includes(question.evidence)
-        && (question.kind === 'choice'
-          ? question.options.length >= 2 && question.options.some((option) => option.id === question.answerOptionId)
-          : Boolean(question.answer.trim())))
-      && Number.isInteger(content.targetOccurrences) && content.targetOccurrences >= 0;
-  }
-  const requirements = content.gradingRequirements;
-  return Boolean(content.scenario.trim() && content.responseInstruction.trim()
-    && requirements.targetExpression.trim()
-    && requirements.targetUseCriteria.length > 0 && requirements.overallExpressionCriteria.length > 0
-    && [...requirements.targetUseCriteria, ...requirements.overallExpressionCriteria]
-      .every((criterion) => Boolean(criterion.trim())));
+  return inspectGeneratedTask(specification, generated, targetLemma).reasons.length === 0;
 }
 
 export interface CreateLearningTaskInput {
@@ -2017,7 +2143,7 @@ function splitSentences(text: string): string[] {
   return (text.match(/[^.!?…\n]+[.!?…]+|[^.!?…\n]+$/g) ?? []).map((sentence) => sentence.trim()).filter(Boolean);
 }
 
-function knowledgePointName(knowledgePoint: KnowledgePoint): string {
+export function knowledgePointName(knowledgePoint: KnowledgePoint): string {
   return knowledgePoint.kind === 'word' || knowledgePoint.kind === 'phrase'
     ? knowledgePoint.lemma
     : knowledgePoint.name;

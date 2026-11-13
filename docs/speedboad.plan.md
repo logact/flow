@@ -189,8 +189,8 @@ export LLM_MODEL=deepseek-chat
 
 **应用层编排**
 
-1. 根据 `specification.goalId` 和 `specification.wordId` 加载目标知识点及目标来源材料。
-2. **应用层调用 AI Provider，根据 `TaskSpecification`、知识点和 `sourceMaterials` 生成 `GeneratedTask`。Domain 不直接调用 AI；当前 `generateLearningTask` 是本地模板生成路径，不代替本用例的 AI 生成路径。**
+1. 根据 `specification.goalId` 和 `specification.wordId` 加载目标知识点及目标来源材料，同时加载学习者最新词汇水平估计（`currentVocabulary`）。
+2. **应用层调用 AI Provider，根据 `TaskSpecification`、知识点、学习者词汇水平和 `sourceMaterials` 生成 `GeneratedTask`；提示词须要求 AI 按学习者实际水平控制题目难度。Domain 不直接调用 AI；当前 `generateLearningTask` 是本地模板生成路径，不代替本用例的 AI 生成路径。**
 3. 应用层解析 AI 输出后调用 `validateGeneratedTask`，核对任务类型、知识点、R/P 维度和提取阶段。
 4. 校验通过后调用 `createLearningTask`，生成服务端完整 `LearningTask`。
 5. AI 生成使用 AI Provider 统一配置；外部调用期间不持有数据库事务。

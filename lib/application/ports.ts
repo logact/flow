@@ -10,6 +10,7 @@ import type {
   LearningGoal,
   Material,
   MaterialAnalysis,
+  VocabularyEstimate,
 } from '../domain/model';
 
 /**
@@ -21,6 +22,8 @@ export interface TaskGenerationContext {
   candidate: GoalKnowledgePoint;
   knowledgePoint: KnowledgePoint;
   sourceMaterials: Material[];
+  /** 学习者最新词汇水平估计；未完成首次测评的学习者为空。 */
+  learnerVocabulary: VocabularyEstimate | null;
 }
 
 /**
@@ -39,6 +42,10 @@ export interface TaskGenerationAIRequest {
   specification: TaskSpecification;
   knowledgePoint: KnowledgePoint;
   sourceMaterials: Material[];
+  /** 学习者最新词汇水平估计，用于让 AI 按实际水平调整题目难度。 */
+  learnerVocabulary: VocabularyEstimate | null;
+  /** 上次生成未通过校验的原因；首次生成为空，重试时带给 AI 帮助其修正。 */
+  feedback?: string;
 }
 
 /**
