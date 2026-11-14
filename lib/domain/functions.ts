@@ -1218,8 +1218,7 @@ export interface DailyStudyDecision {
  * 流程：① 清理已签发任务（范围失效的取消、历史日期的过期，既有任务不顺延）
  * → ② 今日计划中的既有任务优先保留（规格漂移的转取消）→ ③ 收集 active 目标 included 候选的下一任务规格
  * → ④ 排序并填充新位置，其中新词需通过未来 42 天容量准入检查
- * → ⑤ 同词族任务（无词族信息时按词本身）在不打破优先级顺序的前提下拉开位置间隔，
- * 任务不足时保持原顺序。
+ * → ⑤ 按达标复习、未达标学习、新词三段排序，同段同 dueAt 桶内贪心分散词族。
  * 到期复习与新词引入共用本决策：调用方只传新的 date/now，复习间隔不在此处计算。
  */
 function hasSpecificationDrifted(
@@ -1324,8 +1323,8 @@ export function planDailyStudy(
   const candidates: Array<{
     specification: TaskSpecification;
     dueAt: number;
+    priority: 0 | 1 | 2;
     isNew: boolean;
-    isNewWord: boolean;
     scope: (typeof scopes)[number];
   }> = [];
   for (const scope of scopes) {
@@ -1344,25 +1343,55 @@ export function planDailyStudy(
     if (!specification) continue;
     const key = taskSpecificationKey(specification.goalId, specification);
     if (occupied.has(key)) continue;
-    const dueAt = learning
-      ? Math.min(...(['R', 'P'] as FluencyDimension[]).map((dimension) =>
-        Date.parse(learning.dimensions[dimension].review.dueAt)))
-      : Number.POSITIVE_INFINITY;
+    const dueDimension = specification.task === 'ENCODE' ? null : specification.axis;
+    const dueAt = learning ? (dueDimension
+      ? Date.parse(learning.dimensions[dueDimension].review.dueAt)
+      : Math.min(...(['R', 'P'] as FluencyDimension[]).map((dimension) =>
+        Date.parse(learning.dimensions[dimension].review.dueAt)))) : Number.POSITIVE_INFINITY;
+    const isGraduatedReview = Boolean(learning && dueDimension
+      && learning.dimensions[dueDimension].review.graduated
+      && learning.dimensions[dueDimension].fluency >= goal.targetFluency[dueDimension]);
+    const isOverdueUngraduated = Boolean(learning && dueAt !== Number.POSITIVE_INFINITY
+      && localDateFor(new Date(dueAt).toISOString(), learner.timezone) < input.date);
+    const priority = !learning ? 2 : isGraduatedReview ? 0 : isOverdueUngraduated ? 1 : 2;
     candidates.push({
       specification,
       dueAt,
+      priority,
       isNew: learning === null,
-      isNewWord: !hasLearningEvidence(learning),
       scope,
     });
   }
-  // ④ 排序：复习（有学习证据）优先于新词；再按到期时间、goalId、wordId 稳定排序。
-  candidates.sort((a, b) => Number(a.isNewWord) - Number(b.isNewWord)
-    || a.dueAt - b.dueAt
+  // 新词准入先于排位分散：按稳定键逐个预测，首个不满足 42 天容量的候选及后续新词不准入。
+  candidates.sort((a, b) => a.specification.goalId.localeCompare(b.specification.goalId)
+    || a.specification.wordId.localeCompare(b.specification.wordId));
+  const admittedNewKeys = new Set<string>();
+  let newWordAdmissionClosed = false;
+  for (const candidate of candidates) {
+    if (!candidate.isNew || newWordAdmissionClosed || !candidate.scope) continue;
+    const { goal, knowledgePoint } = candidate.scope;
+    const proposedDemand = mergeCapacityDemand(futureDemand, forecastSuccessfulPath(
+      goal,
+      knowledgePoint,
+      initialDimensionsForNewWord(state, learner, knowledgePoint, input.now),
+      learner.timezone,
+      input,
+      true,
+    ));
+    if ([...proposedDemand.values()].some((count) => count > learner.dailyTaskCapacity)) {
+      newWordAdmissionClosed = true;
+      continue;
+    }
+    futureDemand = proposedDemand;
+    admittedNewKeys.add(taskSpecificationKey(candidate.specification.goalId, candidate.specification));
+  }
+  const eligibleCandidates = candidates.filter((candidate) => !candidate.isNew
+    || admittedNewKeys.has(taskSpecificationKey(candidate.specification.goalId, candidate.specification)));
+  // ④ 排序：已达标复习、逾期未达标、今日到期未达标与准入新词；第三段共同分散。
+  eligibleCandidates.sort((a, b) => a.priority - b.priority
+    || (a.priority < 2 ? a.dueAt - b.dueAt : 0)
     || a.specification.goalId.localeCompare(b.specification.goalId)
     || a.specification.wordId.localeCompare(b.specification.wordId));
-  const deferredKeys = new Set(deferredNewTasks.map((task) => taskSpecificationKey(task.goalId, task.content)));
-  // 延迟新任务只整体落位一次；容量不足时同样由决策给出取消。
   let deferredRetained = false;
   const retainDeferredNewTasks = (): void => {
     if (deferredRetained) return;
@@ -1370,49 +1399,45 @@ export function planDailyStudy(
     for (const task of deferredNewTasks) {
       if (tasks.length >= learner.dailyTaskCapacity) {
         cancelTaskIds.push(task.id);
-        continue;
+      } else {
+        tasks.push({ source: 'existing', taskId: task.id });
+        occupied.add(taskSpecificationKey(task.goalId, task.content));
       }
-      tasks.push({ source: 'existing', taskId: task.id });
-      occupied.add(taskSpecificationKey(task.goalId, task.content));
     }
   };
-  // 按排序填充新位置；延迟新任务与已占用规格被跳过。
-  for (const candidate of candidates) {
+  // 既有新词任务优先保留，并作为第三层候选的已排前缀参与分散距离计算。
+  if (eligibleCandidates.some((candidate) => candidate.priority === 2)) retainDeferredNewTasks();
+  const history = [
+    ...completedSameWordHistory(state, learner.id, input.date, learner.timezone),
+    ...tasks.map((position) => plannedTaskGroupKey(state, position)),
+  ];
+  const orderedCandidates = spreadCandidateBuckets(eligibleCandidates, (candidate) =>
+    plannedTaskGroupKey(state, { source: 'new', specification: candidate.specification }), history);
+  // 按分段排序与桶内分散后的顺序填充。
+  for (const candidate of orderedCandidates) {
     const key = taskSpecificationKey(candidate.specification.goalId, candidate.specification);
-    if (deferredKeys.has(key) || occupied.has(key)) continue;
-    if (candidate.isNewWord) retainDeferredNewTasks();
+    if (occupied.has(key)) continue;
     if (tasks.length >= learner.dailyTaskCapacity) break;
-    if (candidate.isNew) {
-      // 新词准入：合并该词全成功路径后，任何未来日期超容量即停止引入（含后续新词）。
-      const { goal, knowledgePoint } = candidate.scope;
-      const proposedDemand = mergeCapacityDemand(futureDemand, forecastSuccessfulPath(
-        goal,
-        knowledgePoint,
-        initialDimensionsForNewWord(state, learner, knowledgePoint, input.now),
-        learner.timezone,
-        input,
-        true,
-      ));
-      if ([...proposedDemand.values()].some((count) => count > learner.dailyTaskCapacity)) break;
-      futureDemand = proposedDemand;
-    }
     occupied.add(key);
     tasks.push({ source: 'new', specification: candidate.specification });
   }
-  // 当天没有新词候选时，延迟新任务也要在此落位。
-  retainDeferredNewTasks();
+  if (!deferredRetained && deferredNewTasks.length) retainDeferredNewTasks();
+  // 未发生替换或新任务准入时，重复刷新保持今日计划的既有顺序。
+  if (currentPlan && tasks.every((position) => position.source === 'existing'
+    && currentIds.has(position.taskId))) {
+    const order = new Map(currentPlan.taskIds.map((id, index) => [id, index]));
+    tasks.sort((a, b) => (order.get(a.source === 'existing' ? a.taskId : '') ?? Number.POSITIVE_INFINITY)
+      - (order.get(b.source === 'existing' ? b.taskId : '') ?? Number.POSITIVE_INFINITY));
+  }
   return {
     learnerId: learner.id,
     date: input.date,
     taskCapacity: learner.dailyTaskCapacity,
-    tasks: spreadSameWordTasks(tasks, (position) => plannedTaskGroupKey(state, position)),
+    tasks,
     expireTaskIds: [...new Set(expireTaskIds)],
     cancelTaskIds: [...new Set(cancelTaskIds)],
   };
 }
-
-/** 同一词族的相邻两次练习之间至少间隔的其它任务数。 */
-const SAME_WORD_TASK_GAP = 5;
 
 /** 分散的分组键：有词族信息时按词族，否则按词本身。 */
 function plannedTaskGroupKey(state: Readonly<LearningState>, position: PlannedTask): string {
@@ -1424,47 +1449,60 @@ function plannedTaskGroupKey(state: Readonly<LearningState>, position: PlannedTa
   return wordFamily ? `family:${wordFamily}` : `word:${wordId}`;
 }
 
-/**
- * ⑤ 同词族分散：同一词族的任务位置至少间隔 5 个其它任务。
- * 只把重复任务向后顺延、不提前任何任务，优先级顺序不被打破；
- * 任务总数不足以拉开时整体保持原顺序。
- */
-function spreadSameWordTasks(
-  tasks: PlannedTask[],
-  groupKeyOf: (task: PlannedTask) => string,
-): PlannedTask[] {
-  const placedAt = new Map<string, number>();
-  const result: PlannedTask[] = [];
-  const pending: PlannedTask[] = [];
-  const allowed = (wordId: string): boolean => {
-    const last = placedAt.get(wordId);
-    return last === undefined || result.length - last > SAME_WORD_TASK_GAP;
-  };
-  const flushPending = (): void => {
-    let index = 0;
-    while (index < pending.length) {
-      const wordId = groupKeyOf(pending[index]);
-      if (!allowed(wordId)) {
-        index++;
-        continue;
-      }
-      const [task] = pending.splice(index, 1);
-      placedAt.set(wordId, result.length);
-      result.push(task);
-    }
-  };
-  for (const task of tasks) {
-    flushPending();
-    const wordId = groupKeyOf(task);
-    if (allowed(wordId)) {
-      placedAt.set(wordId, result.length);
-      result.push(task);
-    } else {
-      pending.push(task);
+/** 当日已完成练习按完成时刻排序，作为本批次间距计算的既有前缀。 */
+function completedSameWordHistory(
+  state: Readonly<LearningState>, learnerId: string, date: LocalDate, timezone: string,
+): string[] {
+  return state.tasks.filter((task) => task.learnerId === learnerId && task.status === 'completed'
+    && task.completedAt !== null && localDateFor(task.completedAt, timezone) === date)
+    .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? '') || a.id.localeCompare(b.id))
+    .map((task) => {
+      const kp = state.knowledgePoints.find((item) => item.id === task.content.wordId);
+      const family = kp && 'wordFamily' in kp ? kp.wordFamily : null;
+      return family ? `family:${family}` : `word:${task.content.wordId}`;
+    });
+}
+
+export function spreadCandidateBuckets<T extends {
+  priority: number;
+  dueAt: number;
+  isNew: boolean;
+  specification: TaskSpecification;
+}>(
+  candidates: T[], groupKeyOf: (candidate: T) => string, history: string[],
+): T[] {
+  const buckets = new Map<string, T[]>();
+  for (const candidate of candidates) {
+    const key = `${candidate.priority}:${candidate.priority === 0 || candidate.priority === 1
+      ? candidate.dueAt : 'same-day-or-new'}`;
+    buckets.set(key, [...(buckets.get(key) ?? []), candidate]);
+  }
+  const result: T[] = [];
+  const lastSeen = new Map<string, number>();
+  history.forEach((key, index) => lastSeen.set(key, index));
+  let position = history.length;
+  const orderedBuckets = [...buckets.values()].sort((a, b) => a[0].priority - b[0].priority
+    || (a[0].priority < 2 ? a[0].dueAt - b[0].dueAt : 0));
+  for (const bucket of orderedBuckets) {
+    while (bucket.length) {
+      bucket.sort((a, b) => {
+        const aLast = lastSeen.get(groupKeyOf(a));
+        const bLast = lastSeen.get(groupKeyOf(b));
+        const aDistance = aLast === undefined
+          ? (a.isNew ? 5 : Number.POSITIVE_INFINITY)
+          : position - aLast - 1;
+        const bDistance = bLast === undefined
+          ? (b.isNew ? 5 : Number.POSITIVE_INFINITY)
+          : position - bLast - 1;
+        return bDistance - aDistance || a.specification.goalId.localeCompare(b.specification.goalId)
+          || a.specification.wordId.localeCompare(b.specification.wordId);
+      });
+      const selected = bucket.shift()!;
+      result.push(selected);
+      lastSeen.set(groupKeyOf(selected), position++);
     }
   }
-  flushPending();
-  return pending.length > 0 ? tasks : result;
+  return result;
 }
 
 /**

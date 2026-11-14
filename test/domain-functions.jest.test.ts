@@ -157,6 +157,68 @@ function buildInitializedState() {
 }
 
 describe('真实领域函数', () => {
+  describe('分散候选排序器', () => {
+    const candidate = (wordId: string, priority = 2, dueAt = 0, isNew = false, goalId = 'goal-1') => ({
+      priority,
+      dueAt,
+      isNew,
+      specification: { goalId, wordId, task: 'ENCODE' as const },
+    });
+    const group = (item: ReturnType<typeof candidate>) => item.specification.wordId.startsWith('family:')
+      ? item.specification.wordId : `word:${item.specification.wordId}`;
+
+    test('无历史的新词按默认距离 5 与未出现的非新词竞争', () => {
+      const fresh = candidate('family:new', 2, 0, true, 'goal-a');
+      const unobservedExisting = candidate('family:existing', 2, 0, false, 'goal-z');
+      expect(Domain.spreadCandidateBuckets([fresh, unobservedExisting], group, []))
+        .toEqual([unobservedExisting, fresh]);
+    });
+
+    test('新词有同族前序位置时按实际距离竞争', () => {
+      const fresh = candidate('family:shared', 2, 0, true, 'goal-z');
+      const other = candidate('family:other', 2, 0, false, 'goal-a');
+      expect(Domain.spreadCandidateBuckets([fresh, other], group,
+        ['family:shared', 'word:x', 'word:y', 'word:z', 'word:q', 'word:r']))
+        .toEqual([other, fresh]);
+    });
+
+    test('先完成较高优先级段，段内按 dueAt 分桶；第三段新词与今日到期共桶', () => {
+      const early = candidate('word:early', 0, 1);
+      const later = candidate('word:later', 0, 2);
+      const dueToday = candidate('word:today', 2, 3);
+      const fresh = candidate('word:new', 2, Number.POSITIVE_INFINITY, true);
+      expect(Domain.spreadCandidateBuckets([fresh, dueToday, later, early], group, []))
+        .toEqual([early, later, dueToday, fresh]);
+    });
+
+    test('planDailyStudy 将当日已完成任务按完成时刻作为分散历史前缀', () => {
+      const initialized = buildInitializedState();
+      const repeatedFamily = { ...initialized.knowledgePoint, wordFamily: 'family-shared' };
+      const freshA = { ...repeatedFamily, id: 'kp-fresh-a', sense: { ...repeatedFamily.sense, id: 'sense-a' } };
+      const freshB = { ...repeatedFamily, id: 'kp-fresh-b', sense: { ...repeatedFamily.sense, id: 'sense-b' } };
+      const other = { ...repeatedFamily, id: 'kp-other', wordFamily: 'family-other', sense: { ...repeatedFamily.sense, id: 'sense-other' } };
+      const makeTask = (id: string, knowledgePoint: Model.KnowledgePoint): Model.LearningTask => {
+        const specification = { goalId: 'goal-1', wordId: knowledgePoint.id, task: 'ENCODE' as const };
+        const generated = Domain.generateLearningTask({ specification, knowledgePoint, sourceMaterials: [initialized.material] });
+        return Domain.createLearningTask({ id, learnerId: 'learner-1', specification, generated, issuedAt: at.planned });
+      };
+      const historyOld = { ...makeTask('history-old', repeatedFamily), status: 'completed', completedAt: '2026-11-12T00:05:00.000Z' } as const;
+      const historyRecent = { ...makeTask('history-recent', other), status: 'completed', completedAt: '2026-11-12T00:20:00.000Z' } as const;
+      const base = initialized.state;
+      const state: Model.LearningState = {
+        ...base,
+        learners: [{ ...base.learners[0], dailyTaskCapacity: 20 }],
+        knowledgePoints: [freshA, freshB, other],
+        goalKnowledgePoints: [freshA, freshB, other].map((kp) => ({ ...base.goalKnowledgePoints[0], knowledgePointId: kp.id })),
+        learnerKnowledgePoints: [],
+        tasks: [historyRecent, historyOld],
+      };
+      const decision = Domain.planDailyStudy(state, { learnerId: 'learner-1', date: '2026-11-12', now: at.planned });
+      expect(decision.tasks.filter((item) => item.source === 'new').map((item) => item.specification.wordId))
+        .toEqual([freshA.id, other.id, freshB.id]);
+    });
+  });
+
   test('定级、材料选词、排期、作答结算与次日复习形成闭环', () => {
     const { state, material, knowledgePoint } = buildInitializedState();
     expect(validateLearningState(state)).toEqual([]);
@@ -902,7 +964,7 @@ describe('真实领域函数', () => {
       });
     }
 
-    test('答错产生到期复习时取消尚未开始的新词任务', () => {
+    test('答错产生当天到期复习，同时保留既有在途新词', () => {
       const { state, newA, newB, review, taskA, taskB } = buildReplanState(at.planned);
       const settled = settleChoiceAnswer(state, taskA, 'b');
       expect(settled.attempt.judgement.dimensions.R?.outcome).toBe('incorrect');
@@ -914,41 +976,38 @@ describe('真实领域函数', () => {
         now: at.judged,
       });
       expect(decision.tasks).toEqual([
+        { source: 'existing', taskId: taskB.id },
         {
           source: 'new',
           specification: { goalId: 'goal-1', wordId: review.id, task: 'RETRIEVE', axis: 'R', stage: 'free' },
         },
-        {
-          source: 'new',
-          specification: { goalId: 'goal-1', wordId: newA.id, task: 'RETRIEVE', axis: 'R', stage: 'choice' },
-        },
       ]);
-      expect(decision.cancelTaskIds).toEqual([taskB.id]);
+      expect(decision.cancelTaskIds).toEqual([]);
 
       const knowledgePoints = new Map([newA, newB, review].map((item) => [item.id, item]));
-      const newTasks = decision.tasks.map((position, index) => {
-        if (position.source !== 'new') throw new Error('Expected a new task');
+      const newTasks = decision.tasks.flatMap((position, index) => {
+        if (position.source !== 'new') return [];
         const knowledgePoint = knowledgePoints.get(position.specification.wordId)!;
         const generated = Domain.generateLearningTask({
           specification: position.specification,
           knowledgePoint,
           sourceMaterials: state.materials,
         });
-        return Domain.createLearningTask({
+        return [Domain.createLearningTask({
           id: `task-replanned-${index}`,
           learnerId: 'learner-1',
           specification: position.specification,
           generated,
           issuedAt: at.judged,
-        });
+        })];
       });
       const replanned = Domain.applyDailyStudyDecision(settled.state, {
         decision,
         newTasks,
         now: at.judged,
       });
-      expect(replanned.tasks.find((task) => task.id === taskB.id)?.status).toBe('cancelled');
-      expect(replanned.studyPlans[0].taskIds).toEqual(['task-replanned-0', 'task-replanned-1']);
+      expect(replanned.tasks.find((task) => task.id === taskB.id)?.status).toBe('issued');
+      expect(replanned.studyPlans[0].taskIds).toHaveLength(2);
       expect(validateLearningState(replanned)).toEqual([]);
     });
 
@@ -962,13 +1021,13 @@ describe('真实领域函数', () => {
         date: '2026-11-12',
         now: at.judged,
       });
-      // 未达标答对当天到期：升级任务优先于新词任务，占满容量时排在新词之前。
+      // 未达标答对当天到期：升级任务优先于新词任务。
       expect(decision.tasks).toEqual([
+        { source: 'existing', taskId: taskB.id },
         {
           source: 'new',
           specification: { goalId: 'goal-1', wordId: newA.id, task: 'RETRIEVE', axis: 'R', stage: 'cued' },
         },
-        { source: 'existing', taskId: taskB.id },
       ]);
       expect(decision.cancelTaskIds).toEqual([]);
     });
@@ -1111,7 +1170,7 @@ describe('真实领域函数', () => {
           },
         },
       });
-      const dup = initialized.knowledgePoint;
+      const dup = { ...initialized.knowledgePoint, wordFamily: 'family-duplicate' };
       // distinctFamilyWords 时第二道任务换成同族不同词（run → running），词族不变。
       const dupB = distinctFamilyWords
         ? { ...dup, id: 'kp-dup-b', lemma: 'running', sense: { ...dup.sense, id: 'sense-dup-b' } }
@@ -1185,18 +1244,14 @@ describe('真实领域函数', () => {
     const planInput = { learnerId: 'learner-1', date: '2026-11-12', now: at.judged };
     const existing = (taskId: string) => ({ source: 'existing', taskId }) as const;
 
-    test('同词两道任务拉开到至少 5 个其它任务之后', () => {
+    test('今日计划中的既有在途任务保持原顺序', () => {
       const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(5);
       expect(validateLearningState(state)).toEqual([]);
       const decision = Domain.planDailyStudy(state, planInput);
-      expect(decision.tasks).toEqual([
-        existing(taskDupA.id),
-        ...otherTasks.map((task) => existing(task.id)),
-        existing(taskDupB.id),
-      ]);
+      expect(decision.tasks).toEqual([taskDupA, taskDupB, ...otherTasks].map((task) => existing(task.id)));
     });
 
-    test('任务总数不足以拉开时保持原计划顺序', () => {
+    test('既有任务无论词族重复或总数多少都保持计划顺序', () => {
       const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(4);
       const decision = Domain.planDailyStudy(state, planInput);
       expect(decision.tasks).toEqual([
@@ -1206,14 +1261,89 @@ describe('真实领域函数', () => {
       ]);
     });
 
-    test('同族不同词的任务同样拉开', () => {
+    test('同族不同词的既有在途任务保持原顺序', () => {
       const { state, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(5, true);
       expect(validateLearningState(state)).toEqual([]);
       const decision = Domain.planDailyStudy(state, planInput);
-      expect(decision.tasks).toEqual([
-        existing(taskDupA.id),
-        ...otherTasks.map((task) => existing(task.id)),
-        existing(taskDupB.id),
+      expect(decision.tasks).toEqual([taskDupA, taskDupB, ...otherTasks].map((task) => existing(task.id)));
+    });
+
+    test('同优先级同 dueAt 候选按最近词族距离最大者入队', () => {
+      const { state: planned, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(5, true);
+      const state: Model.LearningState = {
+        ...planned,
+        learnerKnowledgePoints: planned.learnerKnowledgePoints.map((learning) => ({
+          ...learning,
+          dimensions: {
+            ...learning.dimensions,
+            R: { ...learning.dimensions.R, review: { ...learning.dimensions.R.review, dueAt: at.judged } },
+          },
+        })),
+        studyPlans: [],
+        tasks: [],
+      };
+      const decision = Domain.planDailyStudy(state, planInput);
+      const wordIds = decision.tasks.map((position) => position.source === 'new'
+        ? position.specification.wordId : state.tasks.find((task) => task.id === position.taskId)!.content.wordId);
+      expect(wordIds).toEqual([
+        ...otherTasks.map((task) => task.content.wordId),
+        taskDupA.content.wordId,
+        taskDupB.content.wordId,
+      ]);
+    });
+
+    test('第二优先级按 dueAt 桶顺序处理，且只在同 dueAt 桶内分散', () => {
+      const { state: planned, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(2, true);
+      const state: Model.LearningState = {
+        ...planned,
+        learners: [{ ...planned.learners[0], dailyTaskCapacity: 10 }],
+        learnerKnowledgePoints: planned.learnerKnowledgePoints.map((learning) => ({
+          ...learning,
+          dimensions: {
+            ...learning.dimensions,
+            R: { ...learning.dimensions.R, review: { ...learning.dimensions.R.review, dueAt: '2026-11-10T00:00:00.000Z' } },
+          },
+        })),
+        studyPlans: [],
+        tasks: [],
+      };
+      const decision = Domain.planDailyStudy(state, planInput);
+      const wordIds = decision.tasks.flatMap((position) => position.source === 'new'
+        ? [position.specification.wordId] : []);
+      expect(wordIds).toEqual([
+        ...otherTasks.map((task) => task.content.wordId),
+        taskDupA.content.wordId,
+        taskDupB.content.wordId,
+      ]);
+    });
+
+    test('第二优先级较早 dueAt 桶先于较晚桶完整排入', () => {
+      const { state: planned, taskDupA, taskDupB, otherTasks } = buildDuplicateWordState(2, true);
+      const state: Model.LearningState = {
+        ...planned,
+        learners: [{ ...planned.learners[0], dailyTaskCapacity: 10 }],
+        learnerKnowledgePoints: planned.learnerKnowledgePoints.map((learning) => {
+          const isDuplicate = learning.knowledgePointId === taskDupA.content.wordId
+            || learning.knowledgePointId === taskDupB.content.wordId;
+          return {
+            ...learning,
+            dimensions: {
+              ...learning.dimensions,
+              R: { ...learning.dimensions.R, review: { ...learning.dimensions.R.review,
+                dueAt: isDuplicate ? '2026-11-10T00:00:00.000Z' : '2026-11-11T00:00:00.000Z' } },
+            },
+          };
+        }),
+        studyPlans: [],
+        tasks: [],
+      };
+      const decision = Domain.planDailyStudy(state, planInput);
+      const wordIds = decision.tasks.flatMap((position) => position.source === 'new'
+        ? [position.specification.wordId] : []);
+      expect(wordIds).toEqual([
+        taskDupA.content.wordId,
+        taskDupB.content.wordId,
+        ...otherTasks.map((task) => task.content.wordId),
       ]);
     });
   });
