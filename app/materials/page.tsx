@@ -14,24 +14,34 @@ export default function MaterialsPage() {
   const [text, setText] = useState('');
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice,setNotice]=useState<string|null>(null);
   const [result, setResult] = useState<ImportResultResponse | null>(null);
+  const [targetGoal,setTargetGoal]=useState('');
+  const [hasGoalDraft,setHasGoalDraft]=useState(false);
+  const [goals,setGoals]=useState<Array<{id:string;title:string;status:string}>>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await apiGet<MaterialsResponse>('/api/materials');
+      const [data,goalData] = await Promise.all([apiGet<MaterialsResponse>('/api/materials'),apiGet<{goals:Array<{id:string;title:string;status:string}>}>('/api/goals')]);
       setMaterials(data.materials);
+      const activeGoals=goalData.goals.filter(goal=>goal.status==='active');
+      setGoals(activeGoals);
+      setTargetGoal(current=>activeGoals.some(goal=>goal.id===current)?current:'');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '材料列表加载失败。');
     }
   }, []);
 
   useEffect(() => {
+    setTargetGoal(sessionStorage.getItem('flow.add-material-goal')??'');
+    setHasGoalDraft(Boolean(localStorage.getItem('flow.goal-draft')));
     void load();
   }, [load]);
 
   const readFile = useCallback(async (file: File) => {
     setError(null);
+      setNotice(null);
     setImporting(true);
     try {
       const isPdf = /\.pdf$/i.test(file.name);
@@ -52,6 +62,7 @@ export default function MaterialsPage() {
   const importText = useCallback(async () => {
     if (!text.trim()) return;
     setError(null);
+    setNotice(null);
     setImporting(true);
     try {
       const data = await apiPost<ImportResultResponse>('/api/materials', {
@@ -70,9 +81,10 @@ export default function MaterialsPage() {
   }, [title, text, load]);
 
   return (
-    <PageShell title="材料与词库">
+    <PageShell title="导入学习材料">
       <section className="doc-card">
         <h2>导入学习材料</h2>
+        {hasGoalDraft&&<p className="doc-notice">正在为目标创建流程导入材料。<button className="text-button" onClick={()=>router.push('/goals')}>返回继续创建目标</button></p>}
         <p className="doc-muted">支持粘贴英文文本，或上传 .txt / .md / .pdf 文件。导入后自动提取术语、判定词义并过滤基础词。</p>
         <input className="doc-input" placeholder="材料标题（可选）" value={title} onChange={(event) => setTitle(event.target.value)} />
         <textarea
@@ -100,7 +112,7 @@ export default function MaterialsPage() {
             />
           </label>
         </div>
-        {error && <p className="doc-error">{error}</p>}
+        {notice&&<p className="doc-notice">{notice}{targetGoal&&<button className="text-button" onClick={()=>router.push(`/goals/${targetGoal}`)}>返回当前目标继续编辑</button>}</p>}{error && <p className="doc-error">{error}</p>}
       </section>
 
       {result && (
@@ -127,7 +139,12 @@ export default function MaterialsPage() {
             <li key={material.id}>
               <strong>{material.title}</strong>
               <span className="doc-muted"> · {material.format} · {material.analysis ? `${material.analysis.itemCount} 个知识点` : '未分析'}</span>
-              <button className="text-button" onClick={() => router.push('/goals')}>加入目标 →</button>
+              <label className="doc-muted">加入目标
+                <select className="doc-input" value={targetGoal} onChange={event=>setTargetGoal(event.target.value)} aria-label={`选择用于 ${material.title} 的目标`}>
+                  <option value="">选择活动目标…</option>{goals.map(goal=><option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                </select>
+              </label>
+              <button className="text-button" disabled={!targetGoal||!material.analysis} onClick={async () => {if(!targetGoal||!material.analysis)return;setError(null);setNotice(null);try{await apiPost('/api/goals',{goalId:targetGoal,materialId:material.id,analysisId:material.analysis.id});setNotice(`“${material.title}”已加入目标。`);await load();}catch(e){setError(e instanceof ApiError?e.message:'加入目标失败');}}}>加入目标 →</button>
             </li>
           ))}
         </ul>

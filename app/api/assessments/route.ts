@@ -5,12 +5,10 @@ import { BNC_COCA_L6, getDemoLearner, getRuntime } from '@/lib/server/runtime';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_SAMPLE_COUNTS: Partial<Record<VocabularyBand, number>> = {
-  '1k': 5,
-  '2k': 5,
-  '3k': 5,
-  '4k': 5,
-};
+/** 默认覆盖至 Nation 对受教育成年母语者约 20k 词族的粗略参照。 */
+const DEFAULT_SAMPLE_COUNTS = Object.fromEntries(
+  Array.from({ length: 20 }, (_, index) => [`${index + 1}k`, 5]),
+) as Partial<Record<VocabularyBand, number>>;
 
 /** 开始词汇自评定级（S02）：分层抽样生成只含被测词汇的自评任务。 */
 export async function POST(request: Request) {
@@ -21,6 +19,16 @@ export async function POST(request: Request) {
     sampleCounts?: Partial<Record<VocabularyBand, number>>;
   };
   const sampleCounts = body.sampleCounts ?? DEFAULT_SAMPLE_COUNTS;
+  if (!sampleCounts || typeof sampleCounts !== 'object' || Array.isArray(sampleCounts)) {
+    return NextResponse.json({ reason: 'invalid_sample_counts' }, { status: 400 });
+  }
+  const requestedBeyondCap = Object.keys(sampleCounts).some((band) => {
+    const match = /^(\d+)k$/.exec(band);
+    return !match || Number(match[1]) > 20;
+  });
+  if (requestedBeyondCap) {
+    return NextResponse.json({ reason: 'band_out_of_range', maximumBand: '20k' }, { status: 400 });
+  }
   const counts = Object.values(sampleCounts).filter((count): count is number => count !== undefined);
   const total = counts.reduce((sum, count) => sum + count, 0);
 

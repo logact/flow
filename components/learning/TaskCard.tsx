@@ -94,9 +94,7 @@ function ResultFeedback({ result, axis }: { result: AttemptResponse; axis: 'R' |
 
 function NextButton({ onNext, result }: { onNext: () => void; result: AttemptResponse | null }) {
   return (
-    <button className="primary-button" onClick={onNext}>
-      {result ? '下一张' : '跳过'} <Icon name="arrow" size={19} />
-    </button>
+    result ? <span className="doc-muted">已提交，正在进入下一张…</span> : <button className="primary-button" onClick={onNext}>跳过至队列底部 <Icon name="arrow" size={19} /></button>
   );
 }
 

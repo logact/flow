@@ -16,8 +16,7 @@ export function PageShell({ title, children }: { title: string; children: ReactN
       <main className="doc-body">{children}</main>
       <nav className="bottom-nav" aria-label="主导航">
         <button className="nav-item" onClick={() => router.push('/')}>首页</button>
-        <button className="nav-item" onClick={() => router.push('/materials')}>词库</button>
-        <button className="create-button" onClick={() => router.push('/materials')} aria-label="导入学习材料"><span>＋</span></button>
+        <button className="nav-item" onClick={() => router.push('/knowledge')}>知识点库</button>
         <button className="nav-item" onClick={() => router.push('/goals')}>目标</button>
         <button className="nav-item" onClick={() => router.push('/me')}>我</button>
       </nav>

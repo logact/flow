@@ -12,7 +12,7 @@ import type {
 export interface TodayPlanResponse {
   date: string;
   plan: { id: string; taskCapacity: number } | null;
-  tasks: LearningTaskView[];
+  tasks: Array<LearningTaskView & { sources?: Array<{id:string;title:string}> }>;
 }
 
 export interface PlanFailureResponse {
@@ -31,7 +31,7 @@ export interface AttemptResponse {
     dimensions: Partial<Record<FluencyDimension, DimensionJudgement>>;
   } | null;
   settlement: { settledAt: string; fluencyChanges: FluencyChange[] } | null;
-  refresh: { plan?: { id: string; taskCapacity: number } | null; tasks?: LearningTaskView[]; reason?: string };
+  refresh: { plan?: { id: string; taskCapacity: number } | null; tasks?: Array<LearningTaskView & {sources?:Array<{id:string;title:string}>}>; reason?: string };
 }
 
 /** 学习者档案响应（/api/learner）。 */

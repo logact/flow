@@ -23,6 +23,9 @@ button:disabled { cursor: default; }
 .top-tabs button { position: relative; height: 100%; display: flex; align-items: center; gap: 5px; padding: 3px 0 0; border: 0; background: none; color: rgba(255,255,255,.62); font-size: 15px; font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,.25); }
 .top-tabs button.active { color: #fff; font-weight: 600; }
 .top-tabs button.active::after { content: ''; position: absolute; bottom: 11px; left: 50%; width: 22px; height: 3px; border-radius: 3px; background: #fff; transform: translateX(-50%); }
+.top-tabs.goal-tabs { position: relative; left: auto; flex: 1; min-width: 0; height: 100%; margin-left: 20px; padding: 0 2px; justify-content: flex-start; gap: 20px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: none; transform: none; }
+.top-tabs.goal-tabs::-webkit-scrollbar { display: none; }
+.top-tabs.goal-tabs button { flex: 0 0 auto; }
 .review-badge { display: none; }
 .search-button { width: 32px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: #fff; }
 
@@ -142,20 +145,10 @@ button:disabled { cursor: default; }
 .writing-tools button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255,255,255,.09); color: #fff; }
 .writing-feedback { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--cyan); font-size: 9px; }
 
-.action-rail { position: absolute; z-index: 8; right: 8px; bottom: calc(71px + env(safe-area-inset-bottom)); width: 55px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.creator-avatar { position: relative; width: 47px; height: 52px; margin-bottom: 4px; padding: 0; border: 0; background: none; }
-.creator-avatar > span { width: 45px; height: 45px; display: grid; place-items: center; border: 1.5px solid #fff; border-radius: 50%; background: linear-gradient(145deg, #77d4c5, #2e736f); color: #fff; font-family: Georgia, serif; font-size: 24px; font-weight: 700; }
-.creator-avatar i { position: absolute; left: 50%; bottom: 0; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--red); color: #fff; transform: translateX(-50%); }
-.rail-action { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: #fff; font-size: 10px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
-.rail-icon { width: 43px; height: 38px; display: grid; place-items: center; filter: drop-shadow(0 2px 2px rgba(0,0,0,.18)); }
-.rail-icon svg { fill: #fff; stroke: #fff; stroke-width: 1.2; }
-.rail-action:active .rail-icon { transform: scale(.9); }
-.rail-action.is-liked { color: var(--red); }
-.rail-action.is-liked .rail-icon svg { fill: var(--red); stroke: var(--red); }
-.rail-action.is-saved { color: #f6c94c; }
-.rail-action.is-saved .rail-icon svg { fill: #f6c94c; stroke: #f6c94c; }
-
 .creator-meta { position: absolute; z-index: 5; left: 20px; right: 79px; bottom: calc(66px + env(safe-area-inset-bottom)); pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.creator-meta { border: 0; padding: 0; background: transparent; text-align: left; cursor: pointer; pointer-events: auto; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.55); }
+.source-popup { width: min(100%, 480px); max-height: 75vh; overflow: auto; }
 .creator-meta strong { display: block; margin-bottom: 5px; color: #fff; font-size: 13px; font-weight: 600; }
 .creator-meta p { margin: 0 0 7px; color: rgba(255,255,255,.92); font-size: 10px; line-height: 1.45; }
 .creator-meta p span { color: #fff; font-weight: 500; }
@@ -166,12 +159,6 @@ button:disabled { cursor: default; }
 .bottom-nav { position: fixed; z-index: 20; left: 50%; bottom: 0; width: min(100%, 560px); height: calc(53px + env(safe-area-inset-bottom)); display: flex; align-items: flex-start; justify-content: space-around; padding: 0 10px env(safe-area-inset-bottom); border-top: 1px solid rgba(255,255,255,.07); background: #090909; transform: translateX(-50%); }
 .nav-item { flex: 1; height: 52px; padding: 0; border: 0; background: transparent; color: rgba(255,255,255,.58); font-size: 11px; }
 .nav-item.active { color: #fff; font-weight: 600; }
-.create-button { position: relative; flex: 0 0 60px; height: 52px; display: grid; place-items: center; padding: 0; border: 0; background: none; }
-.create-button::before, .create-button::after { content: ''; position: absolute; top: 13px; width: 38px; height: 27px; border-radius: 6px; }
-.create-button::before { left: 8px; background: var(--cyan); }
-.create-button::after { right: 8px; background: var(--red); }
-.create-button > span { position: relative; z-index: 1; width: 38px; height: 27px; display: grid; place-items: center; border-radius: 6px; background: #fff; color: #090909; }
-.create-button svg { stroke-width: 2.2; }
 .toast { position: fixed; z-index: 50; left: 50%; top: 76px; max-width: calc(100% - 40px); padding: 10px 15px; border: 1px solid rgba(255,255,255,.12); border-radius: 7px; background: rgba(25,25,25,.92); color: #fff; font-size: 11px; opacity: 0; pointer-events: none; transform: translate(-50%, -8px); transition: opacity .2s, transform .2s; backdrop-filter: blur(10px); }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
@@ -199,7 +186,6 @@ button:disabled { cursor: default; }
   .recall-form { margin-top: 22px; }
   .writing-prompt { margin-top: 23px; }
   .writing-area textarea { min-height: 90px; }
-  .action-rail { gap: 8px; }
   .creator-meta { bottom: calc(61px + env(safe-area-inset-bottom)); }
   .card-footer { bottom: 111px; }
 }
@@ -263,7 +249,6 @@ select.doc-input { appearance: none; }
 .status-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .status-actions .primary-button { margin-left: 0; }
 
-.rail-icon-text { color: #fff; font-size: 15px; }
 .review-badge.visible { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 9px; }
 
 .reading-question { margin-bottom: 18px; }

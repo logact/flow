@@ -61,6 +61,26 @@ export default function SetupPage() {
 
   const vocabularyDone = result ?? learner?.currentVocabulary ?? null;
 
+  const continueAfterAssessment = async () => {
+    try {
+      const { goals } = await apiGet<{ goals: Array<{ id: string; status: string }> }>('/api/goals');
+      const active = goals.filter((goal) => goal.status === 'active');
+      if (!active.length) { router.push('/goals'); return; }
+      const readiness = await Promise.all(active.map(async goal => {
+        const detail=await apiGet<{candidates:Array<{knowledgePointId:string;selection:string;learning:unknown}>}>(`/api/goals/${goal.id}`);
+        const selected=detail.candidates.filter(candidate=>candidate.selection==='included');
+        if(selected.length&&selected.some(candidate=>!candidate.learning)){
+          await apiPost(`/api/goals/${goal.id}/selection`,{selections:selected.map(candidate=>({knowledgePointId:candidate.knowledgePointId,selection:'included'}))});
+        }
+        return {id:goal.id,ready:selected.length>0};
+      }));
+      const ready=readiness.find(goal=>goal.ready);
+      const next=ready??readiness[0];
+      if(!next){router.push('/goals');return;}
+      router.push(next.ready?`/?goal=${next.id}`:`/goals/${next.id}`);
+    } catch { router.push('/goals'); }
+  };
+
   return (
     <PageShell title="词汇测评">
       {vocabularyDone ? (
@@ -80,7 +100,7 @@ export default function SetupPage() {
             </tbody>
           </table>
           <div className="doc-actions">
-            <button className="primary-button" onClick={() => router.push('/goals')}>去选择知识点</button>
+            <button className="primary-button" onClick={() => void continueAfterAssessment()}>{'继续开始学习'}</button>
             <button className="text-button" onClick={() => { setResult(null); void start(); }}>重新测评</button>
           </div>
         </section>
@@ -98,8 +118,8 @@ export default function SetupPage() {
         <section className="doc-card">
           <h2>词汇自评定级</h2>
           <p className="doc-muted">
-            从 1k–4k 词段分层抽样 20 个词族，只需自评"认识 / 不认识"。
-            完成后系统会估计各词段掌握概率，用于初始化学习流利度与调整出题难度。
+            当前从 1k–20k 词段分层抽样 100 个词族（每段 5 个），只需自评“认识 / 不认识”。
+            20k 是 Nation 对受教育成年母语者词汇量的粗略参照，不代表阅读或口语理解所需的最低词汇量。完成后系统会估计各词段掌握概率，用于初始化学习流利度与调整出题难度。
           </p>
           {learner?.currentVocabulary && (
             <p className="doc-muted">已完成过测评，重新测评会覆盖当前词汇估计。</p>

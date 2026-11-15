@@ -96,6 +96,14 @@ export async function POST(
 
     const state = runtime.repository.load().state;
     const settledAttempt = state.attempts.find((item) => item.id === effectiveAttemptId);
+    const refreshedTasks = settled.refresh.ok ? settled.refresh.tasks.map((task) => {
+      const sourceTask = state.tasks.find((item) => item.id === task.id);
+      const pointId = sourceTask?.content.wordId;
+      const candidate = pointId ? state.goalKnowledgePoints.find((item) => item.goalId === task.goalId && item.knowledgePointId === pointId) : undefined;
+      const sourceIds = candidate ? state.goalKnowledgePointSources.filter((source) => source.goalId === task.goalId && source.knowledgePointId === candidate.knowledgePointId).map((source) => source.sourceAnalysisId) : [];
+      const sources = sourceIds.map((analysisId) => { const analysis = state.materialAnalyses.find((item) => item.id === analysisId); const material = analysis && state.materials.find((item) => item.id === analysis.materialId); return material ? {id: material.id, title: material.title} : null; }).filter((item): item is {id:string;title:string} => Boolean(item));
+      return {...task, sources};
+    }) : [];
     return NextResponse.json({
       attemptId: effectiveAttemptId,
       status: settledAttempt?.status ?? 'settled',
@@ -110,7 +118,7 @@ export async function POST(
         settledAt: settled.settlement.settledAt,
         fluencyChanges: settled.settlement.fluencyChanges,
       },
-      refresh: settled.refresh.ok ? { plan: settled.refresh.plan, tasks: settled.refresh.tasks } : { reason: settled.refresh.reason },
+      refresh: settled.refresh.ok ? { plan: settled.refresh.plan, tasks: refreshedTasks } : { reason: settled.refresh.reason },
     });
   } catch (error) {
     if (error instanceof ConcurrencyConflictError) {
