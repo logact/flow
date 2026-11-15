@@ -121,7 +121,7 @@ export LLM_MODEL=deepseek-chat
 
 **输入**
 
-`goalId`、`learnerId`、目标标题、`targetFluency`、`materialId`、`analysisId`、`addedAt`；创建目标时同时传入 `now`。
+创建目标时输入 `learnerId`、目标标题、`targetFluency`、`materialId`、`analysisId`、`addedAt` 和 `now`；加入已有目标时额外输入已有 `goalId`。新目标 ID 由服务端生成并在成功响应中返回，不由客户端生成或从草稿恢复。
 
 **应用层编排**
 
@@ -177,7 +177,9 @@ export LLM_MODEL=deepseek-chat
 - 达到目标分数不等于复习毕业：达标后的到期任务固定为 `FLUENCY`，只有该维度通过最后一次 30 天间隔复习并标记 `graduated` 后才停止派题。
 - 容量缩减时，排期决策负责给出 `cancelTaskIds` 和 `expireTaskIds`，应用层不自行决定取消或过期任务。
 - 规格漂移失效：保留今日计划中的既有任务前，按当前学习状态重算该知识点的下一任务规格；规格已变化（题型、维度或 `RETRIEVE` 档位不同）时，该任务进入 `cancelTaskIds`，同一位置改由 `new` 规格重新生成；当前没有到期规格时不视为漂移，任务保留。只有受结算影响的任务会被重生成，其余已生成任务原样保留，不整批重生成。
-- 同一词族的任务在当日计划中重复出现时（如同词跨目标、同族不同词），在不打破优先级顺序的前提下拉开位置：相邻两次练习之间至少间隔 5 个其它任务；任务总数不足以拉开时保持原顺序。
+- 新词准入与排位分散分两步：先按 `goalId`、`wordId` 稳定顺序逐个执行 42 天容量预测，确定本次准入新词集合；首个预测超容量的新词及其后续新词均不准入。准入结果固定后，再参与下述排序，不因分散改变准入集合或数量。
+- 候选任务按三个优先级段依次排期：①已达标且待复习；②未达标且 `dueAt` 的学习者本地日期早于当前学习日；③未达标且 `dueAt` 属于当前学习日，以及已准入新词。第一、二段按 `dueAt` 升序，时间相同再按 `goalId`、`wordId` 升序；第三段中今日到期任务与新词视为同一桶，不再按 `dueAt` 分桶。
+- 第一、二段中相同优先级及相同 `dueAt` 的候选构成分散桶；第三段的今日到期任务与新词共同构成分散桶。桶按优先级段顺序处理；每次从当前桶选择词族（无词族信息时用词本身）最近一次出现位置距当前序列末尾最远的候选，追加至队尾并更新位置，再重复选择。新词若在历史前缀及已排任务中存在相同词族的前序任务，按该词族最近出现位置计算实际距离；若不存在，则新词的距离按默认值 `5` 参与同桶竞争，不按无限大处理。其他候选沿用原有距离规则。当日尚未出现的非新词候选词族仍视为距离最大；距离相同按 `goalId`、`wordId` 升序。桶内没有其他候选时照常排入，不等待。当天已完成任务按完成时刻构成历史前缀，已排任务也计入距离。分散不得改变桶之间的优先级。
 
 **输出与边界**
 
@@ -298,7 +300,9 @@ export LLM_MODEL=deepseek-chat
 
 本场景将材料中的 `contemporary`、`ubiquitous`、`deliberate`、`resilient`、`adapt`、`setback`、`pivot`、`feedback`、`morale`、`momentum` 十个候选全部设为 `included`。`deliberate` 使用“深思熟虑的”这一独立词义。
 
-**循环退出条件**：学习循环（步骤 12）一直推进，直到目标内全部十个知识点的 R、P 两个维度都达到 `targetFluency`（≥80）。达到目标分数不等于复习毕业，达标后的到期任务仍按 `FLUENCY` 固定派题直到 30 天间隔复习毕业，但本场景在全部达标后即退出，不等毕业。
+**循环退出条件**：学习循环（步骤 12）一直推进，直到目标内全部十个知识点的 R、P 两个维度都**复习毕业**（`review.graduated`）。每个维度要先练到 `targetFluency`（≥80），之后达标复习固定派 `FLUENCY` 任务，间隔按 +1、+3、+7、+30 天推进，通过最后一次 30 天间隔复习后标记 `graduated` 才停止派题；场景必须完整模拟这条毕业复习链。
+
+**结算即重排（R2 语义）**：学习日内每答完一题、结算完成后立即用最新状态重新排期，后续任务一律以最新计划为准——在途任务不是按天快照，而是随每次结算刷新。已引入词的另一维度到期、答错词间隔清零后的重试，都会在**同一天**内升级派题。每日容量约束的是"同时在途任务数"（每次排期不超过容量，答完一题空出一位即由排期决定补升级任务还是新词），与当天已完成数量无关；新词引入只看 42 天准入预测。当日计划在途任务与新生成都为空时学习日结束。
 
 ### 调用顺序与状态传递
 
@@ -315,7 +319,7 @@ export LLM_MODEL=deepseek-chat
 | 9 | S09 | 一次性应用决策及全部新任务 | 持久化计划、N 项 `issued` 任务 |
 | 10 | S10 × N | 分别提交 N 项作答；`ubiquitous` 首次出现的 RETRIEVE 选择题有效但答错 | N 条首次作答 |
 | 11 | S11 × N | ENCODE 与选择题规则评判；**RETRIEVE cued/free、阅读 free 问题、P 场景表达由应用层调用 AI 评判**；阅读混合题合并规则与 AI 结果后统一结算 | N 个 `settled` 作答、N 个完成任务、更新后的学习状态和 `V1` |
-| 12 | 学习循环：每日重复 7～11 | 每个后续学习日把 `now` 推进到当前状态最早 `dueAt` 之后重新排期，**直到全部十个知识点的 R、P 维度都达到 `targetFluency`**；未引入的新词按容量准入陆续首批，答错的 `ubiquitous` 次日重练，验证失败路径与到期复习驱动 | 逐日计划与结算链、全部达标的学习状态 |
+| 12 | 学习循环：每日重复 7～11 | 每个学习日把 `now` 推进到当前状态最早未来 `dueAt` 之后重新排期；日内每答一题结算后立即重排（R2 语义），后续任务以最新计划为准，已引入词的新维度/失败重试当天升级派题。**直到全部十个知识点的 R、P 维度都复习毕业**（含达标后的 +1/+3/+7/+30 天 FLUENCY 复习链）；答错的 `ubiquitous` 当天重练，验证失败路径与到期复习驱动 | 逐日计划与结算链、全部毕业的学习状态 |
 | 13 | S12 → S07～S09 | 归档目标后再次请求计划 | 保留历史，不再生成该目标的新任务 |
 
 第 7 步的决策由真实 `planDailyStudy` 对 S06 后的状态计算，不由场景预设：无学习状态的候选产出 `ENCODE`；已有初始学习状态的候选按初始流利度产出 RETRIEVE（<20 `choice`、<40 `cued`、<60 `free`）。FLUENCY 任务只在循环推进、某维度流利度练到 60 以上后出现。当前实现下词频分类记录尚无写入方，初始流利度一律为 0，首轮排期为 `ENCODE` 规格；十个新词受每日容量 5 限制，按 42 天准入预测分批引入，首日最多 5 个，其余词在后续有剩余容量时陆续首批。分类写入补齐后首轮可能直接出现 RETRIEVE 各档。两种情形本场景编排一致，测试只断言结构属性：`new` 数不超过每日容量、每词至多一个规格、首轮不含 FLUENCY（初始分上限 50，低于 FLUENCY 门槛 60）。S07 只产生这些规格，S08 才通过应用层 AI Provider 生成具体题目，S09 才将任务和计划一起持久化。
@@ -331,8 +335,8 @@ export LLM_MODEL=deepseek-chat
 7. S09 的公开任务响应不包含答案、阅读证据或场景表达评分标准。
 8. 到期复习由新的 S07～S09 调用产生；归档后历史仍可加载，但不再出现该目标的新任务。
 9. 应用用例测试使用可控的 Fake AI Provider 返回固定题目和评判，验证编排、失败与幂等；真实供应商调用单独做 Live 验证。非选择题的 AI 评判必须以 `judgedBy = 'ai'` 进入同一 Domain 结算路径。
-10. 循环在有限天数内退出，退出时目标内全部十个知识点的 R、P 流利度均 ≥ `targetFluency`，且每个知识点至少经历过一次结算；退出前 RETRIEVE `choice`/`cued`/`free` 与 `FLUENCY-R`、`FLUENCY-P` 均实际出现过。
-11. 新词准入生效：首日计划不超过每日容量，未在首日引入的新词在后续学习日陆续出现在计划中。
+10. 循环在有限天数内退出，退出时目标内全部十个知识点的 R、P 维度均已 `graduated`（流利度 ≥ `targetFluency` 且走完 30 天间隔毕业复习），且每个知识点至少经历过一次结算；退出前 RETRIEVE `choice`/`cued`/`free` 与 `FLUENCY-R`、`FLUENCY-P` 均实际出现过。
+11. 容量与准入生效：每次排期的任务数不超过每日容量（"同时在途任务数"语义）；新词引入由 42 天准入预测决定，答完一题空出的位置由下一次排期立即决定补升级任务还是新词。
 
 ## 四、组合编排用例
 
@@ -385,3 +389,50 @@ export LLM_MODEL=deepseek-chat
 - 实现顺序为：Repository 契约 → AI Provider 契约 → 各环节小用例 → 大场景集成验证 → 组合编排用例（R1、R2），不在应用层复制领域算法。
 - 词频分类记录（`knowledgePointVocabularyClassifications`）的写入由独立变更补齐；大场景描述不依赖其是否落地——首轮排期可能是 4 个 ENCODE（分类缺失，初始流利度恒为 0）或 RETRIEVE 各档（分类已写入），场景的结构性断言两种情形都成立。
 - 当前 Domain 已有本地规则生成和 `judgeTask` 规则评判，但没有 AI Provider 调用能力；`test/core-flow.jest.test.ts` 使用桩，`test/domain-functions.jest.test.ts` 执行真实领域函数。本文描述的 AI Provider、应用用例和 Repository 仍属于待实现的应用层设计。
+
+## SQLite Repository 实施计划
+
+### 目标与约束
+
+- 生产数据使用 SQLite + Drizzle ORM + `better-sqlite3`；所有持久化 Repository 共用同一个数据库连接和关系表，测试继续可使用内存 Repository。
+- 关系表是唯一持久化真相。`LearningStateRepository` 是完整领域状态的聚合读写视图，不另存一份 JSON 快照；其余端口对相同表进行细粒度读写。
+- 首期保留 `LearningStateRepository.save(next, expectedRevision)` 契约。保存时在数据库事务内检查全局 revision，以数据库事务开始时的当前状态为基准计算差异，只插入、更新或删除变化的行，不清空并重建全库。
+- 增设单行 `repository_meta`（例如固定键 `main`、`revision`）作为共享乐观并发版本。**每个修改共享业务表的 Repository 写事务都必须检查并递增同一个 revision**；快照保存使用调用方传入的 `expectedRevision`，细粒度端口在事务开始时读取当前 revision 并在成功提交前递增。任何写入路径不得绕过此机制。
+- revision 不匹配时回滚并抛出 `ConcurrencyConflictError`。应用层只有在能从最新状态重新执行整个决策时才重试；AI 请求、文件解析等外部工作不放进数据库事务。
+- 所有端口声明的原子写入边界各自对应一个 SQLite 事务；不引入跨用例大事务。外键约束在连接初始化时开启。
+
+### Schema 范围
+
+使用 Drizzle schema 管理关系表、外键、唯一约束、检查约束和索引；版本化 SQL migration 是 schema 演进的唯一来源。领域对象有明确身份、独立生命周期或关系查询需求的部分使用关系表；任务内容、词汇估计细节、初始化证据、作答 submission/judgement/settlement、提取元数据等稳定整体读写的结构使用 JSON 文本列，并在仓储边界反序列化和校验。
+
+首版表覆盖完整 `LearningState`：
+
+- 学习者与词汇评估：`learners`、`vocabulary_assessments`、`vocabulary_assessment_tasks`、`vocabulary_assessment_attempts`；词汇估计历史可单独建表或以 JSON 保存，并明确当前估计的关联方式。
+- 材料分析：`materials`、`material_analyses`、`knowledge_points`、`material_analysis_items`、`material_analysis_occurrences`、`material_analysis_unmatched_items`、`material_analysis_unmatched_occurrences`。
+- 学习范围：`learning_goals`、`goal_materials`、`goal_knowledge_points`、`goal_knowledge_point_sources`、`knowledge_point_vocabulary_classifications`、`learner_knowledge_points`。
+- 计划与作答：`study_plans`、`study_plan_tasks`（显式保存顺序）、`learning_tasks`、`task_attempts`。
+- 并发元数据：`repository_meta`，保存全库 revision；初始化数据库时插入唯一主记录。
+
+主键优先使用领域稳定 ID；关联实体使用领域自然复合键（例如目标与材料、目标与候选知识点、学习者与知识点）；一对多有序数组使用 `position` 列。关键唯一约束包括 `(learner_id, date)` 每日计划唯一、同一任务最多一条首次作答、同一分析中的知识点项唯一，以及各复合关系键唯一。删除行为采用限制或显式事务删除，不用级联删除学习历史。
+
+### 仓储与事务映射
+
+1. **Schema 与迁移**：定义上述 Drizzle schema、主外键和约束，生成初始 migration；建立数据库初始化、连接配置、外键启用、revision 初始化和迁移入口。
+2. **共享事务/版本机制**：封装事务辅助器，使所有写端口以一致方式读取/检查 revision、执行短事务、递增 revision；快照 `save` 额外接受 `expectedRevision` 并做严格比较。
+3. **状态聚合仓储**：实现 `LearningStateRepository.load()`，从各关系表按稳定顺序加载并组装完整状态；实现 `save()` 的全实体差异同步。差异同步按外键依赖顺序写入，删除按反向依赖顺序执行； revision 检查、差异写入和递增必须在同一事务内。
+4. **材料仓储**：`saveMaterialWithAnalysis` 在一个事务内写材料、分析、知识点、分析项、出现记录及未匹配记录；AI 分析在事务外完成。
+5. **目标材料仓储**：实现目标/材料/分析/范围读取；`saveGoalMaterial` 在一个事务内保存目标、材料关联、知识点、候选和来源。新分析版本以新分析记录保存，并按用例规则更新关联，不覆盖历史分析。
+6. **知识点选择仓储**：实现选择上下文聚合查询；`saveKnowledgePointSelection` 在一个事务内更新候选状态并写入新增分类和学习者知识状态。
+7. **任务上下文仓储**：按目标和知识点关联候选、知识点、来源分析对应的材料及目标学习者最新词汇估计，批量查询后组装 `TaskGenerationContext`；来源分析和材料须遵循目标固定的分析版本。
+8. **运行时接线**：提供单一 SQLite 数据库模块和 Repository factory，应用运行时创建一次连接并注入全部仓储；静态词汇索引、词义库等只读本地资源端口继续采用现有实现。
+
+### 验收条件
+
+- 每个 `LearningState` 集合都能从关系表完整往返；保存仅变更对应记录，重复保存无额外业务差异。
+- 所有仓储读写共享同一数据库；通过任一端口写入后，`LearningStateRepository.load()` 能立即读到一致结果。
+- 各多表写操作在中途故障时完整回滚，revision 不递增；成功时 revision 恰好递增一次。
+- 旧 revision 的快照保存会冲突；任一细粒度写入发生后，先前加载的旧快照也会冲突，且不会覆盖细粒度写入。
+- 关闭并重新打开 SQLite 文件后数据仍完整；外键、唯一约束和关键查询索引生效。
+- Repository 契约测试覆盖空库、已有数据、更新/删除、事务失败、并发冲突和重启重载；现有应用行为测试仍可用内存实现运行。
+
+实施顺序：Schema/migration → SQLite 基础设施与 revision 协议 → 状态聚合与差异同步 → 其余细粒度仓储 → 运行时接线 → SQLite Repository 契约验证。首期不做旧格式生产数据迁移；如已有需保留的数据，再单独定义导入迁移步骤。
