@@ -29,6 +29,23 @@ describe('SQLite learning state repository', () => {
     }
   });
 
+  test('allows pending material analysis to finish under the same id', async () => {
+    const { connection } = openSqliteDatabase(':memory:');
+    try {
+      const repository = new SqliteLearningStateRepository(connection);
+      const initial = repository.load();
+      const learner = { id: 'learner', currentVocabulary: null, timezone: 'UTC', dailyTaskCapacity: 1, createdAt: 'now', updatedAt: 'now' };
+      const material = { id: 'material', learnerId: learner.id, title: 't', filename: 't.txt', format: 'txt', mimeType: 'text/plain', checksum: 'x', storageKey: null, extractedText: 'text', extractionMetadata: {}, createdAt: 'now' };
+      repository.save({ ...initial.state, learners: [learner], materials: [material] } as any, initial.revision);
+      const pending = { id: 'analysis', materialId: material.id, analyzerVersion: 'v1', createdAt: 'now', status: 'pending', items: [], unmatchedItems: [], errors: [], completedAt: null };
+      await repository.saveMaterialAnalysis(material.id, pending as any);
+      await repository.saveMaterialWithAnalysis(material as any, { ...pending, status: 'analyzed', completedAt: 'later' } as any);
+      expect(repository.load().state.materialAnalyses[0].status).toBe('analyzed');
+    } finally {
+      connection.close();
+    }
+  });
+
   test('rolls back invalid foreign-key writes without advancing revision', () => {
     const { connection } = openSqliteDatabase(':memory:');
     try {

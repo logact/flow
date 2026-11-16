@@ -112,7 +112,11 @@ export class SqliteLearningStateRepository implements LearningStateRepository, M
           if(descriptor.table==='vocabulary_assessment_tasks' && !values[1]) throw new Error(`Vocabulary assessment task has no owning assessment: ${item.id}`);
           const data=JSON.stringify(item);
           const old=find.get(...values.slice(0,descriptor.primary.length)) as {data:string;position?:number}|undefined;
-          if(descriptor.table==='material_analyses' && old && old.data!==data) throw new Error(`Material analysis id is immutable: ${item.id}`);
+          if(descriptor.table==='material_analyses' && old && old.data!==data) {
+            const previous=JSON.parse(old.data) as LearningState['materialAnalyses'][number];
+            const transition=previous.status==='pending' && previous.materialId===item.materialId && item.status!=='pending';
+            if(!transition) throw new Error(`Material analysis id is immutable: ${item.id}`);
+          }
           if (old?.data===data && (descriptor.table!=='vocabulary_assessment_tasks' || old.position===values[2])) return;
           statement.run(...values,data);
         });
