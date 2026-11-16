@@ -9,6 +9,7 @@
 - `learning-history-and-vocabulary-estimate.decision.md`
 - `encode-pronunciation.decision.md`
 - `initial-vocabulary-fluency.decision.md`
+- `sqlite-runtime-memory.decision.md`
 
 已将可独立验收的决策归并为以下场景。检查后未发现决策冲突。学习词频估计场景明确覆盖第 12 条的最新决策：作答结算更新流利度，词频估计只在知识点毕业时更新且仅计入一次。loop1 的 decision 不属于本次 loop2 决策集合；loop1 output 中的两项遗留内容不纳入本计划。
 
