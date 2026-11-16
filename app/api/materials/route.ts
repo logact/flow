@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ materials });
 }
 
-/** 保存材料原文并建立待分析记录；分析由用户后续显式触发。 */
+/** 只保存材料原文；分析记录仅在用户显式启动分析时创建。 */
 export async function POST(request: Request) {
   const runtime = getRuntime();
   await runtime.ready;
@@ -71,7 +71,6 @@ export async function POST(request: Request) {
   const now=new Date().toISOString(), id=crypto.randomUUID();
   const material=createMaterial({id,learnerId:learner.id,title:body.title?.trim()||filename.replace(/\.[^.]+$/,''),filename,format,mimeType:format==='pdf'?'application/pdf':format==='markdown'?'text/markdown':'text/plain',checksum:createHash('sha256').update(rawFile??Buffer.from(extractedText)).digest('hex'),storageKey:null,extractedText,extractionMetadata,now});
   await runtime.repository.saveMaterial(material);
-  await runtime.repository.saveMaterialAnalysis(id,{id:crypto.randomUUID(),materialId:id,analyzerVersion:'web-v1',createdAt:now,status:'pending',items:[],unmatchedItems:[],errors:[],completedAt:null});
   return NextResponse.json({
     material: {
       id: material.id,
@@ -79,6 +78,6 @@ export async function POST(request: Request) {
       filename: material.filename,
       format: material.format,
     },
-    analysis: {id: null,status:'pending',itemCount:0,unmatchedCount:0},
+    analysis: null,
   });
 }
