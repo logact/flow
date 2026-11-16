@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { importMaterialUseCase } from '@/lib/application/material-import';
 import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
+import { BNC_COCA_L6 } from '@/lib/server/vocabulary-list-repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,18 @@ export async function GET() {
             status: latest.status,
             itemCount: latest.items.length,
             unmatchedCount: latest.unmatchedItems.length,
+            frequencyRank: latest.items.reduce((best, item) => {
+              const classification = state.knowledgePointVocabularyClassifications.find(x => x.knowledgePointId === item.knowledgePoint.id && x.list.id === BNC_COCA_L6.id && x.list.version === BNC_COCA_L6.version);
+              const family = runtime.vocabularyIndex.lookup(item.knowledgePoint.kind === 'word' || item.knowledgePoint.kind === 'phrase' ? item.knowledgePoint.lemma : '');
+              const rank = classification ? Number.parseInt(classification.band, 10) : family ? Number.parseInt(family.band, 10) : Number.POSITIVE_INFINITY;
+              return Math.min(best, rank);
+            }, Number.POSITIVE_INFINITY),
+            frequentTermCount: latest.items.reduce((count, item) => {
+              const classification = state.knowledgePointVocabularyClassifications.find(x => x.knowledgePointId === item.knowledgePoint.id && x.list.id === BNC_COCA_L6.id && x.list.version === BNC_COCA_L6.version);
+              const family = runtime.vocabularyIndex.lookup(item.knowledgePoint.kind === 'word' || item.knowledgePoint.kind === 'phrase' ? item.knowledgePoint.lemma : '');
+              const rank = classification ? Number.parseInt(classification.band, 10) : family ? Number.parseInt(family.band, 10) : Number.POSITIVE_INFINITY;
+              return count + (rank <= 2 ? 1 : 0);
+            }, 0),
             createdAt: latest.createdAt,
           }
         : null,

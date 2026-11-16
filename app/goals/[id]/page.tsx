@@ -23,6 +23,10 @@ export default function GoalDetailPage({ params }: { params: Promise<{ id: strin
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [candidatePage, setCandidatePage] = useState(1);
+  const candidatesPerPage = 10;
+  const candidatePageCount = Math.max(1, Math.ceil((detail?.candidates.length ?? 0) / candidatesPerPage));
+  const visibleCandidates = detail?.candidates.slice((candidatePage - 1) * candidatesPerPage, candidatePage * candidatesPerPage) ?? [];
 
   const load = useCallback(async () => {
     try {
@@ -133,7 +137,7 @@ export default function GoalDetailPage({ params }: { params: Promise<{ id: strin
             <p className="doc-muted">选择要学习的词；保存后新选中的词会初始化 R/P 流利度并进入每日排期。</p>
             <div className="doc-actions"><button className="text-button" onClick={() => setDraft(Object.fromEntries(detail.candidates.map(c=>[c.knowledgePointId,'included'] as const)))}>全选</button><button className="text-button" onClick={() => setDraft(Object.fromEntries(detail.candidates.map(c=>[c.knowledgePointId,'excluded'] as const)))}>全不选</button></div>
             <ul className="doc-list candidate-list">
-              {detail.candidates.map((candidate) => (
+              {visibleCandidates.map((candidate) => (
                 <li key={candidate.knowledgePointId} className="candidate-item">
                   <div className="candidate-info">
                     <strong>{candidate.name}</strong>
@@ -161,6 +165,11 @@ export default function GoalDetailPage({ params }: { params: Promise<{ id: strin
                 </li>
               ))}
             </ul>
+            {candidatePageCount > 1 && <nav className="doc-actions" aria-label="知识点分页">
+              <button className="doc-secondary-button" disabled={candidatePage <= 1} onClick={() => setCandidatePage(page => page - 1)}>上一页</button>
+              <span className="doc-muted">第 {candidatePage} / {candidatePageCount} 页 · 共 {detail.candidates.length} 项</span>
+              <button className="doc-secondary-button" disabled={candidatePage >= candidatePageCount} onClick={() => setCandidatePage(page => page + 1)}>下一页</button>
+            </nav>}
             <div className="doc-actions">
               <button className="primary-button" disabled={saving || !dirty} onClick={() => void save()}>
                 {saving ? '保存中…' : dirty ? '立即保存选择' : '已自动保存'}

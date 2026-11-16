@@ -87,6 +87,10 @@ button:disabled { cursor: default; }
 .option-letter { flex-shrink: 0; width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.17); border-radius: 5px; color: rgba(255,255,255,.65); font-size: 9px; }
 .answer-feedback { min-height: 56px; display: flex; align-items: center; gap: 9px; margin-top: 13px; padding: 9px 11px; border-radius: 7px; background: rgba(0,0,0,.17); opacity: 0; }
 .answer-feedback.visible { opacity: 1; }
+.answer-feedback.celebration { position: relative; overflow: hidden; animation: celebrate-glow 1s ease-in-out 2 alternate; background: linear-gradient(110deg, rgba(37,244,238,.22), rgba(255,215,95,.18), rgba(254,44,85,.16)); }
+.celebration-burst { position: absolute; inset: 0 0 auto; height: 100%; display: grid; place-items: center; font-size: 20px; opacity: 0; pointer-events: none; animation: celebrate-burst 2.5s ease-out both; }
+@keyframes celebrate-glow { to { box-shadow: 0 0 28px rgba(37,244,238,.45); transform: scale(1.015); } }
+@keyframes celebrate-burst { 12% { opacity: 1; transform: translateY(-3px) scale(1.15); } 75% { opacity: .75; } 100% { opacity: 0; transform: translateY(-20px) scale(.9); } }
 .feedback-icon { flex-shrink: 0; width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #25bca8; color: #fff; }
 .feedback-icon.retry { background: var(--red); font-size: 16px; }
 .answer-feedback p { margin: 0; }

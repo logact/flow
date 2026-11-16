@@ -78,7 +78,8 @@ function ResultFeedback({ result, axis }: { result: AttemptResponse; axis: 'R' |
   const text = outcome ? OUTCOME_TEXT[outcome] : null;
   const changes = fluencyChangeText(result.settlement?.fluencyChanges ?? []);
   return (
-    <div className="answer-feedback visible" aria-live="polite">
+    <div className={`answer-feedback visible ${outcome === 'correct' ? 'celebration' : ''}`} aria-live="polite">
+      {outcome === 'correct' && <span className="celebration-burst" aria-hidden="true">✨　🎉　✦　🎊　✨</span>}
       <span className={`feedback-icon ${outcome === 'incorrect' ? 'retry' : ''}`}>
         {outcome === 'incorrect' ? '↻' : <Icon name="check" size={18} />}
       </span>

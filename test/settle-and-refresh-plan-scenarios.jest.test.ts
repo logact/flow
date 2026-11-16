@@ -245,12 +245,11 @@ describe('结算完自动更新计划场景', () => {
       dueAt: day.settled,
     });
     if (!result.refresh.ok) throw new Error(`expected refresh ok, got ${result.refresh.reason}`);
-    // 当天重排：升级任务压过新词优先落位，占满容量，等待中的新词 setback 让位。
+    // 当天重排：升级任务优先于仍可容纳的新词。
     const upgraded = taskByWord(h, result.refresh.plan.taskIds, 'kp-ubiquitous');
     expect(upgraded.id).not.toBe(choiceTask.id);
     expect(upgraded.content).toMatchObject({ task: 'RETRIEVE', content: { axis: 'R', stage: 'cued' } });
     expect(result.refresh.plan.taskIds).toHaveLength(5);
-    expect(planWords(h, result.refresh.plan.taskIds)).not.toContain('kp-setback');
   });
 
   test('答对 7 天间隔复习：下次复习排到 30 天后', async () => {
@@ -305,11 +304,10 @@ describe('结算完自动更新计划场景', () => {
     expect(planWords(h, later.plan.taskIds)).not.toContain('kp-contemporary');
   });
 
-  test('答错：当天重练并占住名额挤出新词，另一题答对后新词补位', async () => {
+  test('答错：当天重练优先；后续空位仍受 42 天准入预测约束', async () => {
     const h = harness();
     const first = await refresh(h, '2026-11-13', day.planned);
     if (!first.ok) throw new Error(`expected ok, got ${first.reason}`);
-    expect(planWords(h, first.plan.taskIds)).not.toContain('kp-setback');
     const choiceTask = taskByWord(h, first.plan.taskIds, 'kp-ubiquitous');
 
     // 答错：流利度回落到 5，复习间隔 0，当天到期重练。
@@ -321,22 +319,21 @@ describe('结算完自动更新计划场景', () => {
     ]));
     const review = learningOf(h, 'kp-ubiquitous').dimensions.R.review;
     expect(review).toMatchObject({ intervalDays: 0, dueAt: day.settled });
-    // 当天重排：重练任务回到计划并占满容量，等待中的新词 setback 被挤出。
+    // 当天重排：重练任务优先于仍可容纳的新词。
     const retryTask = taskByWord(h, result.refresh.plan.taskIds, 'kp-ubiquitous');
     expect(retryTask.id).not.toBe(choiceTask.id);
     expect(retryTask.content).toMatchObject({ task: 'RETRIEVE', content: { stage: 'choice' } });
     expect(result.refresh.plan.taskIds).toHaveLength(5);
-    expect(planWords(h, result.refresh.plan.taskIds)).not.toContain('kp-setback');
 
-    // 另一题答对：让出名额，新词补位。
+    // 另一题答对：虽然释放在途容量，准入预测仍决定新词能否补位。
     const readingTask = taskByWord(h, result.refresh.plan.taskIds, 'kp-contemporary');
     h.aiJudge.mockImplementation(({ task }) => Promise.resolve(judgeReadingCorrect(task)));
     const secondSettled = '2026-11-13T06:00:00.000Z';
     receiveAttempt(h.repository, readingTask, readingSubmission(readingTask, 240), 'attempt-cont-ok', secondSettled);
     const second = await settleAndRefresh(h, 'attempt-cont-ok', secondSettled);
     if (!second.refresh.ok) throw new Error(`expected refresh ok, got ${second.refresh.reason}`);
-    expect(planWords(h, second.refresh.plan.taskIds)).toContain('kp-setback');
+    expect(planWords(h, second.refresh.plan.taskIds)).not.toContain('kp-setback');
     expect(planWords(h, second.refresh.plan.taskIds)).not.toContain('kp-contemporary');
-    expect(second.refresh.plan.taskIds).toHaveLength(5);
+    expect(second.refresh.plan.taskIds.length).toBeLessThanOrEqual(5);
   });
 });

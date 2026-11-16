@@ -19,9 +19,8 @@ import { InMemoryAppRepository, emptyLearningState } from './memory-repository';
 import { BNC_COCA_L6, createFileVocabularyListRepository } from './vocabulary-list-repository';
 
 /**
- * 服务端运行时单例：内存仓库 + 全部基础设施端口 + 演示种子数据。
- * 原型阶段进程内共享一份状态（dev 热更新通过 globalThis 保持）；
- * 切换 SQLite 持久化时只替换 repository 实现，用例与路由不变。
+ * 服务端运行时单例：进程内内存仓库 + 基础设施端口 + 幂等演示种子数据。
+ * 重启后状态重置；切换 SQLite 持久化时替换 repository 实现即可（见 lib/server/sqlite）。
  */
 
 export const DEMO_LEARNER_ID = 'demo-learner';
@@ -73,11 +72,7 @@ function createRuntime(): FlowRuntime {
     llmConfigured,
     ready: Promise.resolve(),
   };
-  // 种子失败时重置仓库避免半初始化状态，错误随 ready 抛出，路由返回 500。
-  runtime.ready = seed(runtime).catch((error) => {
-    runtime.repository = new InMemoryAppRepository(emptyLearningState());
-    throw error;
-  });
+  runtime.ready = seed(runtime);
   return runtime;
 }
 

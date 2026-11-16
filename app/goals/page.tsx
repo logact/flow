@@ -26,6 +26,7 @@ export default function GoalsPage() {
   const [selectionOverrides,setSelectionOverrides]=useState<Record<string,boolean>>({});
   const [candidatesLoading,setCandidatesLoading]=useState(false);
   const [candidateError,setCandidateError]=useState<string|null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     try {
@@ -109,7 +110,8 @@ export default function GoalsPage() {
       setDraftRestored(false);
       setDraftReady(true);
       setTitle('');
-      router.push(`/goals/${goalId}`);
+      setAdding(false);
+      void load();
     } catch (err) {
       setError(err instanceof ApiError && err.reason === 'assessment_incomplete'
         ? '目标和材料已保存。请先完成词汇测评，再重新提交以初始化学习知识点。'
@@ -121,8 +123,9 @@ export default function GoalsPage() {
 
   return (
     <PageShell title="学习目标">
-      <section className="doc-card">
+      {adding && <section className="doc-card">
         <h2>创建目标并加入材料</h2>
+        <button className="doc-secondary-button" onClick={()=>setAdding(false)}>返回目标管理</button>
         {draftRestored && <p className="doc-notice">已恢复未完成的目标草稿。</p>}
         <p className="doc-muted">目标是学习范围与流利度目标的载体；同一材料可加入多个目标。</p>
         <div className="doc-actions"><button className="doc-secondary-button" onClick={()=>{localStorage.setItem('flow.goal-draft',JSON.stringify({goalId:draftGoalId,title,materialIds,targetR,targetP,selectedKnowledge,selectionOverrides}));router.push('/materials')}}>导入新材料</button></div>
@@ -146,10 +149,10 @@ export default function GoalsPage() {
           </button>
         </div>
         {error && <p className="doc-error">{error}</p>}
-      </section>
+      </section>}
 
       <section className="doc-card">
-        <h2>全部目标</h2>
+        <div className="doc-actions" style={{justifyContent:'space-between', marginTop:0}}><h2>目标管理</h2><button className="doc-secondary-button" aria-label="添加目标" title="添加目标" onClick={()=>setAdding(true)} style={{fontSize:22,lineHeight:1,padding:'4px 12px'}}>＋</button></div>
         {goals.length === 0 && <p className="doc-muted">还没有目标。</p>}
         <ul className="doc-list">
           {goals.map((goal) => (

@@ -19,12 +19,22 @@ export default function MaterialsPage() {
   const [targetGoal,setTargetGoal]=useState('');
   const [hasGoalDraft,setHasGoalDraft]=useState(false);
   const [goals,setGoals]=useState<Array<{id:string;title:string;status:string}>>([]);
+  const [materialPage, setMaterialPage] = useState(1);
+  const materialsPerPage = 8;
+  const orderedMaterials = [...materials].sort((a, b) =>
+    (a.analysis?.frequencyRank ?? Infinity) - (b.analysis?.frequencyRank ?? Infinity)
+    || (b.analysis?.frequentTermCount ?? 0) - (a.analysis?.frequentTermCount ?? 0)
+    || a.title.localeCompare(b.title),
+  );
+  const pageCount = Math.max(1, Math.ceil(orderedMaterials.length / materialsPerPage));
+  const visibleMaterials = orderedMaterials.slice((materialPage - 1) * materialsPerPage, materialPage * materialsPerPage);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
       const [data,goalData] = await Promise.all([apiGet<MaterialsResponse>('/api/materials'),apiGet<{goals:Array<{id:string;title:string;status:string}>}>('/api/goals')]);
       setMaterials(data.materials);
+      setMaterialPage(page => Math.min(page, Math.max(1, Math.ceil(data.materials.length / materialsPerPage))));
       const activeGoals=goalData.goals.filter(goal=>goal.status==='active');
       setGoals(activeGoals);
       setTargetGoal(current=>activeGoals.some(goal=>goal.id===current)?current:'');
@@ -134,8 +144,9 @@ export default function MaterialsPage() {
       <section className="doc-card">
         <h2>已导入材料</h2>
         {materials.length === 0 && <p className="doc-muted">还没有材料。</p>}
+        {materials.length > 0 && <p className="doc-muted">按词频排序（高频优先） · 每页 {materialsPerPage} 项</p>}
         <ul className="doc-list">
-          {materials.map((material) => (
+          {visibleMaterials.map((material) => (
             <li key={material.id}>
               <strong>{material.title}</strong>
               <span className="doc-muted"> · {material.format} · {material.analysis ? `${material.analysis.itemCount} 个知识点` : '未分析'}</span>
@@ -148,6 +159,11 @@ export default function MaterialsPage() {
             </li>
           ))}
         </ul>
+        {pageCount > 1 && <nav className="doc-actions" aria-label="材料分页">
+          <button className="doc-secondary-button" disabled={materialPage <= 1} onClick={() => setMaterialPage(page => page - 1)}>上一页</button>
+          <span className="doc-muted">第 {materialPage} / {pageCount} 页</span>
+          <button className="doc-secondary-button" disabled={materialPage >= pageCount} onClick={() => setMaterialPage(page => page + 1)}>下一页</button>
+        </nav>}
       </section>
     </PageShell>
   );

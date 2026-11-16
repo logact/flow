@@ -115,7 +115,9 @@ export default function LearningFeedPage() {
         return [...marked, ...merged.filter((item) => !known.has(item.id))];
       });
       const index = visibleTasks.findIndex((item) => item.id === task.id);
-      if (index >= 0) window.setTimeout(() => goToSlide(index + 1), 250);
+      const dimension = task.content.task === 'RETRIEVE' ? result.judgement?.dimensions?.[task.content.content.axis] : undefined;
+      const celebrated = dimension?.outcome === 'correct';
+      if (index >= 0) window.setTimeout(() => goToSlide(index + 1), celebrated ? 2600 : 250);
     } catch (error) {
       notify(error instanceof ApiError ? `提交失败：${error.message}` : '提交失败，请重试。');
     } finally {

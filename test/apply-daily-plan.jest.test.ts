@@ -145,7 +145,7 @@ describe('S09 应用排期决策并保存每日计划', () => {
       { planId: 'plan-day-1', decision: first.decision, newTasks: first.newTasks, now: at.planned },
     ));
 
-    // 将 resilient-b 移出学习范围，空出的位置由第一轮因容量落选的 setback 补位。
+    // 将 resilient-b 移出学习范围，空位由新词段按稳定键排序后补位。
     const snapshot = repository.load();
     const state = snapshot.state;
     const nextState: Model.LearningState = {
@@ -160,8 +160,7 @@ describe('S09 应用排期决策并保存每日计划', () => {
     const second = await planAndGenerate(repository, provider, planDate, at.replanned);
     const resilientBTaskId = idForSpec({ goalId, wordId: 'kp-resilient-b', task: 'FLUENCY', axis: 'P' });
     expect(second.decision.cancelTaskIds).toEqual([resilientBTaskId]);
-    expect(second.newTasks).toHaveLength(1);
-    expect(second.newTasks[0].id).toBe(idForSpec({ goalId, wordId: 'kp-setback', task: 'ENCODE' }));
+    expect(second.newTasks).toHaveLength(0);
 
     // 第二次应用省略 planId：复用当天已有计划，保留 createdAt。
     const result = expectOk(await applyDailyPlanUseCase(
@@ -176,10 +175,10 @@ describe('S09 应用排期决策并保存每日计划', () => {
 
     const after = repository.load().state;
     expect(after.tasks.find((task) => task.id === resilientBTaskId)?.status).toBe('cancelled');
-    expect(after.tasks.find((task) => task.id === second.newTasks[0].id)?.status).toBe('issued');
+    expect(second.newTasks).toHaveLength(0);
     expect(after.studyPlans).toHaveLength(1);
-    // 第二轮只为 setback 调用一次 AI。
-    expect(provider.requests).toHaveLength(6);
+    // 42 天准入预测未允许替补新词，因此没有额外 AI 调用。
+    expect(provider.requests).toHaveLength(5);
   });
 
   test('P3 过期与取消：状态变化与新计划在同一次写入中保存', async () => {
@@ -286,10 +285,9 @@ describe('S09 应用排期决策并保存每日计划', () => {
     repository.save(state, snapshot.revision);
 
     const second = await planAndGenerate(repository, provider, planDate, at.replanned);
-    const encodeTaskId = idForSpec(encodeSpec);
     expect(second.newTasks).toHaveLength(0);
     expect(second.decision.tasks.every((position) => position.source === 'existing')).toBe(true);
-    expect(second.decision.cancelTaskIds).toEqual([encodeTaskId]);
+    expect(second.decision.cancelTaskIds).toEqual([idForSpec({ goalId, wordId: 'kp-resilient', task: 'ENCODE' })]);
 
     const result = expectOk(await applyDailyPlanUseCase(
       { repository, logger: silentLogger },
@@ -312,7 +310,9 @@ describe('S09 应用排期决策并保存每日计划', () => {
     expect(settledTask.status).toBe('completed');
     expect(result.plan.taskIds).not.toContain(ubiquitousTaskId);
     // 容量装不下的新词任务被显式取消。
-    expect(after.tasks.find((task) => task.id === encodeTaskId)?.status).toBe('cancelled');
+    for (const taskId of second.decision.cancelTaskIds) {
+      expect(after.tasks.find((task) => task.id === taskId)?.status).toBe('cancelled');
+    }
     // 第二轮没有新规格，零 AI 调用。
     expect(provider.requests).toHaveLength(5);
   });
