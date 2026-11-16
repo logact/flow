@@ -113,6 +113,8 @@ export async function importMaterialUseCase(
     chunkItemLimit?: number;
     /** 单次 AI 请求的 prompt 字符预算；缺省由词义消歧模块决定。 */
     chunkCharLimit?: number;
+    /** 词条级发音查询；失败不阻断分析。 */
+    pronunciationLookup?: (lemma: string, partOfSpeech: string | null) => Promise<import('../domain/model').PronunciationMetadata | null>;
   },
   input: ImportMaterialUseCaseInput,
 ): Promise<ImportMaterialResult> {
@@ -223,6 +225,22 @@ export async function importMaterialUseCase(
       '材料导入：失败（分析未完成）',
     );
     return { ok: false, reason: 'analysis_failed' };
+  }
+
+  const pronunciationLookup = deps.pronunciationLookup;
+  for (let index = 0; pronunciationLookup && index < analysis.items.length; index += 4) {
+    const batch = await Promise.all(analysis.items.slice(index, index + 4).map(async (item) => {
+      const point = item.knowledgePoint;
+      if (point.kind !== 'word' && point.kind !== 'phrase') return item;
+      let pronunciation = null;
+      try {
+        pronunciation = await pronunciationLookup(point.lemma, point.sense.partOfSpeech);
+      } catch {
+        // Dictionary availability must never fail material analysis.
+      }
+      return { ...item, knowledgePoint: { ...point, pronunciation } };
+    }));
+    analysis.items.splice(index, batch.length, ...batch);
   }
 
   await deps.repository.saveMaterialWithAnalysis(material, analysis);

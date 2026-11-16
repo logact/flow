@@ -70,7 +70,7 @@ describe('S08 生成学习任务', () => {
     expect(task.issuedAt).toBe(at.issued);
     expect(task.status).toBe('issued');
     expect(task.completedAt).toBe(null);
-    expect(task.content).toEqual(aiOutputs[key]);
+    expect(task.content).toMatchObject(aiOutputs[key]);
     // AI Provider 收到排期规格、仓库加载的目标知识点、学习者词汇水平和来源材料。
     const knowledgePoint = knowledgePoints.find((item) => item.id === specification.wordId);
     expect(provider.requests).toEqual([{
@@ -82,6 +82,30 @@ describe('S08 生成学习任务', () => {
     // 本用例不单独持久化任务，避免生成后未进入计划的孤立任务。
     expect(repository.persistedTasks).toHaveLength(0);
     expect(state.tasks).toHaveLength(0);
+  });
+
+  test('ENCODE 快照使用知识点已缓存的词典发音，不读取 AI 临时值', async () => {
+    const { state, repository, provider } = setup(() => JSON.stringify(aiOutputs.encodeResilient));
+    const cached = {
+      ipa: '/rɪˈzɪliənt/',
+      audioUrl: 'https://audio.example/resilient.mp3',
+      source: 'Free Dictionary API (dictionaryapi.dev)',
+      sourceUrl: 'https://api.dictionaryapi.dev/api/v2/entries/en/resilient',
+      queriedAt: at.issued,
+    };
+    state.knowledgePoints = state.knowledgePoints.map((point) => point.id === 'kp-resilient' ? { ...point, pronunciation: cached } : point);
+    const result = await generateLearningTaskUseCase(
+      { repository, aiProvider: provider, logger: silentLogger },
+      inputFor('encodeResilient'),
+    );
+    const task = expectOk(result);
+    if (task.content.task !== 'ENCODE') throw new Error('expected ENCODE task');
+    expect(task.content.content).toMatchObject({
+      pronunciation: cached.ipa,
+      pronunciationAudioUrl: cached.audioUrl,
+      pronunciationSource: cached.source,
+      pronunciationSourceUrl: cached.sourceUrl,
+    });
   });
 
   test('AI 请求失败时返回失败，不创建、不保存任务', async () => {

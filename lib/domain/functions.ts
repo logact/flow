@@ -954,7 +954,7 @@ export function inspectGeneratedTask(
       return { malformed, reasons };
     }
     if (typeof content.prompt !== 'string' || !content.prompt.trim()) fail('RETRIEVE prompt 不能为空');
-    if (content.stage !== 'choice' && typeof targetLemma === 'string' && targetLemma.trim()) {
+    if (content.stage !== 'choice' && specification.axis === 'P' && typeof targetLemma === 'string' && targetLemma.trim()) {
       const escapedTarget = targetLemma.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const targetPattern = new RegExp(`(^|[^\\p{L}\\p{N}])${escapedTarget}($|[^\\p{L}\\p{N}])`, 'iu');
       const recallClues = [content.prompt, content.stage === 'cued' ? content.cue : ''];
@@ -1971,39 +1971,6 @@ export function calculateNextReviewSchedule(
     lapseCount,
     graduated,
   };
-}
-
-export interface UpdateVocabularyEstimateInput {
-  before: VocabularyEstimate;
-  knowledgePoint: KnowledgePoint;
-  classification: KnowledgePointVocabularyClassification | null;
-  task: LearningTask;
-  judgement: TaskJudgement;
-  estimatedAt: ISODateTime;
-}
-
-export function updateVocabularyEstimate(input: UpdateVocabularyEstimateInput): VocabularyEstimate {
-  if (input.task.content.wordId !== input.knowledgePoint.id || input.judgement.taskId !== input.task.id) {
-    throw new Error('Vocabulary update evidence does not match the task');
-  }
-  if (input.classification) {
-    if (input.classification.knowledgePointId !== input.knowledgePoint.id
-      || input.classification.list.id !== input.before.list.id
-      || input.classification.list.version !== input.before.list.version) {
-      throw new Error('Classification does not match the vocabulary estimate');
-    }
-  }
-  const after = clone(input.before);
-  after.estimatedAt = input.estimatedAt;
-  if (!input.classification) return after;
-  const band = after.bands.find((item) => item.band === input.classification!.band);
-  const judgement = input.judgement.dimensions.R ?? input.judgement.dimensions.P;
-  if (!band || !judgement) return after;
-  band.sampleCount++;
-  if (judgement.outcome === 'correct') band.knownCount++;
-  band.knownProbability = band.knownCount / band.sampleCount;
-  band.interval = wilsonInterval(band.knownCount, band.sampleCount);
-  return after;
 }
 
 function countGraduatedKnowledgePoint(

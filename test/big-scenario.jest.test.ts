@@ -335,7 +335,6 @@ describe('端到端大场景', () => {
       const expectEncode = expectedSignatures(learningsOf(ctx.repository.load().state)).has('ENCODE');
       const expected = expectedSignatures(learningsOf(ctx.repository.load().state));
       const seen = new Set<string>();
-      const estimatedAts = new Set<string>([ctx.vocabulary0.estimatedAt]);
       let ubiquitousWrongAnswered = false;
       let idempotencyChecked = false;
       let judgeFailureChecked = false;
@@ -508,10 +507,6 @@ describe('端到端大场景', () => {
             + `做后 R${learningAfter.dimensions.R.fluency}/P${learningAfter.dimensions.P.fluency} | `
             + `评判 ${outcomeText} (${settledAttempt.judgement!.judgedBy})`,
           );
-          estimatedAts.add(
-            ctx.repository.load().state.learners.find((item) => item.id === learnerId)!.currentVocabulary!.estimatedAt,
-          );
-
           sessionNow = new Date(Date.parse(sessionNow) + 60_000).toISOString();
         }
 
@@ -523,7 +518,7 @@ describe('端到端大场景', () => {
         now = nextStudyTime(afterDay, now);
       }
 
-      // 循环退出即验收：全部维度复习毕业、路径覆盖、答错保真、词汇估计持续推进。
+      // 循环退出即验收：全部维度复习毕业、路径覆盖、答错保真。
       // 毕业要求走完达标后的 +1/+3/+7/+30 天 FLUENCY 复习链；按日历跨度断言
       //（外层迭代数不等于天数，nextStudyTime 会一次跳到 30 天后的到期复习）。
       const elapsedDays = (Date.parse(now) - Date.parse(at(20))) / 86_400_000;
@@ -532,7 +527,6 @@ describe('端到端大场景', () => {
         expect(seen.has(signature)).toBe(true);
       }
       expect(ubiquitousWrongAnswered).toBe(true);
-      expect(estimatedAts.size).toBeGreaterThan(1);
 
       const finalState = ctx.repository.load().state;
       const settledAttempts = finalState.attempts.filter((item) => item.status === 'settled');

@@ -5,6 +5,7 @@ import { addMaterialToGoalUseCase } from '../application/goal-material';
 import { createLearnerUseCase } from '../application/learner-settings';
 import { importMaterialUseCase } from '../application/material-import';
 import { createSenseMeaningTranslator } from '../application/sense-meaning-translation';
+import { lookupPronunciation } from '../application/pronunciation';
 import { createOpenAITaskGenerationProvider } from '../application/openai-task-provider';
 import type {
   SenseDisambiguator,
@@ -46,6 +47,7 @@ export interface FlowRuntime {
   taskGenerationProvider: TaskGenerationAIProvider;
   senseDisambiguator: SenseDisambiguator;
   translateSenseMeaning: ReturnType<typeof createSenseMeaningTranslator>;
+  pronunciationLookup: typeof lookupPronunciation;
   aiJudge: TaskAIJudge;
   /** 是否配置了 LLM_API_KEY；未配置时任务生成与 AI 评判不可用。 */
   llmConfigured: boolean;
@@ -75,6 +77,7 @@ function createRuntime(): FlowRuntime {
     taskGenerationProvider: createOpenAITaskGenerationProvider(),
     senseDisambiguator: createSenseDisambiguatorFromEnv(),
     translateSenseMeaning: createSenseMeaningTranslator(),
+    pronunciationLookup: lookupPronunciation,
     aiJudge: createTaskAIJudgeFromEnv(),
     llmConfigured,
     ready: Promise.resolve(),
@@ -104,6 +107,7 @@ async function seed(runtime: FlowRuntime): Promise<void> {
         senseInventory: runtime.senseInventory,
         // 种子材料不调用 AI 消歧：单义词条直接取词义库，多义词条回退占位义项。
         vocabularyFilter: runtime.vocabularyFilter,
+        pronunciationLookup: runtime.pronunciationLookup,
       },
       {
         materialId: DEMO_MATERIAL_ID,

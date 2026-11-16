@@ -144,6 +144,36 @@ function analysisItemIds(analysis: AnalyzedMaterialAnalysis): string[] {
 }
 
 describe('S04 导入并分析材料', () => {
+  test('分析完成后缓存词条发音，发音服务失败不阻断材料分析', async () => {
+    const { repository } = setup();
+    const pronunciation = {
+      ipa: '/rɪˈzɪliənt/',
+      audioUrl: 'https://audio.example/resilient.mp3',
+      source: 'Free Dictionary API (dictionaryapi.dev)',
+      sourceUrl: 'https://api.dictionaryapi.dev/api/v2/entries/en/resilient',
+      queriedAt: at.imported,
+    };
+    const result = await importMaterialUseCase({
+      repository,
+      logger: silentLogger,
+      senseInventory: { lookup: (lemma) => lemma === 'resilient' ? [{ id: 'sense:resilient', pos: 'adjective', gloss: 'able to recover' }] : [] },
+      pronunciationLookup: async (lemma) => lemma === 'resilient' ? pronunciation : null,
+    }, baseInput({ extractedText: 'A resilient team stays resilient.' }));
+    const imported = expectOk(result);
+    const resilient = imported.analysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient');
+    expect(resilient?.knowledgePoint.pronunciation).toEqual(pronunciation);
+
+    const failed = await importMaterialUseCase({
+      repository: setup().repository,
+      logger: silentLogger,
+      senseInventory: { lookup: (lemma) => lemma === 'resilient' ? [{ id: 'sense:resilient', pos: 'adjective', gloss: 'able to recover' }] : [] },
+      pronunciationLookup: async () => { throw new Error('dictionary unavailable'); },
+    }, baseInput({ materialId: 'material-failed-pronunciation', analysisId: 'analysis-failed-pronunciation', extractedText: 'A resilient team.' }));
+    const failedAnalysis = expectOk(failed).analysis;
+    expect(failedAnalysis.items.length).toBeGreaterThan(0);
+    expect(failedAnalysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient')?.knowledgePoint.pronunciation).toBeNull();
+  });
+
   test('markdown 原始文件：应用层提取文本并分析，材料与分析一次性保存', async () => {
     const { state, repository } = setup();
     const rawFile = Buffer.from(markdownSource, 'utf8');

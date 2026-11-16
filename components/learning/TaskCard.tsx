@@ -138,10 +138,13 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
         <div className="word-hero">
           <span className="word-kicker">MEET A NEW WORD</span>
           <h1>{content.word}<span>.</span></h1>
-          <button className="pronunciation" onClick={() => notify('发音播放为原型演示')}>
+          <button className="pronunciation" disabled={!content.pronunciationAudioUrl} onClick={() => void playPronunciation()} aria-label={content.pronunciationAudioUrl ? '播放词典发音' : '音频暂缺'}>
             <span className="sound-button"><Icon name="volume" size={20} /></span>
-            {content.pronunciation && <span>{content.pronunciation}</span>}
+            <span>{content.pronunciation || '音标暂缺'}</span>
+            {audioStatus === 'playing' && <span role="status">播放中…</span>}
+            {audioStatus === 'failed' && <span role="status">播放失败</span>}
           </button>
+          {content.pronunciationSource && <a className="pronunciation-source" href={content.pronunciationSourceUrl ?? 'https://dictionaryapi.dev/'} target="_blank" rel="noreferrer">发音来源：{content.pronunciationSource}</a>}
         </div>
         <div className="meaning-block">
           {content.partOfSpeech && <span className="part-of-speech">{content.partOfSpeech}</span>}
@@ -289,7 +292,7 @@ export function ReadingCard({ task, index, active, result, submitting, onSubmit,
   const [freeAnswers, setFreeAnswers] = useState<Record<string, string>>({});
   const [questionOptions] = useState(() => new Map(content.questions
     .filter((question) => question.kind === 'choice')
-    .map((question) => [question.id, shuffled(question.options)] as const));
+    .map((question) => [question.id, shuffled(question.options)] as const)));
 
   const finishReading = () => {
     setReadMs(Date.now() - (shownAtRef.current || Date.now()));

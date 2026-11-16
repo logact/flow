@@ -122,6 +122,16 @@ interface KnowledgePointBase {
   id: string;
   /** 当前知识点学习的具体词义或用法。 */
   sense: KnowledgePointSense;
+  /** 可选的词条级词典发音数据；词典暂缺时保持 null。 */
+  pronunciation?: PronunciationMetadata | null;
+}
+
+export interface PronunciationMetadata {
+  ipa: string | null;
+  audioUrl: string | null;
+  source: string;
+  sourceUrl: string;
+  queriedAt: ISODateTime;
 }
 
 /** 可按词族和词频分类的词汇知识点。 */
@@ -459,6 +469,9 @@ export interface EncodeTaskContent {
   word: string;
   /** 目标词发音或音标；没有时可省略。 */
   pronunciation?: string;
+  pronunciationAudioUrl?: string | null;
+  pronunciationSource?: string | null;
+  pronunciationSourceUrl?: string | null;
   /** 目标词性；没有时可省略。 */
   partOfSpeech?: string;
   /** 目标词义。 */
