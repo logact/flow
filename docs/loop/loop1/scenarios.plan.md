@@ -57,6 +57,12 @@
 - 目标列表按目标区块展示，明确创建及详情入口，并覆盖空状态和窄屏。
 - 目标详情展示完成率、数量、R/P 当前值与目标值、状态分类和下一步提示；正确呈现未初始化、空集合和加载错误。
 
+#### implementation status
+- 核验结果：已完成。目标详情 API 仅按 `included` 知识点计算完成率、分类数和 R/P 平均值；页面展示空集合、待初始化和完成状态。
+- 核验依据：`app/api/goals/[id]/route.ts`、`app/goals/[id]/page.tsx`。
+- 验证：完整 Jest 套件通过；`test/goal-status.jest.test.ts` 覆盖目标学习状态流转。构建通过，页面/API 类型检查完成。
+- 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
+
 ### 场景三：知识点选择与材料来源筛选
 
 #### include decision
