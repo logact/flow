@@ -110,10 +110,26 @@ function NextButton({ onNext, result }: { onNext: () => void; result: AttemptRes
 
 // ── ENCODE 新词连接 ──────────────────────────────────────────────
 
-export function EncodeCard({ task, index, active, result, submitting, onSubmit, onNext, notify }: TaskCardProps) {
+export function EncodeCard({ task, index, active, result, submitting, onSubmit, onNext }: TaskCardProps) {
   if (task.content.task !== 'ENCODE') return null;
   const content = task.content.content;
   const shownAtRef = useShownAt(active);
+  const [audioStatus, setAudioStatus] = useState<'idle'|'playing'|'failed'>('idle');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playPronunciation = async () => {
+    if (!content.pronunciationAudioUrl) return;
+    try {
+      const audio = audioRef.current ?? new Audio(content.pronunciationAudioUrl);
+      audioRef.current = audio;
+      audio.src = content.pronunciationAudioUrl;
+      audio.onended = () => setAudioStatus('idle');
+      audio.onerror = () => setAudioStatus('failed');
+      setAudioStatus('playing');
+      await audio.play();
+    } catch {
+      setAudioStatus('failed');
+    }
+  };
   return (
     <article className="learning-card encode-card">
       <div className="decode-shape shape-one" /><div className="decode-shape shape-two" />
@@ -271,6 +287,9 @@ export function ReadingCard({ task, index, active, result, submitting, onSubmit,
   const [readMs, setReadMs] = useState(0);
   const [choiceAnswers, setChoiceAnswers] = useState<Record<string, string>>({});
   const [freeAnswers, setFreeAnswers] = useState<Record<string, string>>({});
+  const [questionOptions] = useState(() => new Map(content.questions
+    .filter((question) => question.kind === 'choice')
+    .map((question) => [question.id, shuffled(question.options)] as const));
 
   const finishReading = () => {
     setReadMs(Date.now() - (shownAtRef.current || Date.now()));
