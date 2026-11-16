@@ -1,5 +1,4 @@
 import path from 'node:path';
-import fs from 'node:fs';
 import { createTaskAIJudgeFromEnv, type TaskAIJudge } from '../application/ai-judge';
 import { addMaterialToGoalUseCase } from '../application/goal-material';
 import { createLearnerUseCase } from '../application/learner-settings';
@@ -18,12 +17,12 @@ import { createSenseDisambiguatorFromEnv } from '../application/sense-disambigua
 import type { VocabularyListRepository } from '../application/vocabulary-assessment';
 import { createVocabularyDecisionFilter, loadVocabularyIndexFromFile } from '../application/vocabulary-index';
 import type { Learner } from '../domain/model';
-import { SqliteLearningStateRepository } from './sqlite/repository';
-import { openSqliteDatabase } from './sqlite/database';
+import { InMemoryAppRepository, emptyLearningState } from './memory-repository';
 import { BNC_COCA_L6, createFileVocabularyListRepository } from './vocabulary-list-repository';
 
 /**
- * 服务端运行时单例：SQLite 持久化仓储 + 基础设施端口 + 幂等演示种子数据。
+ * 服务端运行时单例：进程内存仓储 + 基础设施端口 + 幂等演示种子数据。
+ * SQLite 仓储保留但当前不由应用运行时启用；服务重启后状态重新初始化。
  */
 
 export const DEMO_LEARNER_ID = 'demo-learner';
@@ -39,7 +38,7 @@ const SEED_MATERIAL_TEXT = [
 ].join('\n');
 
 export interface FlowRuntime {
-  repository: SqliteLearningStateRepository;
+  repository: InMemoryAppRepository;
   senseInventory: SenseInventory;
   vocabularyIndex: VocabularyIndex;
   vocabularyListRepository: VocabularyListRepository;
@@ -65,11 +64,8 @@ function createRuntime(): FlowRuntime {
     path.join(process.cwd(), 'data', 'bnc-coca-l6-v2.0.0.json'),
   );
   const llmConfigured = Boolean(process.env.LLM_API_KEY);
-  const databasePath = path.resolve(/*turbopackIgnore: true*/ process.env.FLOW_DATABASE_PATH ?? path.join(process.cwd(), '.flow', 'flow.sqlite'));
-  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
-  const { connection } = openSqliteDatabase(databasePath);
   const runtime: FlowRuntime = {
-    repository: new SqliteLearningStateRepository(connection),
+    repository: new InMemoryAppRepository(emptyLearningState()),
     senseInventory,
     vocabularyIndex,
     vocabularyListRepository: createFileVocabularyListRepository(),
@@ -82,7 +78,10 @@ function createRuntime(): FlowRuntime {
     llmConfigured,
     ready: Promise.resolve(),
   };
-  runtime.ready = seed(runtime);
+  runtime.ready = seed(runtime).catch((error) => {
+    runtime.repository = new InMemoryAppRepository(emptyLearningState());
+    throw error;
+  });
   return runtime;
 }
 

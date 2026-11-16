@@ -27,4 +27,7 @@
 
 ### 第 8 条实施结果
 
-- 待实施。
+- `lib/server/runtime.ts` 已恢复初始化 `InMemoryAppRepository(emptyLearningState())`；运行时不再读取 `FLOW_DATABASE_PATH`、创建 `.flow` 目录或打开 SQLite 连接。SQLite repository 代码、迁移与 `:memory:` 测试保留，但不会被应用启动路径调用。
+- 已更新 loop1/loop2 相关文档，标记此前 SQLite 持久化描述为历史实现，并链接到本条新决策。
+- 服务状态现存于服务进程内存，进程重启后重置；磁盘上已有 SQLite 文件未读取、迁移或删除。
+- 验证：`npx tsc --noEmit` 通过；静态检查确认运行时文件不再引用 SQLite 数据库路径或连接。未运行测试套件。
