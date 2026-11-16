@@ -158,6 +158,12 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 - 答对后显示全屏庆祝动画并在明确时长后结束，支持减少动态效果；答错展示正确答案和解释（对应 `human-verify.record.md` 第 9 条，需确认具体题型与解释来源后实现）。
 - 明确显示学习进度保存状态及失败反馈；刷新或重新进入后恢复已保存进度。
 
+#### implementation status
+- 核验结果：已完成。答题反馈仅在结算成功后出现；答对庆祝全屏显示 2.4 秒、2.5 秒后继续，减少动态效果规则覆盖庆祝动画。学习领域状态使用 SQLite 持久化，作答结算幂等，计划刷新失败不会回滚已保存结算。
+- 核验依据：`app/page.tsx`、`app/globals.css`、`app/api/tasks/[id]/attempt/route.ts`、`lib/application/settle-and-refresh-plan.ts`、`lib/server/runtime.ts`、`lib/server/sqlite/repository.ts`、`docs/loop/loop1/human-verify-20-22.implementation-decisions.md`。
+- 验证：完整 Jest 套件通过（24 suites、265 tests）；`test/settle-and-refresh-plan.jest.test.ts`、`test/judge-settle-task-attempt.jest.test.ts`、`test/sqlite-repository.jest.test.ts` 覆盖结算、重试及持久化；Next.js 生产构建和 TypeScript 检查通过。
+- 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
+
 ## 冲突与待决策
 
 - 未发现已确认 decisions 之间直接冲突。材料解耦与目标创建共享材料状态及关联边界，按场景一先落实材料分析状态，再接目标创建校验。
