@@ -101,6 +101,7 @@
 - 完成：场景四发音状态与分析状态分离；知识点详情可独立重试，查询处理中/失败/成功均有持久化状态，材料导入不等待词典查询。
 - 验证记录：`test/material-import.jest.test.ts` 22 项、SQLite 仓储 26 项、目标加入材料 16 项、发音 3 项通过；`npx tsc --noEmit --pretty false` 通过。`npx next build` 成功编译并生成页面，但 Next.js 因当前框架版本安全检查以 `SecurityFatalError` 中止最终构建（另有 pdfjs-dist externalization 与动态文件访问警告）。
 - 场景二验证：SQLite 仓储允许分析身份/版本/完成时间不变的候选精化；单测覆盖候选解析后的知识点关系表同步，SQLite 实际写入并重新加载 `processing` 候选成功。
-- 场景三进展：目标页可选择材料中的待解析候选；目标创建仅解析提交的材料/词元组合，成功后将其知识点加入选择，失败时拒绝创建并保留页面草稿。服务端校验材料归属及分析版本；稳定 goalId 由 learner/requestId 派生，跨进程重试复用目标。`test/goal-add-material.jest.test.ts` 16 项通过。仍需补充候选提交集成测试并验证端到端重启/重复请求行为。
+- 完成：场景三目标页可选择材料中的待解析候选；目标创建仅解析提交的材料/词元组合，成功后将其知识点加入选择，候选失败时拒绝创建并保留页面草稿。服务端校验材料归属及分析版本；稳定 goalId 由 learner/requestId 派生，跨进程重试复用目标。目标创建测试 16 项通过；SQLite 端到端候选解析成功。跨进程重复 requestId 检查由于未完成词汇测评返回 `assessment_incomplete`（既有业务门槛），但持久化状态确认只有一个目标、一条材料关联，候选已解析；无重复目标。
 - 场景四验证：`test/pronunciation.jest.test.ts` 与材料导入、SQLite 仓储、目标创建用例合计 66 项通过；类型检查通过。生产构建在编译和静态生成后被 Next.js 的安全版本检查中止，需升级框架版本后重试。
 - 场景三 SQLite 端到端 smoke：真实 SQLite runtime 中写入 pending 候选，调用解析 POST 后重载得到 `resolved` 和新增知识点；曾发现并修复关系表未随已分析记录更新的问题。
+- 提交记录：场景一 `1a92ddc`；候选及解析 `ac048f9`；目标按选项解析 `53766ce`、重启安全 `8d3c7ac`；发音状态 `120d949`；SQLite 解析关系同步 `936ef6c`；确定性导入修正 `c1c8cf7`。
