@@ -103,9 +103,8 @@ function ResultFeedback({ result, axis }: { result: AttemptResponse; axis: 'R' |
 }
 
 function NextButton({ onNext, result }: { onNext: () => void; result: AttemptResponse | null }) {
-  return (
-    result ? <span className="doc-muted">已提交，正在进入下一张…</span> : <button className="primary-button" onClick={onNext}>跳过至队列底部 <Icon name="arrow" size={19} /></button>
-  );
+  if (!result) return null;
+  return <button className="primary-button" onClick={onNext}>继续下一题 <Icon name="arrow" size={19} /></button>;
 }
 
 // ── ENCODE 新词连接 ──────────────────────────────────────────────
@@ -204,14 +203,14 @@ export function ChoiceCard({ task, index, active, result, submitting, onSubmit, 
           <span className="question-label">{content.prompt}</span>
         </div>
         <div className="choice-grid">
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button
               key={option.id}
               className={`choice-option ${selected === option.id ? 'correct' : ''}`}
               onClick={() => choose(option.id)}
               disabled={submitted || Boolean(selected)}
             >
-              <span className="option-letter">{option.id.toUpperCase()}</span>
+              <span className="option-letter">{String.fromCharCode(65 + index)}</span>
               <span>{option.text}</span>
             </button>
           ))}
@@ -337,14 +336,14 @@ export function ReadingCard({ task, index, active, result, submitting, onSubmit,
                 <h1>{qi + 1}. {question.prompt}</h1>
                 {question.kind === 'choice' ? (
                   <div className="reading-options">
-                    {(questionOptions.get(question.id) ?? question.options).map((option) => (
+                    {(questionOptions.get(question.id) ?? question.options).map((option, optionIndex) => (
                       <button
                         key={option.id}
                         className={`choice-option ${choiceAnswers[question.id] === option.id ? 'correct' : ''}`}
                         disabled={Boolean(result)}
                         onClick={() => setChoiceAnswers((value) => ({ ...value, [question.id]: option.id }))}
                       >
-                        <span className="option-letter">{option.id.toUpperCase()}</span>{option.text}
+                        <span className="option-letter">{String.fromCharCode(65 + optionIndex)}</span>{option.text}
                       </button>
                     ))}
                   </div>

@@ -236,6 +236,8 @@ select.doc-input { appearance: none; }
 .doc-secondary-button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 17px; border: 1px solid rgba(255,255,255,.22); border-radius: 6px; background: transparent; color: #fff; font-size: 12px; }
 .doc-file-button { cursor: pointer; }
 .doc-list { margin: 0; padding: 0; list-style: none; }
+.doc-list fieldset, fieldset.doc-list { min-width: 0; padding: 0; border: 0; }
+.doc-list legend { margin-bottom: 8px; padding: 0; color: rgba(255,255,255,.68); font-size: 11px; }
 .doc-list li { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 12px; line-height: 1.7; }
 .doc-list li:last-child { border-bottom: 0; }
 .doc-list em { color: rgba(255,255,255,.5); font-size: 10px; }
@@ -254,7 +256,7 @@ select.doc-input { appearance: none; }
 .assessment-word { margin: 18px 0 10px; font-family: Georgia, serif; font-size: 44px; font-weight: 400; letter-spacing: -1.5px; }
 .assessment-card .doc-actions { justify-content: center; }
 
-.candidate-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.candidate-item { display: flex; align-items: flex-start; justify-content: flex-start; gap: 12px; }
 .candidate-info { flex: 1; }
 .candidate-info p { margin: 3px 0 0; }
 .candidate-toggle { flex-shrink: 0; display: flex; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; overflow: hidden; }

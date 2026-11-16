@@ -129,7 +129,9 @@ export default function LearningFeedPage() {
         setCelebrating(true);
         window.setTimeout(() => setCelebrating(false), 2400);
       }
-      if (index >= 0) window.setTimeout(() => goToSlide(index + 1), celebrated ? 2500 : 250);
+      if (index >= 0 && dimension?.outcome !== 'incorrect') {
+        window.setTimeout(() => goToSlide(index + 1), celebrated ? 2500 : 250);
+      }
     } catch (error) {
       notify(error instanceof ApiError ? `提交失败：${error.message}` : '提交失败，请重试。');
     } finally {
@@ -209,7 +211,7 @@ export default function LearningFeedPage() {
                 result={results[task.id] ?? null}
                 submitting={submittingId === task.id}
                 onSubmit={(submission, elapsedMs) => void submitAttempt(task, submission, elapsedMs)}
-                onNext={() => goToSlide(visibleTasks.length)}
+                onNext={() => goToSlide(index + 1)}
                 notify={notify}
               />
               <button className="creator-meta" onClick={()=>setSourcePopup(task.sources??[])}><strong>@{task.sources?.[0]?.title??'来源材料'}</strong><p>{task.sources&&task.sources.length>1?'…':'点击查看来源材料'}</p></button>

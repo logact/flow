@@ -231,6 +231,8 @@ export interface Material {
   extractionMetadata: Record<string, unknown>;
   /** 材料导入时间。 */
   createdAt: ISODateTime;
+  /** 归档时间；为空或缺失表示仍在使用。 */
+  archivedAt?: ISODateTime | null;
 }
 
 /** 词汇在原始材料中的一次出现。 */

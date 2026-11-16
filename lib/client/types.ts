@@ -62,6 +62,7 @@ export interface MaterialListItem {
   filename: string;
   format: string;
   createdAt: string;
+  archivedAt?: string | null;
   analysis: { id: string; status: string; itemCount: number; unmatchedCount: number; frequencyRank: number; frequentTermCount: number } | null;
 }
 

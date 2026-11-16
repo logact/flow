@@ -377,6 +377,7 @@ export function createMaterial(input: CreateMaterialInput): Material {
     extractedText: input.extractedText,
     extractionMetadata: { ...input.extractionMetadata },
     createdAt: input.now,
+    archivedAt: null,
   };
 }
 
