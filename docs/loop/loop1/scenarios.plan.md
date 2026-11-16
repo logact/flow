@@ -91,6 +91,7 @@
 
 #### include decision
 - `human-verify.record.md` 第 20 条：知识点库搜索、来源筛选、熟练度排序及详情
+- [第 20–22 条实现口径](human-verify-20-22.implementation-decisions.md)：熟练度、复习日期、历史和分数变化口径
 
 #### description
 用户在知识点库中查找并按熟练度排序知识点，查看词族和来源材料；进入详情后查看未来复习计划、学习记录及分数变化。
@@ -115,6 +116,7 @@
 
 #### include decision
 - [ENCODE 页面中文释义归属决策](encode-sense-chinese-meaning.decision.md)
+- [ENCODE sense 中文释义实施决策](encode-sense-chinese-meaning.implementation-decision.md)
 
 #### description
 ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；同词不同义项不互相借用释义。
@@ -141,6 +143,7 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 - [首页手动刷新计划入口调整](home-plan-refresh.decision.md)
 - `human-verify.record.md` 第 21 条：答对题目时全屏庆祝动画
 - `human-verify.record.md` 第 22 条：保存用户学习进度
+- [第 20–22 条实现口径](human-verify-20-22.implementation-decisions.md)：庆祝反馈与学习进度持久化
 
 #### description
 用户进入首页自动获得今日计划；答题结算后更新计划并保存进度。加载失败可重试。答对时显示全屏庆祝反馈，结束后继续学习。
@@ -167,9 +170,9 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 ## 冲突与待决策
 
 - 未发现已确认 decisions 之间直接冲突。材料解耦与目标创建共享材料状态及关联边界，按场景一先落实材料分析状态，再接目标创建校验。
-- 第 19、20 条的多来源筛选组合规则、熟练度排序口径、分数变化数据口径尚未在 decision 中定义；实施前需确认会影响用户可见行为的规则。
-- ENCODE 既有释义回填方式及生成服务尚待调查；确认前不应假定具体模型或静默借用其他 sense。
-- 第 21 条动画时长/结束行为和减少动态效果要求、第 22 条进度持久化范围及保存失败恢复策略仍需形成明确验收口径。
+- 第 19 条的多来源筛选按“任一来源匹配”实现，并在知识点选择页明确告知；第 20 条熟练度、复习日期、历史排序和分数变化口径已由 `human-verify-20-22.implementation-decisions.md` 明确。
+- ENCODE 中文释义由配置的 OpenAI 兼容 LLM 翻译并保存到具体 sense；缺失或翻译失败时明确显示暂缺，历史数据不串用其他 sense，依据 `encode-sense-chinese-meaning.implementation-decision.md`。
+- 第 21 条动画时长、结束行为、减少动态效果，以及第 22 条 SQLite 持久化和重复提交语义，均已有 `human-verify-20-22.implementation-decisions.md` 的实施口径。
 - 第 9 条错题答案与原因反馈不在 `loop1.plan.md` 当前计划范围内，且题型、解释来源及自由作答判定尚未决策；本计划仅标出与首页反馈链路的潜在关联，不将其纳入已确认实施范围。若要纳入，需先补充 decision。
 
 ## 建议依赖顺序
@@ -181,4 +184,4 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 
 ## 文档边界
 
-本文按 `loop1.plan.md` 汇总的 decisions 和第 16–22 条场景记录生成，描述 domain、service、UI 的实施方向；不表示代码已实施或验收通过。本次仅新增计划文档。
+本文按 `loop1.plan.md` 汇总的 decisions 和第 16–22 条场景记录组织实施范围。六个场景均在提交 `31e326f` 中实现；本次逐场景核验代码与测试后，在对应章节记录实现状态和证据，没有发现需要继续修改的场景代码。
