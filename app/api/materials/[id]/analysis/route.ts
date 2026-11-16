@@ -4,6 +4,7 @@ import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
 
 export const dynamic = 'force-dynamic';
 const analyzing = new Set<string>();
+const ANALYSIS_TIMEOUT_MS = 2 * 60 * 1000;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,9 +17,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (analyzing.has(id)) return NextResponse.json({ reason: 'analysis_in_progress' }, { status: 409 });
   const latest = state.materialAnalyses.filter((item) => item.materialId === id).at(-1);
   if (latest?.status === 'analyzed') return NextResponse.json({ status: 'analyzed', analysisId: latest.id, itemCount: latest.items.length });
+  if (latest?.status === 'pending' && Date.now() - Date.parse(latest.createdAt) < ANALYSIS_TIMEOUT_MS) {
+    return NextResponse.json({ reason: 'analysis_in_progress', status: 'pending', retryAfterMs: ANALYSIS_TIMEOUT_MS - (Date.now() - Date.parse(latest.createdAt)) }, { status: 409 });
+  }
   if (!material.extractedText?.trim()) return NextResponse.json({ reason: 'material_text_missing' }, { status: 400 });
 
   analyzing.add(id);
+  if (latest?.status === 'pending') {
+    await runtime.repository.saveMaterialAnalysis(id, { ...latest, status: 'failed', errors: ['analysis_timed_out'], completedAt: new Date().toISOString() });
+  }
   const analysisId = crypto.randomUUID();
   const now = new Date().toISOString();
   await runtime.repository.saveMaterialAnalysis(id, { id: analysisId, materialId: id, analyzerVersion: 'web-v1', createdAt: now, status: 'pending', items: [], unmatchedItems: [], errors: [], completedAt: null });
@@ -29,6 +36,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       senseDisambiguator: runtime.llmConfigured ? runtime.senseDisambiguator : undefined,
       translateSenseMeaning: runtime.translateSenseMeaning,
       vocabularyFilter: runtime.vocabularyFilter,
+      pronunciationLookup: runtime.pronunciationLookup,
     }, {
       materialId: material.id,
       analysisId,

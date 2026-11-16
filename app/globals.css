@@ -60,6 +60,8 @@ button:disabled { cursor: default; }
 .word-hero h1 { margin: 9px 0 9px; color: #fff; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(49px, 12vw, 68px); line-height: 1.05; font-weight: 400; letter-spacing: -3.5px; text-shadow: 0 3px 22px rgba(0,0,0,.15); }
 .word-hero h1 span { color: var(--cyan); }
 .pronunciation { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: rgba(255,255,255,.7); font-size: 11px; }
+.pronunciation:disabled { opacity: .7; cursor: default; }
+.pronunciation-source { display: inline-block; margin: 7px 0 0 38px; color: rgba(255,255,255,.48); font-size: 9px; }
 .sound-button { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; }
 .accent-label { padding: 2px 4px; border: 1px solid rgba(255,255,255,.22); border-radius: 3px; font-size: 8px; }
 .meaning-block { display: flex; align-items: flex-start; gap: 13px; margin-top: clamp(24px, 4vh, 35px); }
@@ -168,6 +170,10 @@ button:disabled { cursor: default; }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
 @media (max-width: 390px) {
+  .doc-form-row { align-items: flex-end; gap: 8px; }
+  .doc-form-row > input { flex: 1 1 0; min-width: 0; }
+  .doc-form-row label { flex: 0 0 140px; min-width: 140px; }
+  .doc-form-row select { width: 100%; }
   .top-tabs { gap: 19px; }
   .top-tabs button { font-size: 14px; }
   .brand { font-size: 18px; }
@@ -219,7 +225,8 @@ button:disabled { cursor: default; }
 select.doc-input { appearance: none; }
 .doc-textarea { resize: vertical; font-family: Georgia, serif; line-height: 1.6; }
 .doc-form-row { display: flex; gap: 12px; margin-top: 9px; }
-.doc-form-row label { flex: 1; display: flex; flex-direction: column; gap: 6px; color: rgba(255,255,255,.6); font-size: 11px; }
+.doc-form-row label { flex: 0 0 min(42%, 190px); min-width: 132px; display: flex; flex-direction: column; gap: 6px; color: rgba(255,255,255,.6); font-size: 11px; }
+.doc-form-row > input { flex: 1 1 auto; min-width: 0; }
 .doc-form-row input { padding: 9px 12px; border: 1px solid rgba(255,255,255,.16); border-radius: 7px; background: rgba(255,255,255,.07); color: #fff; font-size: 13px; }
 .doc-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 .doc-actions .primary-button { margin-left: 0; }
