@@ -213,10 +213,10 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 离散档位映射：0.9 → free 档 R=50，0.5 → cued 档 R=30；P 自动退一档，全部低于 60。
+    // 决策阈值：0.9 达到 0.7 后为 R=40/P=20；0.5 未达到阈值从 0 起步。
     expect(result.initialized.map((item) => item.initialFluency)).toEqual([
-      { R: 50, P: 30 },
-      { R: 30, P: 10 },
+      { R: 40, P: 20 },
+      { R: 0, P: 0 },
     ]);
     const [high, mid] = result.initialized;
     expect(high.knowledgePointId).toBe(kpHigh.id);
@@ -251,7 +251,7 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
     expect(validateLearningState(toState(repo))).toEqual([]);
   });
 
-  test('2. 低档与边界：中低概率映射低档，词表未收录按概率 0 处理', async () => {
+  test('2. 低档与边界：低于 0.7 及词表未收录均从零开始', async () => {
     const kpLow = wordKP('word:ubiquitous:s1', 'ubiquitous');
     const kpOut = wordKP('word:jargon:placeholder:1', 'jargon');
     const repo = makeRepo({
@@ -271,7 +271,7 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.initialized.map((item) => item.initialFluency)).toEqual([
-      { R: 10, P: 0 },
+      { R: 0, P: 0 },
       { R: 0, P: 0 },
     ]);
     const [low, out] = result.initialized;
@@ -398,7 +398,7 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
     if (!result.ok) return;
     expect(result.initialized).toHaveLength(4);
     expect(validateLearningState(toState(repo))).toEqual([]);
-    // 不同概率映射到不同练习区：不同初始分的词首任务规格不同。
+    // 低于阈值从 ENCODE 开始，达到阈值的词按 40/20 规则进入对应 RETRIEVE 阶段。
     const nextSpecs = result.initialized.map((learning) => {
       const kp = knowledgePoints.find((item) => item.id === learning.knowledgePointId)!;
       return Domain.decideNextTask({
@@ -409,10 +409,9 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
         now: at.selected,
       });
     });
-    // 0.2 → choice 档，0.5 → cued 档，0.9 → free 档；四词全部进入 RETRIEVE 区而非 ENCODE/FLUENCY。
-    expect(nextSpecs.map((spec) => spec?.task)).toEqual(['RETRIEVE', 'RETRIEVE', 'RETRIEVE', 'RETRIEVE']);
+    expect(nextSpecs.map((spec) => spec?.task)).toEqual(['ENCODE', 'ENCODE', 'RETRIEVE', 'RETRIEVE']);
     expect(nextSpecs.map((spec) => (spec?.task === 'RETRIEVE' ? spec.stage : null)))
-      .toEqual(['choice', 'cued', 'free', 'free']);
+      .toEqual([null, null, 'free', 'free']);
   });
 
   test('7. 词表端口补建分类：命中建记录并参与初始分，未收录与非词汇类不建', async () => {
@@ -448,9 +447,9 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 命中 5k 词族：分类记录写入并按 0.5 概率派生 R=30/P=10；未收录与非词汇类从 0 起步。
+    // 命中 5k 词族但概率低于 0.7，按新规则从 0 起步；未收录与非词汇类也从 0 起步。
     expect(result.initialized.map((item) => item.initialFluency)).toEqual([
-      { R: 30, P: 10 },
+      { R: 0, P: 0 },
       { R: 0, P: 0 },
       { R: 0, P: 0 },
     ]);
@@ -490,9 +489,9 @@ describe('S06 设置知识点选择并初始化新增学习项', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 既有 9k 分类优先，不查词表、不新建记录，初始分仍按 9k 的 0.9 派生。
+    // 既有 9k 分类优先，不查词表、不新建记录，0.9 按决策初始化为 40/20。
     expect(lookups).toEqual([]);
-    expect(result.initialized[0].initialFluency).toEqual({ R: 50, P: 30 });
+    expect(result.initialized[0].initialFluency).toEqual({ R: 40, P: 20 });
     expect(result.initialized[0].initialization.classification).toEqual(existing);
     expect(repo.saved[0].newClassifications).toEqual([]);
     expect(repo.context.classifications).toEqual([existing]);

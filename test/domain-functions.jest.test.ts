@@ -165,6 +165,27 @@ describe('真实领域函数', () => {
       .toContain('RETRIEVE 回忆题的题干或提示不能直接包含目标词');
   });
 
+  test('初始流利度在 0.7 边界切换为 R=40/P=20，缺少分类按零处理', () => {
+    const { state } = buildInitializedState();
+    const vocabulary = state.learners[0].currentVocabulary!;
+    const classification = state.knowledgePointVocabularyClassifications[0];
+    const withProbability = (probability: number) => ({
+      ...vocabulary,
+      bands: vocabulary.bands.map((band) => ({
+        ...band,
+        knownProbability: band.band === classification.band ? probability : band.knownProbability,
+      })),
+    });
+    expect(Domain.deriveInitialFluency({ vocabulary: withProbability(0.699), classification, policyVersion: 'loop2' }).initialFluency)
+      .toEqual({ R: 0, P: 0 });
+    expect(Domain.deriveInitialFluency({ vocabulary: withProbability(0.7), classification, policyVersion: 'loop2' }).initialFluency)
+      .toEqual({ R: 40, P: 20 });
+    expect(Domain.deriveInitialFluency({ vocabulary: withProbability(1), classification, policyVersion: 'loop2' }).initialFluency)
+      .toEqual({ R: 40, P: 20 });
+    expect(Domain.deriveInitialFluency({ vocabulary, classification: null, policyVersion: 'loop2' }).initialFluency)
+      .toEqual({ R: 0, P: 0 });
+  });
+
   describe('分散候选排序器', () => {
     const candidate = (wordId: string, priority = 2, dueAt = 0, isNew = false, goalId = 'goal-1') => ({
       priority,
