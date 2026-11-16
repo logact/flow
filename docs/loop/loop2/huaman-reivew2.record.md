@@ -16,4 +16,15 @@
 5. 答错后停留在当前题目，可在看完反馈后手动继续。
 6. 选择题打乱选项内容，但展示编号始终按 A、B、C、D 顺序；提交仍使用原选项 ID。
 7. 移除答题前的“跳过至队列底部”按钮；结果出现后显示继续按钮。
-8. 已有 `test/sqlite-repository.jest.test.ts` 使用 `openSqliteDatabase(':memory:')` 覆盖 SQLite 仓储；`lib/server/runtime.ts` 当前运行时选用 SQLite。接入提交为 `055518f`（2026-11-16 08:46 +08:00，提交说明“feat: 添加 SQLite repository（待审核）”）。
+8. SQLite 仓储应接回项目原有的内存仓储作为应用运行时；SQLite 实现保留，但不由当前运行时启用。原运行时接入提交为 `055518f`（2026-11-16 08:46 +08:00，提交说明“feat: 添加 SQLite repository（待审核）”）。
+
+### 第 8 条决策与实施计划
+
+- **决策**：当前应用恢复使用 `InMemoryAppRepository` 与 `emptyLearningState()`；不打开或写入 `.flow/flow.sqlite`。SQLite repository、迁移和测试代码保留，作为未启用的实现，后续启用前另行评审。
+- **运行行为**：学习状态仅保存在当前服务进程内存中；服务重启后重新创建状态并幂等初始化演示数据，不承诺跨进程重启持久化。既有 SQLite 文件保留在磁盘，不在本次处理中读取、迁移或删除。
+- **实施计划**：替换 `lib/server/runtime.ts` 的 repository 类型及初始化，恢复失败时重建空内存仓储；移除运行时对 SQLite 数据库路径、目录和连接的初始化；修正文档中“运行时使用 SQLite”的现状描述。
+- **验证计划**：运行 TypeScript 类型检查；确认运行时不再引用 SQLite 数据库路径或打开连接；检查 SQLite repository 自身的 `:memory:` 测试仍保持独立可运行。
+
+### 第 8 条实施结果
+
+- 待实施。
