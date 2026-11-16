@@ -63,7 +63,7 @@ export interface MaterialListItem {
   format: string;
   createdAt: string;
   archivedAt?: string | null;
-  analysis: { id: string; status: string; itemCount: number; unmatchedCount: number; frequencyRank: number; frequentTermCount: number } | null;
+  analysis: { id: string; status: 'pending' | 'analyzed' | 'failed'; itemCount: number; unmatchedCount: number; frequencyRank: number; frequentTermCount: number; createdAt: string } | null;
 }
 
 export interface MaterialsResponse {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiGet, apiPost, ApiError } from '@/lib/client/api';
 import type { MaterialsResponse } from '@/lib/client/types';
 import { PageShell } from '@/components/PageShell';
+import { isMaterialAnalysisStale, materialAnalysisStatusLabel } from '@/lib/domain/material-analysis-status';
 
 /** 材料导入（S04）：粘贴文本或上传 txt/md/pdf，查看分析出的知识点与过滤原因。 */
 export default function MaterialsPage() {
@@ -147,8 +148,8 @@ export default function MaterialsPage() {
           {visibleMaterials.map((material) => (
             <li key={material.id}>
               <strong>{material.title}</strong>
-              <span className="doc-muted"> · {material.format} · {material.analysis?.status === 'analyzed' ? `${material.analysis.itemCount} 个知识点 · 分析完成` : material.analysis?.status === 'failed' ? '分析失败' : material.analysis?.status === 'pending' ? '待分析' : '未分析'}</span>
-              {material.analysis?.status !== 'analyzed' && <button className="text-button" disabled={analyzingIds.includes(material.id)} onClick={() => void analyzeMaterial(material.id)}>{analyzingIds.includes(material.id) ? '分析中…' : material.analysis?.status === 'failed' ? '重试分析' : '开始分析'}</button>}
+              <span className="doc-muted"> · {material.format} · {material.analysis?.status === 'analyzed' ? `${material.analysis.itemCount} 个知识点 · ` : ''}{materialAnalysisStatusLabel(material.analysis?.status ?? null, 'list')}{isMaterialAnalysisStale(material.analysis?.status === 'pending' ? 'pending' : null, material.analysis?.createdAt) ? ' · 已超时，可恢复并重试' : ''}</span>
+              {material.analysis?.status !== 'analyzed' && <button className="text-button" disabled={analyzingIds.includes(material.id) || (material.analysis?.status === 'pending' && !isMaterialAnalysisStale('pending', material.analysis.createdAt))} onClick={() => void analyzeMaterial(material.id)}>{analyzingIds.includes(material.id) ? '分析中…' : material.analysis?.status === 'pending' ? '恢复并重试' : material.analysis?.status === 'failed' ? '重试分析' : '开始分析'}</button>}
               <label className="doc-muted">加入目标
                 <select className="doc-input" value={targetGoal} onChange={event=>setTargetGoal(event.target.value)} aria-label={`选择用于 ${material.title} 的目标`}>
                   <option value="">选择活动目标…</option>{goals.map(goal=><option key={goal.id} value={goal.id}>{goal.title}</option>)}

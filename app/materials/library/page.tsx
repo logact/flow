@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiGet, apiPatch, ApiError } from '@/lib/client/api';
 import type { MaterialsResponse } from '@/lib/client/types';
 import { PageShell } from '@/components/PageShell';
+import { isMaterialAnalysisStale, materialAnalysisStatusLabel } from '@/lib/domain/material-analysis-status';
 
 export default function MaterialsLibraryPage() {
   const router = useRouter();
@@ -53,7 +54,7 @@ export default function MaterialsLibraryPage() {
       <ul className="doc-list">{materials.map(material => <li key={material.id}>
         <button className="doc-list-link" onClick={() => router.push(`/materials/${material.id}`)}>
           <strong>{material.title}{material.archivedAt ? '（已归档）' : ''}</strong>
-          <span className="doc-muted">{material.format} · {material.analysis?.status === 'analyzed' ? `已分析，${material.analysis.itemCount} 个知识点` : material.analysis?.status === 'failed' ? '分析失败' : material.analysis?.status === 'pending' ? '待分析' : '未分析'} · {new Date(material.createdAt).toLocaleDateString()}</span>
+          <span className="doc-muted">{material.format} · {material.analysis?.status === 'analyzed' ? `${material.analysis.itemCount} 个知识点 · ` : ''}{materialAnalysisStatusLabel(material.analysis?.status ?? null, 'list')}{isMaterialAnalysisStale(material.analysis?.status === 'pending' ? 'pending' : null, material.analysis?.createdAt) ? ' · 已超时，可在详情恢复' : ''} · {new Date(material.createdAt).toLocaleDateString()}</span>
         </button>
         <button className="text-button" onClick={() => router.push(`/materials/${material.id}`)}>查看详情 →</button>
         <button className="text-button" disabled={workingId === material.id} onClick={() => void setArchived(material.id, !material.archivedAt)}>
