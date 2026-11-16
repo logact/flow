@@ -97,7 +97,8 @@
 ## 实施进度
 
 - 完成：场景一仓储选择已接入 `FLOW_STORAGE` / `FLOW_SQLITE_PATH`。运行时 smoke 验证：默认 memory 与 `FLOW_STORAGE=sqlite FLOW_SQLITE_PATH=/tmp/flow-loop5-runtime.sqlite` 均成功初始化种子；`FLOW_STORAGE=bogus` 清晰报错。
-- 进行中：分析候选领域结构与详情 API 输出已扩展；本地候选生成、按需解析、目标提交流程和独立发音补全尚未完成。
+- 完成：场景二实现本地候选生成、单义词确认、候选持久化和材料详情展示；导入不调用消歧 LLM 或发音词典。
 - 进行中：材料导入主路径已移除同步发音查询；独立补全 API/状态/重试仍待实现。
-- 验证记录：`npx jest --runInBand test/material-import.jest.test.ts` 当前 6 项失败、16 项通过；失败用例仍按旧决策断言导入时自动消歧/发音或生成占位知识点，需改为 loop5 候选与独立发音行为后重验。
-- 验证记录：`npx tsc --noEmit --pretty false` 目前错误集中于 `test/sqlite-repository.jest.test.ts` 的既有 fixture 类型，不再报告本轮应用代码类型错误。
+- 验证记录：`test/material-import.jest.test.ts` 更新为 loop5 语义后 22 项通过；SQLite 仓储 25 项、目标加入材料 16 项通过；`npx tsc --noEmit --pretty false` 通过；`npx next build` 成功（存在 pdfjs-dist externalization 与动态文件访问警告）。
+- 场景二进展：SQLite 原先拒绝已完成分析的候选状态增量更新；仓储现允许分析身份/版本/完成时间不变的候选精化。仓储测试 25 项通过，SQLite 实际写入并重新加载 `processing` 候选成功。
+- 场景三进展：目标页可选择材料中的待解析候选；目标创建仅解析提交的材料/词元组合，成功后将其知识点加入选择，失败时拒绝创建并保留页面草稿。`test/goal-add-material.jest.test.ts` 16 项通过。仍需补充候选提交集成测试、复核权限/幂等及目标创建恢复行为。

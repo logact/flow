@@ -7,9 +7,10 @@ import { PageShell } from '@/components/PageShell';
 import { isMaterialAnalysisStale, materialAnalysisProgressLabel, materialAnalysisStatusLabel } from '@/lib/domain/material-analysis-status';
 
 type Item = { knowledgePointId: string; lemma: string; definition: string; partOfSpeech: string | null; occurrenceCount: number };
+type Candidate = { lemma: string; candidates: Array<{ id: string; pos: string; gloss: string }>; occurrences: Array<{ sentence: string; context: string[] }>; status: string; error?: string };
 type Detail = {
   material: { id: string; title: string; filename: string; format: string; createdAt: string };
-  analysis: { id: string; status: 'pending' | 'analyzed' | 'failed'; createdAt: string; progress?: { stage: string; updatedAt: string }; errors: string[]; items: Item[] } | null;
+  analysis: { id: string; status: 'pending' | 'analyzed' | 'failed'; createdAt: string; progress?: { stage: string; updatedAt: string }; errors: string[]; items: Item[]; candidates: Candidate[] } | null;
 };
 
 export default function MaterialDetailPage() {
@@ -18,6 +19,7 @@ export default function MaterialDetailPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'frequency' | 'name'>('frequency');
 
@@ -34,10 +36,11 @@ export default function MaterialDetailPage() {
 
   useEffect(() => { setLoading(true); void load(); }, [load]);
   useEffect(() => {
-    if (data?.analysis?.status !== 'pending') return;
+    const candidateProcessing = data?.analysis?.candidates?.some(candidate => candidate.status === 'processing') ?? false;
+    if (data?.analysis?.status !== 'pending' && !candidateProcessing) return;
     const timer = window.setInterval(() => void load(), 5000);
     return () => window.clearInterval(timer);
-  }, [data?.analysis?.status, load]);
+  }, [data?.analysis?.status, data?.analysis?.candidates, load]);
 
   const stale = isMaterialAnalysisStale(data?.analysis?.status ?? null, data?.analysis?.createdAt);
   const analyze = async () => {
@@ -51,6 +54,20 @@ export default function MaterialDetailPage() {
       await load();
     } finally {
       setWorking(false);
+    }
+  };
+  const resolveCandidates = async (lemmas: string[]) => {
+    setResolving(true);
+    setError('');
+    try {
+      const result = await apiPost<{ failedLemmas?: string[] }>(`/api/materials/${id}/analysis/resolve`, { lemmas });
+      await load();
+      if (result.failedLemmas?.length) setError(`以下候选解析失败：${result.failedLemmas.join('、')}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '候选解析失败，请重试');
+      await load();
+    } finally {
+      setResolving(false);
     }
   };
   const items = (data?.analysis?.items ?? [])
@@ -84,6 +101,7 @@ export default function MaterialDetailPage() {
             <label>排序<select className="doc-input" value={sort} onChange={event => setSort(event.target.value as 'frequency' | 'name')}><option value="frequency">材料出现次数</option><option value="name">词条名称</option></select></label>
           </div>
           {!items.length ? <p className="doc-muted">{data.analysis.items.length ? '没有匹配的知识点。' : '此材料没有分析出知识点。'}</p> : <ul className="doc-list">{items.map(item => <li key={item.knowledgePointId}><strong>{item.lemma}</strong>{item.partOfSpeech && <span className="doc-muted"> · {item.partOfSpeech}</span>}<p className="doc-muted">{item.definition} · 在材料中出现 {item.occurrenceCount} 次</p></li>)}</ul>}
+          {!!data.analysis.candidates.length && <><h3>待解析候选（{data.analysis.candidates.filter(candidate => candidate.status !== 'resolved').length}）</h3><button className="primary-button" disabled={resolving || !data.analysis.candidates.some(candidate => candidate.status !== 'resolved')} onClick={() => void resolveCandidates(data.analysis!.candidates.filter(candidate => candidate.status !== 'resolved').map(candidate => candidate.lemma))}>{resolving ? '正在解析…' : '解析或恢复待处理知识点'}</button><ul className="doc-list">{data.analysis.candidates.map(candidate => <li key={candidate.lemma}><strong>{candidate.lemma}</strong><span className="doc-muted"> · {candidate.status === 'failed' ? '解析失败' : candidate.status === 'processing' ? '待恢复' : candidate.status === 'resolved' ? '已解析' : '待解析'} · {candidate.occurrences.length} 处语境</span><p className="doc-muted">{candidate.candidates.map(option => option.gloss).join('；')}</p>{candidate.occurrences.slice(0, 2).map((occurrence, index) => <p className="doc-muted" key={index}>{occurrence.sentence}</p>)}{candidate.error && <p className="doc-error">{candidate.error}</p>}{candidate.status !== 'resolved' && <button className="secondary-button" disabled={resolving} onClick={() => void resolveCandidates([candidate.lemma])}>{candidate.status === 'processing' ? '恢复' : '重试'}</button>}</li>)}</ul></>}
         </>}
       </section>
     </>}

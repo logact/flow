@@ -253,6 +253,15 @@ export interface MaterialAnalysisItem {
   occurrences: Occurrence[];
 }
 
+/** A locally generated ambiguous lemma awaiting an explicit resolution request. */
+export interface MaterialAnalysisCandidate {
+  lemma: string;
+  candidates: Array<{ id: string; pos: string; gloss: string }>;
+  occurrences: Occurrence[];
+  status: 'pending' | 'processing' | 'resolved' | 'failed';
+  error?: string;
+}
+
 /** 材料分析中未能匹配为知识点的一组原始出现记录。 */
 export interface MaterialUnmatchedItem {
   /** 按词元归并后的词；无法归并到具体词元时为空。 */
@@ -298,6 +307,8 @@ export type MaterialAnalysis = MaterialAnalysisBase & (
       items: MaterialAnalysisItem[];
       /** 未能匹配为知识点的原始出现记录及其原因。 */
       unmatchedItems: MaterialUnmatchedItem[];
+      /** Ambiguous local candidates remain outside the learnable knowledge points until resolved. */
+      candidates?: MaterialAnalysisCandidate[];
       errors: [];
       completedAt: ISODateTime;
     }

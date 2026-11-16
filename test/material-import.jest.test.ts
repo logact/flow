@@ -144,7 +144,7 @@ function analysisItemIds(analysis: AnalyzedMaterialAnalysis): string[] {
 }
 
 describe('S04 导入并分析材料', () => {
-  test('分析完成后缓存词条发音，发音服务失败不阻断材料分析', async () => {
+  test('材料导入不等待发音查询，发音独立补全', async () => {
     const { repository } = setup();
     const pronunciation = {
       ipa: '/rɪˈzɪliənt/',
@@ -161,7 +161,7 @@ describe('S04 导入并分析材料', () => {
     }, baseInput({ extractedText: 'A resilient team stays resilient.' }));
     const imported = expectOk(result);
     const resilient = imported.analysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient');
-    expect(resilient?.knowledgePoint.pronunciation).toEqual(pronunciation);
+    expect(resilient?.knowledgePoint.pronunciation).toBeUndefined();
 
     const failed = await importMaterialUseCase({
       repository: setup().repository,
@@ -171,7 +171,7 @@ describe('S04 导入并分析材料', () => {
     }, baseInput({ materialId: 'material-failed-pronunciation', analysisId: 'analysis-failed-pronunciation', extractedText: 'A resilient team.' }));
     const failedAnalysis = expectOk(failed).analysis;
     expect(failedAnalysis.items.length).toBeGreaterThan(0);
-    expect(failedAnalysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient')?.knowledgePoint.pronunciation).toBeNull();
+    expect(failedAnalysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient')?.knowledgePoint.pronunciation).toBeUndefined();
   });
 
   test('markdown 原始文件：应用层提取文本并分析，材料与分析一次性保存', async () => {
@@ -442,21 +442,11 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     );
 
     const { analysis } = expectOk(result);
-    // 两处出现各投一个义项（平票），最早出现支持形容词义胜出，全部出现归入该义项。
-    const adjectiveItem = analysis.items.find(
-      (entry) => entry.knowledgePoint.id === 'word:deliberate:wn31:a:01340892',
-    );
-    const verbItem = analysis.items.find(
-      (entry) => entry.knowledgePoint.id === 'word:deliberate:wn31:v:00814706',
-    );
-    expect(adjectiveItem?.occurrences.map((occurrence) => occurrence.rawForm)).toEqual(['deliberate', 'deliberated']);
-    expect(verbItem).toBeUndefined();
-    // AI 一次收到两处出现（≤3 采样上限内全采），带上全部候选义项与原句语境。
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toHaveLength(2);
-    expect(requests[0][0].candidates).toEqual(deliberateSenses);
-    expect(requests[0][0].sentence).toBe('A deliberate response helped the team.');
-    expect(requests[0][0].context).toEqual(['The team deliberated the proposal overnight.']);
+    // 候选及全部语境持久化，进入导入流程不触发 LLM。
+    expect(analysis.items.some((entry) => 'lemma' in entry.knowledgePoint && entry.knowledgePoint.lemma === 'deliberate')).toBe(false);
+    expect(analysis.candidates).toEqual([expect.objectContaining({ lemma: 'deliberate', candidates: deliberateSenses, status: 'pending' })]);
+    expect(analysis.candidates?.[0].occurrences.map((occurrence) => occurrence.rawForm)).toEqual(['deliberate', 'deliberated']);
+    expect(requests).toHaveLength(0);
   });
 
   test('词义库未收录的 lemma 不生成知识点', async () => {
@@ -503,7 +493,7 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     expect(analysis.unmatchedItems[0].occurrences.map((occurrence) => occurrence.rawForm)).toEqual(['Contemporary']);
   });
 
-  test('AI 返回候选集外的 senseId 时该词整体回退占位义项', async () => {
+  test('导入阶段忽略消歧器，待解析词不生成占位知识点', async () => {
     const { repository } = setup();
     const disambiguator: SenseDisambiguator = {
       async disambiguate(items) {
@@ -522,11 +512,11 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     );
 
     const { analysis } = expectOk(result);
-    expect(analysisItemIds(analysis)).toContain('word:deliberate:placeholder:1');
-    expect(analysisItemIds(analysis)).not.toContain('word:deliberate:wn31:a:01340892');
+    expect(analysisItemIds(analysis)).not.toContain('word:deliberate:placeholder:1');
+    expect(analysis.candidates?.map((candidate) => candidate.lemma)).toContain('deliberate');
   });
 
-  test('AI 请求失败时全部回退占位义项，分析仍成功保存', async () => {
+  test('导入阶段不会调用 AI，即使 AI 故障也只保存待解析候选', async () => {
     const { repository } = setup();
     const disambiguator: SenseDisambiguator = {
       async disambiguate() { throw new Error('LLM unreachable'); },
@@ -544,15 +534,12 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
 
     const { analysis } = expectOk(result);
     expect(analysis.status).toBe('analyzed');
-    const item = analysis.items.find(
-      (entry) => entry.knowledgePoint.kind === 'word' && entry.knowledgePoint.lemma === 'deliberate',
-    );
-    expect(item?.knowledgePoint.id).toBe('word:deliberate:placeholder:1');
-    expect(item?.occurrences).toHaveLength(1);
+    expect(analysis.items.some((entry) => 'lemma' in entry.knowledgePoint && entry.knowledgePoint.lemma === 'deliberate')).toBe(false);
+    expect(analysis.candidates?.find((candidate) => candidate.lemma === 'deliberate')?.status).toBe('pending');
     expect(repository.saves).toHaveLength(1);
   });
 
-  test('只提供词义库而未提供消歧器时，多义词条回退占位义项', async () => {
+  test('只提供词义库时，多义词条仍保存候选而非占位知识点', async () => {
     const { repository } = setup();
 
     const result = await importMaterialUseCase(
@@ -561,10 +548,11 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     );
 
     const { analysis } = expectOk(result);
-    expect(analysisItemIds(analysis)).toContain('word:deliberate:placeholder:1');
+    expect(analysisItemIds(analysis)).not.toContain('word:deliberate:placeholder:1');
+    expect(analysis.candidates?.some((candidate) => candidate.lemma === 'deliberate')).toBe(true);
   });
 
-  test('多义词条按预算分批请求 AI，失败批次只回退该批次词条', async () => {
+  test('导入时批量多义词全部保存候选且不请求 AI', async () => {
     const { repository } = setup();
     const two = (lemma: string): InventorySense[] => [
       { id: `${lemma}-1`, pos: 'noun', gloss: `${lemma} first sense` },
@@ -591,15 +579,9 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     );
 
     const { analysis } = expectOk(result);
-    // item 上限为 1：每个多义 lemma 独立成块，共三批。
-    expect(calls).toHaveLength(3);
-    expect(calls.every((call) => call.length === 1)).toBe(true);
-    const ids = analysisItemIds(analysis);
-    // alpha 与 gamma 正常判定，beta 所在批次失败仅回退 beta。
-    expect(ids).toContain('word:alpha:alpha-1');
-    expect(ids).toContain('word:gamma:gamma-1');
-    expect(ids).toContain('word:beta:placeholder:1');
-    expect(ids).not.toContain('word:beta:beta-1');
+    expect(calls).toHaveLength(0);
+    expect(analysis.candidates?.map((candidate) => candidate.lemma).sort()).toEqual(['alpha', 'beta', 'gamma']);
+    expect(analysis.items.some((item) => 'lemma' in item.knowledgePoint && ['alpha', 'beta', 'gamma'].includes(item.knowledgePoint.lemma))).toBe(false);
   });
 });
 

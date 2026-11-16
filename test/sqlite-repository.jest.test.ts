@@ -116,7 +116,7 @@ describe('SQLite learning state repository', () => {
     try {
       const repository=new SqliteLearningStateRepository(connection);const initial=repository.load();
       const learner={id:'material-port-learner',currentVocabulary:null,timezone:'UTC',dailyTaskCapacity:1,createdAt:'now',updatedAt:'now'};
-      const material={id:'material-port',learnerId:learner.id,title:'original',filename:'m.txt',format:'txt',mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'text',extractionMetadata:{},createdAt:'now'};
+      const material={id:'material-port',learnerId:learner.id,title:'original',filename:'m.txt',format:'txt' as const,mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'text',extractionMetadata:{},createdAt:'now'};
       repository.save({...initial.state,learners:[learner]},0);
       await repository.saveMaterial(material as any);
       const afterInsert=repository.load();expect(afterInsert.state.materials).toEqual([material]);expect(afterInsert.revision).toBe(2);
@@ -140,7 +140,7 @@ describe('SQLite learning state repository', () => {
       const repository=new SqliteLearningStateRepository(connection);const initial=repository.load();
       const learner={id:'scope-learner',currentVocabulary:null,timezone:'UTC',dailyTaskCapacity:1,createdAt:'now',updatedAt:'now'};
       const goal={id:'scope-goal',learnerId:learner.id,title:'g',targetFluency:{R:1,P:1},status:'active',createdAt:'now',updatedAt:'now'};
-      const material={id:'scope-material',learnerId:learner.id,title:'m',filename:'m',format:'txt',mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'};
+      const material={id:'scope-material',learnerId:learner.id,title:'m',filename:'m',format:'txt' as const,mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'};
       const kp={id:'scope-kp',kind:'word',lemma:'word',wordFamily:'word',sense:{id:'sense',definition:'word',partOfSpeech:null,explanation:null}};
       const analysis={id:'scope-analysis',materialId:material.id,analyzerVersion:'v',createdAt:'now',status:'pending',items:[],unmatchedItems:[],errors:[],completedAt:null};
       repository.save({...initial.state,learners:[learner],materials:[material],materialAnalyses:[analysis]} as any,0);
@@ -200,7 +200,7 @@ describe('SQLite learning state repository', () => {
       const goal={id:'taskctx-goal',learnerId:learner.id,title:'g',targetFluency:{R:1,P:1},status:'active',createdAt:'now',updatedAt:'now'};
       const kp={id:'taskctx-kp',kind:'word',lemma:'word',wordFamily:'word',sense:{id:'s',definition:'word',partOfSpeech:null,explanation:null}};
       const candidate={goalId:goal.id,knowledgePointId:kp.id,selection:'included',addedAt:'now',selectionUpdatedAt:'now'};
-      const materials=['one','two','unrelated'].map(id=>({id:`material-${id}`,learnerId:learner.id,title:id,filename:id,format:'txt',mimeType:'text/plain',checksum:id,storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'}));
+      const materials=['one','two','unrelated'].map(id=>({id:`material-${id}`,learnerId:learner.id,title:id,filename:id,format:'txt' as const,mimeType:'text/plain',checksum:id,storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'}));
       const analyses=materials.map((m,i)=>({id:`analysis-${i}`,materialId:m.id,analyzerVersion:'v',createdAt:'now',status:'pending',items:[],unmatchedItems:[],errors:[],completedAt:null}));
       const sources=[0,1].map(i=>({goalId:goal.id,knowledgePointId:kp.id,sourceAnalysisId:analyses[i].id,addedAt:'now'}));
       const vocabulary={source:'assessment',estimatedAt:'now'};
@@ -284,10 +284,10 @@ describe('SQLite learning state repository', () => {
     try {
       const repository=new SqliteLearningStateRepository(connection);const initial=repository.load();
       const learner={id:'unique-learner',currentVocabulary:null,timezone:'UTC',dailyTaskCapacity:1,createdAt:'now',updatedAt:'now'};
-      const goal={id:'unique-goal',learnerId:learner.id,title:'g',targetFluency:{R:1,P:1},status:'active',createdAt:'now',updatedAt:'now'};
-      const material={id:'unique-material',learnerId:learner.id,title:'m',filename:'m',format:'txt',mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'};
-      const planA={id:'plan-a',learnerId:learner.id,date:'same-day',taskIds:[]};
-      const planB={id:'plan-b',learnerId:learner.id,date:'same-day',taskIds:[]};
+      const goal={id:'unique-goal',learnerId:learner.id,title:'g',targetFluency:{R:1,P:1},status:'active' as const,createdAt:'now',updatedAt:'now'};
+      const material={id:'unique-material',learnerId:learner.id,title:'m',filename:'m',format:'txt' as const,mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'',extractionMetadata:{},createdAt:'now'};
+      const planA={id:'plan-a',learnerId:learner.id,date:'same-day',taskIds:[],taskCapacity:1,createdAt:'now',updatedAt:'now'};
+      const planB={id:'plan-b',learnerId:learner.id,date:'same-day',taskIds:[],taskCapacity:1,createdAt:'now',updatedAt:'now'};
       repository.save({...initial.state,learners:[learner],goals:[goal],materials:[material],studyPlans:[planA]},0);
       const committed=repository.load();
       expect(()=>repository.save({...committed.state,materials:[],studyPlans:[planA,planB]},committed.revision)).toThrow();

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { analyzeMaterial, createMaterial, extractMaterialTerms } from '../domain/functions';
-import type { ISODateTime, Material, MaterialAnalysisProgressStage } from '../domain/model';
+import type { ISODateTime, MaterialAnalysisCandidate, MaterialAnalysisProgressStage, Material } from '../domain/model';
 import { logger as defaultLogger, type AppLogger } from './logger';
 import type {
   AnalyzedMaterialAnalysis,
@@ -224,11 +224,20 @@ export async function importMaterialUseCase(
     await progress('extracting_terms');
     const terms = extractMaterialTerms(material);
     await progress('resolving_senses');
-    const resolved = await withDeadline(resolveSenseAssignments(terms, { ...deps, signal: analysisAbort.signal }), remainingMs(), () => analysisAbort.abort());
+    const candidates: MaterialAnalysisCandidate[] = terms.flatMap((term) => {
+      const decision = deps.vocabularyFilter?.(term.lemma);
+      if (decision === false || (typeof decision === 'object' && decision !== null && !decision.keep)) return [];
+      const senses = deps.senseInventory?.lookup(term.lemma) ?? [];
+      return senses.length > 1 ? [{ lemma: term.lemma, candidates: senses, occurrences: term.occurrences, status: 'pending' as const }] : [];
+    });
+    // Import is deterministic: ambiguous lemmas are persisted as candidates and
+    // never sent to the LLM until a user explicitly requests resolution.
+    const resolved = await withDeadline(resolveSenseAssignments(terms, { ...deps, senseDisambiguator: undefined, signal: analysisAbort.signal }), remainingMs(), () => analysisAbort.abort());
     const assignments: typeof resolved.assignments = [];
     await progress('translating_meanings');
-    for (let index = 0; index < resolved.assignments.length; index += 4) {
-      const batch = await withDeadline(Promise.all(resolved.assignments.slice(index, index + 4).map(async assignment => ({
+    const confirmedAssignments = resolved.assignments.filter((assignment) => !assignment.senseId.startsWith('placeholder:'));
+    for (let index = 0; index < confirmedAssignments.length; index += 4) {
+      const batch = await withDeadline(Promise.all(confirmedAssignments.slice(index, index + 4).map(async assignment => ({
         ...assignment,
         chineseMeaning: assignment.senseId.startsWith('placeholder:') || !deps.translateSenseMeaning
           ? null
@@ -244,6 +253,7 @@ export async function importMaterialUseCase(
       assignments,
       excludedTerms: resolved.excluded,
     });
+    analysis.candidates = candidates;
   } catch (error) {
     const reason = error instanceof AnalysisTimeoutError ? 'analysis_timeout' : 'analysis_failed';
     logger.warn(
@@ -252,30 +262,6 @@ export async function importMaterialUseCase(
     );
     return { ok: false, reason };
   }
-
-  const pronunciationLookup = deps.pronunciationLookup;
-  if (remainingMs() <= 0) return { ok: false, reason: 'analysis_timeout' };
-  await progress('looking_up_pronunciation');
-  let pronunciationTimedOut = false;
-  for (let index = 0; pronunciationLookup && index < analysis.items.length; index += 4) {
-    const batch = await withDeadline(Promise.all(analysis.items.slice(index, index + 4).map(async (item) => {
-      const point = item.knowledgePoint;
-      if (point.kind !== 'word' && point.kind !== 'phrase') return item;
-      let pronunciation = null;
-      try {
-        pronunciation = await pronunciationLookup(point.lemma, point.sense.partOfSpeech);
-      } catch {
-        // Dictionary availability must never fail material analysis.
-      }
-      return { ...item, knowledgePoint: { ...point, pronunciation } };
-    })), pronunciationDeadlineAt - Date.now()).catch((error) => {
-      if (error instanceof AnalysisTimeoutError) pronunciationTimedOut = true;
-      return null;
-    });
-    if (!batch) break;
-    analysis.items.splice(index, batch.length, ...batch);
-  }
-  if (pronunciationTimedOut) logger.warn({ materialId: input.materialId, analysisId: input.analysisId }, '材料分析：发音补充达到 30 秒上限，保留已查询结果并继续保存');
 
   await progress('saving_results');
   try {
