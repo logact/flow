@@ -334,7 +334,7 @@ export function ReadingCard({ task, index, active, result, submitting, onSubmit,
                 <h1>{qi + 1}. {question.prompt}</h1>
                 {question.kind === 'choice' ? (
                   <div className="reading-options">
-                    {question.options.map((option) => (
+                    {(questionOptions.get(question.id) ?? question.options).map((option) => (
                       <button
                         key={option.id}
                         className={`choice-option ${choiceAnswers[question.id] === option.id ? 'correct' : ''}`}
