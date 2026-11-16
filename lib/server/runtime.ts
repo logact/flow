@@ -19,10 +19,13 @@ import { createVocabularyDecisionFilter, loadVocabularyIndexFromFile } from '../
 import type { Learner } from '../domain/model';
 import { InMemoryAppRepository, emptyLearningState } from './memory-repository';
 import { BNC_COCA_L6, createFileVocabularyListRepository } from './vocabulary-list-repository';
+import { openSqliteDatabase } from './sqlite/database';
+import { SqliteLearningStateRepository } from './sqlite/repository';
+import type { LearningStateRepository } from '../application/repository';
+import type { GoalMaterialRepository, KnowledgePointSelectionRepository, LearningTaskRepository, MaterialRepository } from '../application/ports';
 
 /**
- * 服务端运行时单例：进程内存仓储 + 基础设施端口 + 幂等演示种子数据。
- * SQLite 仓储保留但当前不由应用运行时启用；服务重启后状态重新初始化。
+ * 服务端运行时单例：按 FLOW_STORAGE 选择状态仓储，并执行幂等演示种子初始化。
  */
 
 export const DEMO_LEARNER_ID = 'demo-learner';
@@ -38,7 +41,7 @@ const SEED_MATERIAL_TEXT = [
 ].join('\n');
 
 export interface FlowRuntime {
-  repository: InMemoryAppRepository;
+  repository: LearningStateRepository & MaterialRepository & GoalMaterialRepository & KnowledgePointSelectionRepository & LearningTaskRepository;
   senseInventory: SenseInventory;
   vocabularyIndex: VocabularyIndex;
   vocabularyListRepository: VocabularyListRepository;
@@ -57,6 +60,13 @@ export interface FlowRuntime {
 const globalForRuntime = globalThis as unknown as { flowRuntime?: FlowRuntime };
 
 function createRuntime(): FlowRuntime {
+  const storage = process.env.FLOW_STORAGE ?? 'memory';
+  if (storage !== 'memory' && storage !== 'sqlite') {
+    throw new Error(`Invalid FLOW_STORAGE=${storage}; expected memory or sqlite`);
+  }
+  const repository: FlowRuntime['repository'] = storage === 'sqlite'
+    ? new SqliteLearningStateRepository(openSqliteDatabase(process.env.FLOW_SQLITE_PATH ?? path.join(process.cwd(), '.data', 'flow.sqlite')).connection)
+    : new InMemoryAppRepository(emptyLearningState());
   const senseInventory = loadSenseInventoryFromFile(
     path.join(process.cwd(), 'data', 'sense-inventory-v1.json'),
   );
@@ -65,7 +75,7 @@ function createRuntime(): FlowRuntime {
   );
   const llmConfigured = Boolean(process.env.LLM_API_KEY);
   const runtime: FlowRuntime = {
-    repository: new InMemoryAppRepository(emptyLearningState()),
+    repository,
     senseInventory,
     vocabularyIndex,
     vocabularyListRepository: createFileVocabularyListRepository(),
@@ -79,7 +89,8 @@ function createRuntime(): FlowRuntime {
     ready: Promise.resolve(),
   };
   runtime.ready = seed(runtime).catch((error) => {
-    runtime.repository = new InMemoryAppRepository(emptyLearningState());
+    // Keep the selected backend intact. A failed seed rejects readiness and is
+    // surfaced to callers; replacing SQLite with memory would hide data loss.
     throw error;
   });
   return runtime;
