@@ -5,6 +5,7 @@ import { emptyLearningState } from '../lib/server/memory-repository';
 import { ConcurrencyConflictError } from '../lib/application/repository';
 import { openSqliteDatabase } from '../lib/server/sqlite/database';
 import { SqliteLearningStateRepository } from '../lib/server/sqlite/repository';
+import { analyzeMaterial, createMaterial } from '../lib/domain/functions';
 
 describe('SQLite learning state repository', () => {
   test('starts with a complete empty state and revision zero, and initializes idempotently', () => {
@@ -262,6 +263,33 @@ describe('SQLite learning state repository', () => {
       await repository.saveMaterialAnalysis(material.id, pending as any);
       await repository.saveMaterialWithAnalysis(material as any, { ...pending, status: 'analyzed', completedAt: 'later' } as any);
       expect(repository.load().state.materialAnalyses[0].status).toBe('analyzed');
+    } finally {
+      connection.close();
+    }
+  });
+
+  test('persists knowledge-point additions when an analyzed candidate is resolved', async () => {
+    const { connection } = openSqliteDatabase(':memory:');
+    try {
+      const repository = new SqliteLearningStateRepository(connection);
+      const initial = repository.load();
+      const learner = { id: 'learner', currentVocabulary: null, timezone: 'UTC', dailyTaskCapacity: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+      const material = createMaterial({ id: 'material', learnerId: learner.id, title: 't', filename: 't.txt', format: 'txt', mimeType: 'text/plain', checksum: 'x', storageKey: null, extractedText: 'alpha beta', extractionMetadata: {}, now: '2026-01-01T00:00:00.000Z' });
+      repository.save({ ...initial.state, learners: [learner], materials: [material] } as any, initial.revision);
+      const occurrence = { rawForm: 'alpha', sentence: 'alpha beta', context: [] };
+      const first = analyzeMaterial({ analysisId: 'analysis', material, analyzerVersion: 'v1', now: '2026-01-02T00:00:00.000Z', assignments: [{ lemma: 'alpha', senseId: 'sense-a', partOfSpeech: 'noun', definition: 'first', occurrences: [occurrence] }] });
+      await repository.saveMaterialWithAnalysis(material, first);
+      const refined = analyzeMaterial({ analysisId: 'analysis', material, analyzerVersion: 'v1', now: '2026-01-03T00:00:00.000Z', assignments: [
+        { lemma: 'alpha', senseId: 'sense-a', partOfSpeech: 'noun', definition: 'first', occurrences: [occurrence] },
+        { lemma: 'beta', senseId: 'sense-b', partOfSpeech: 'noun', definition: 'second', occurrences: [{ ...occurrence, rawForm: 'beta' }] },
+      ] });
+      refined.createdAt = first.createdAt;
+      refined.completedAt = first.completedAt;
+      refined.candidates = [{ lemma: 'beta', candidates: [{ id: 'sense-b', pos: 'noun', gloss: 'second' }], occurrences: [{ ...occurrence, rawForm: 'beta' }], status: 'resolved' }];
+      await repository.saveMaterialWithAnalysis(material, refined);
+      const loaded = repository.load().state;
+      expect(loaded.materialAnalyses[0].items.map((item) => item.knowledgePoint.id)).toContain('word:beta:sense-b');
+      expect(loaded.knowledgePoints.map((item) => item.id)).toContain('word:beta:sense-b');
     } finally {
       connection.close();
     }

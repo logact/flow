@@ -99,7 +99,8 @@
 - 完成：场景一仓储选择已接入 `FLOW_STORAGE` / `FLOW_SQLITE_PATH`。运行时 smoke 验证：默认 memory 与 `FLOW_STORAGE=sqlite FLOW_SQLITE_PATH=/tmp/flow-loop5-runtime.sqlite` 均成功初始化种子；`FLOW_STORAGE=bogus` 清晰报错。
 - 完成：场景二实现本地候选生成、单义词确认、候选持久化和材料详情展示；导入只做本地确定性处理，不调用消歧、释义翻译 LLM 或发音词典。释义可通过既有知识点释义补全 API 单独处理。
 - 完成：场景四发音状态与分析状态分离；知识点详情可独立重试，查询处理中/失败/成功均有持久化状态，材料导入不等待词典查询。
-- 验证记录：`test/material-import.jest.test.ts` 更新为 loop5 语义后 22 项通过；SQLite 仓储 25 项、目标加入材料 16 项通过；`npx tsc --noEmit --pretty false` 通过；`npx next build` 成功（存在 pdfjs-dist externalization 与动态文件访问警告）。
-- 场景二进展：SQLite 原先拒绝已完成分析的候选状态增量更新；仓储现允许分析身份/版本/完成时间不变的候选精化。仓储测试 25 项通过，SQLite 实际写入并重新加载 `processing` 候选成功。
+- 验证记录：`test/material-import.jest.test.ts` 22 项、SQLite 仓储 26 项、目标加入材料 16 项、发音 3 项通过；`npx tsc --noEmit --pretty false` 通过。`npx next build` 成功编译并生成页面，但 Next.js 因当前框架版本安全检查以 `SecurityFatalError` 中止最终构建（另有 pdfjs-dist externalization 与动态文件访问警告）。
+- 场景二验证：SQLite 仓储允许分析身份/版本/完成时间不变的候选精化；单测覆盖候选解析后的知识点关系表同步，SQLite 实际写入并重新加载 `processing` 候选成功。
 - 场景三进展：目标页可选择材料中的待解析候选；目标创建仅解析提交的材料/词元组合，成功后将其知识点加入选择，失败时拒绝创建并保留页面草稿。服务端校验材料归属及分析版本；稳定 goalId 由 learner/requestId 派生，跨进程重试复用目标。`test/goal-add-material.jest.test.ts` 16 项通过。仍需补充候选提交集成测试并验证端到端重启/重复请求行为。
 - 场景四验证：`test/pronunciation.jest.test.ts` 与材料导入、SQLite 仓储、目标创建用例合计 66 项通过；类型检查通过。生产构建在编译和静态生成后被 Next.js 的安全版本检查中止，需升级框架版本后重试。
+- 场景三 SQLite 端到端 smoke：真实 SQLite runtime 中写入 pending 候选，调用解析 POST 后重载得到 `resolved` 和新增知识点；曾发现并修复关系表未随已分析记录更新的问题。

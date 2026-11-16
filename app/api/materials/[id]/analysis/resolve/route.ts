@@ -78,6 +78,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
   const next = analyzeMaterial({ analysisId: analysis.id, material, analyzerVersion: analysis.analyzerVersion, now: new Date().toISOString(), assignments, excludedTerms: analysis.unmatchedItems.filter((item): item is typeof item & { lemma: string } => Boolean(item.lemma)).map((item) => ({ lemma: item.lemma, reason: item.reason, occurrences: item.occurrences })) });
+  next.createdAt = analysis.createdAt;
+  next.completedAt = analysis.completedAt;
   next.candidates = updated;
   await runtime.repository.saveMaterialWithAnalysis(material, next);
   return NextResponse.json({ status: failures.length ? 'partial' : 'resolved', resolvedCount: updated.filter((item) => item.status === 'resolved').length, failedLemmas: failures, candidates: updated });

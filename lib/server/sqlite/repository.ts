@@ -137,7 +137,17 @@ export class SqliteLearningStateRepository implements LearningStateRepository, M
       const insertOccurrence=this.connection.prepare('INSERT OR IGNORE INTO material_analysis_occurrences(analysis_id,knowledge_point_id,position,data) VALUES (?,?,?,?)');
       const insertUnmatched=this.connection.prepare('INSERT OR IGNORE INTO material_analysis_unmatched_items(analysis_id,position,data) VALUES (?,?,?)');
       const insertUnmatchedOccurrence=this.connection.prepare('INSERT OR IGNORE INTO material_analysis_unmatched_occurrences(analysis_id,item_position,position,data) VALUES (?,?,?,?)');
-      for(const analysis of next.materialAnalyses) if(analysis.status==='analyzed' && !oldAnalysisIds.has(analysis.id)) {
+      const deleteOccurrences=this.connection.prepare('DELETE FROM material_analysis_occurrences WHERE analysis_id=?');
+      const deleteItems=this.connection.prepare('DELETE FROM material_analysis_items WHERE analysis_id=?');
+      const deleteUnmatchedOccurrences=this.connection.prepare('DELETE FROM material_analysis_unmatched_occurrences WHERE analysis_id=?');
+      const deleteUnmatchedItems=this.connection.prepare('DELETE FROM material_analysis_unmatched_items WHERE analysis_id=?');
+      for(const analysis of next.materialAnalyses) if(analysis.status==='analyzed') {
+        if(oldAnalysisIds.has(analysis.id)) {
+          deleteOccurrences.run(analysis.id);
+          deleteItems.run(analysis.id);
+          deleteUnmatchedOccurrences.run(analysis.id);
+          deleteUnmatchedItems.run(analysis.id);
+        }
         analysis.items.forEach((item,index)=>{insertItem.run(analysis.id,item.knowledgePoint.id,index,'{}');item.occurrences.forEach((occurrence,position)=>insertOccurrence.run(analysis.id,item.knowledgePoint.id,position,JSON.stringify(occurrence)));});
         analysis.unmatchedItems.forEach((item,index)=>{const {occurrences,...metadata}=item;insertUnmatched.run(analysis.id,index,JSON.stringify(metadata));occurrences.forEach((occurrence,position)=>insertUnmatchedOccurrence.run(analysis.id,index,position,JSON.stringify(occurrence)));});
       }
