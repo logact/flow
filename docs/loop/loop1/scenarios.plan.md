@@ -163,6 +163,7 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 
 #### implementation status
 - 核验结果：已完成。答题反馈仅在结算成功后出现；答对庆祝全屏显示 2.4 秒、2.5 秒后继续，减少动态效果规则覆盖庆祝动画。学习领域状态使用 SQLite 持久化，作答结算幂等，计划刷新失败不会回滚已保存结算。
+- 仓储说明：上述记录对应 `31e326f` 的历史实现。根据 loop2 人工评审第 8 条，当前应用运行时改回进程内存仓储；SQLite 仅保留为未启用实现。
 - 核验依据：`app/page.tsx`、`app/globals.css`、`app/api/tasks/[id]/attempt/route.ts`、`lib/application/settle-and-refresh-plan.ts`、`lib/server/runtime.ts`、`lib/server/sqlite/repository.ts`、`docs/loop/loop1/human-verify-20-22.implementation-decisions.md`。
 - 验证：完整 Jest 套件通过（24 suites、265 tests）；`test/settle-and-refresh-plan.jest.test.ts`、`test/judge-settle-task-attempt.jest.test.ts`、`test/sqlite-repository.jest.test.ts` 覆盖结算、重试及持久化；Next.js 生产构建和 TypeScript 检查通过。
 - 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
