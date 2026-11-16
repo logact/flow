@@ -12,7 +12,14 @@ export function createSenseMeaningTranslator(env: Parameters<typeof loadLLMConfi
     const pending = client.chat([
       { role: 'system', content: 'Translate the English dictionary sense definition into a concise, accurate Simplified Chinese meaning. Return only the Chinese translation.' },
       { role: 'user', content: englishDefinition },
-    ], { temperature: 0.1 }).then(value => value.trim() || null).catch(() => null);
+    ], { temperature: 0.1 }).then(value => {
+      const translated = value.trim() || null;
+      if (!translated) cache.delete(key);
+      return translated;
+    }).catch(() => {
+      cache.delete(key);
+      return null;
+    });
     cache.set(key, pending);
     return pending;
   };

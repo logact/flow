@@ -7,6 +7,7 @@ import type {
   LearningTaskView,
   TaskSubmission,
 } from '@/lib/client/types';
+import { apiPost } from '@/lib/client/api';
 
 /** 卡片公共输入：任务视图、提交回调与提交结果。 */
 export interface TaskCardProps {
@@ -114,6 +115,8 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
   const content = task.content.content;
   const shownAtRef = useShownAt(active);
   const [audioStatus, setAudioStatus] = useState<'idle'|'playing'|'failed'>('idle');
+  const [meaningStatus, setMeaningStatus] = useState<'idle'|'working'|'failed'|'unavailable'>('idle');
+  const [chineseMeaning, setChineseMeaning] = useState(content.chineseMeaning?.trim() || '');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playPronunciation = async () => {
     if (!content.pronunciationAudioUrl) return;
@@ -129,6 +132,20 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
       setAudioStatus('failed');
     }
   };
+  const backfillMeaning = async () => {
+    setMeaningStatus('working');
+    try {
+      const result = await apiPost<{ status: string; chineseMeaning: string | null }>(`/api/knowledge/${task.content.wordId}/meaning`, {});
+      if (result.chineseMeaning) {
+        setChineseMeaning(result.chineseMeaning);
+        setMeaningStatus('idle');
+      } else {
+        setMeaningStatus('unavailable');
+      }
+    } catch {
+      setMeaningStatus('failed');
+    }
+  };
   return (
     <article className="learning-card encode-card">
       <div className="decode-shape shape-one" /><div className="decode-shape shape-two" />
@@ -140,6 +157,7 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
           <button className="pronunciation" disabled={!content.pronunciationAudioUrl} onClick={() => void playPronunciation()} aria-label={content.pronunciationAudioUrl ? '播放词典发音' : '音频暂缺'}>
             <span className="sound-button"><Icon name="volume" size={20} /></span>
             <span>{content.pronunciation || '音标暂缺'}</span>
+            {!content.pronunciationAudioUrl && <span role="status">音频暂缺</span>}
             {audioStatus === 'playing' && <span role="status">播放中…</span>}
             {audioStatus === 'failed' && <span role="status">播放失败</span>}
           </button>
@@ -148,7 +166,8 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
         <div className="meaning-block">
           {content.partOfSpeech && <span className="part-of-speech">{content.partOfSpeech}</span>}
           <p>{content.definition}</p>
-          <p className="sense-chinese-meaning" aria-label="当前词义的中文释义">中文释义：{content.chineseMeaning?.trim() || '暂缺'}</p>
+          <p className="sense-chinese-meaning" aria-label="当前词义的中文释义">中文释义：{chineseMeaning || '暂缺'}</p>
+          {!chineseMeaning && <div className="sense-meaning-backfill"><button className="text-button" disabled={meaningStatus === 'working'} onClick={() => void backfillMeaning()}>{meaningStatus === 'working' ? '正在补全…' : '补全中文释义'}</button>{meaningStatus === 'failed' && <span role="status">补全失败，可重试。</span>}{meaningStatus === 'unavailable' && <span role="status">暂时没有可用译文，可稍后重试。</span>}</div>}
         </div>
         {content.examples.length > 0 && (
           <div className="example-block">
