@@ -2021,6 +2021,29 @@ export function updateVocabularyEstimate(input: UpdateVocabularyEstimateInput): 
   return after;
 }
 
+function countGraduatedKnowledgePoint(
+  estimate: VocabularyEstimate,
+  classification: KnowledgePointVocabularyClassification | null,
+  knowledgePointId: string,
+  estimatedAt: ISODateTime,
+): VocabularyEstimate {
+  const after = clone(estimate);
+  if (!classification) return after;
+  if (classification.knowledgePointId !== knowledgePointId
+    || classification.list.id !== estimate.list.id
+    || classification.list.version !== estimate.list.version) {
+    throw new Error('Classification does not match the vocabulary estimate');
+  }
+  const band = after.bands.find((item) => item.band === classification.band);
+  if (!band) return after;
+  band.sampleCount++;
+  band.knownCount++;
+  band.knownProbability = band.knownCount / band.sampleCount;
+  band.interval = wilsonInterval(band.knownCount, band.sampleCount);
+  after.estimatedAt = estimatedAt;
+  return after;
+}
+
 export interface SettleTaskAttemptInput {
   attemptId: string;
   judgement: TaskJudgement;
@@ -2112,14 +2135,13 @@ export function settleTaskAttempt(
     item.knowledgePointId === knowledgePoint.id
     && item.list.id === learner.currentVocabulary!.list.id
     && item.list.version === learner.currentVocabulary!.list.version) ?? null;
-  const vocabularyAfter = updateVocabularyEstimate({
-    before: learner.currentVocabulary,
-    knowledgePoint,
-    classification,
-    task,
-    judgement: input.judgement,
-    estimatedAt: input.now,
-  });
+  const graduatedBefore = learning.dimensions.R.review.graduated && learning.dimensions.P.review.graduated;
+  const graduatedAfter = dimensions.R.review.graduated && dimensions.P.review.graduated;
+  const shouldCountGraduation = graduatedAfter && !graduatedBefore && !learning.vocabularyGraduationCounted;
+  const vocabularyAfter = shouldCountGraduation
+    ? countGraduatedKnowledgePoint(learner.currentVocabulary, classification, knowledgePoint.id, input.now)
+    : learner.currentVocabulary;
+  updatedLearning.vocabularyGraduationCounted = Boolean(learning.vocabularyGraduationCounted) || shouldCountGraduation;
   const settlement = {
     fluencyChanges,
     reviewChanges,

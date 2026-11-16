@@ -270,10 +270,10 @@ describe('S11 评判并结算学习任务作答', () => {
     expect(attempt.judgement.dimensions.R).toMatchObject({ outcome: 'correct', score: 1 });
     expect(attempt.settlement).toEqual(result.settlement);
     expect(saved.tasks[0].status).toBe('completed');
-    // RETRIEVE choice 通过按绝对赋分表设为 20；词汇估计随结算更新。
+    // RETRIEVE choice 通过按绝对赋分表设为 20；毕业前作答不更新词频估计。
     expect(saved.learnerKnowledgePoints[0].dimensions.R.fluency).toBe(20);
-    expect(result.settlement.vocabularyAfter.estimatedAt).toBe(at.settled);
-    expect(result.settlement.vocabularyAfter.bands[0]).toMatchObject({ sampleCount: 2, knownCount: 1 });
+    expect(result.settlement.vocabularyAfter.estimatedAt).toBe(at.answered);
+    expect(result.settlement.vocabularyAfter.bands[0]).toMatchObject({ sampleCount: 1, knownCount: 0 });
     expect(validateLearningState(saved)).toEqual([]);
   });
 
@@ -474,6 +474,32 @@ describe('S11 评判并结算学习任务作答', () => {
     expect(second.feedback).toBe(first.feedback);
     expect(second.settlement).toEqual(first.settlement);
     expect(repo.load().revision).toBe(revisionAfterFirst);
+  });
+
+  test('知识点 R/P 均毕业时词频段只增加一次已掌握样本', async () => {
+    const base = buildInitializedState();
+    const learning = base.learnerKnowledgePoints[0];
+    const graduatedR = { ...learning.dimensions.R, review: { ...learning.dimensions.R.review, graduated: true } };
+    const finalReviewP = { ...learning.dimensions.P, fluency: 100, review: { ...learning.dimensions.P.review, intervalDays: 30, graduated: false } };
+    const nearlyGraduated = {
+      ...base,
+      learnerKnowledgePoints: [{ ...learning, dimensions: { R: graduatedR, P: finalReviewP } }],
+    };
+    const { state, task } = makeTask(nearlyGraduated, {
+      goalId: 'goal-1', wordId: base.knowledgePoints[0].id, task: 'RETRIEVE', axis: 'P', stage: 'choice',
+    }, 'task-final-graduation');
+    const received = receive(state, task, { task: 'RETRIEVE', stage: 'choice', selectedOptionId: 'a' }, 'attempt-final-graduation');
+    const repo = new InMemoryLearningStateRepository(received.state);
+
+    await settle(repo, aiJudgeReturning({ taskId: task.id, retrieveAccepted: true, feedback: 'ok' }), 'attempt-final-graduation');
+    const saved = repo.load().state;
+    expect(saved.learnerKnowledgePoints[0].vocabularyGraduationCounted).toBe(true);
+    expect(saved.learners[0].currentVocabulary!.bands[0]).toMatchObject({ sampleCount: 2, knownCount: 1 });
+    expect(saved.learners[0].currentVocabulary!.estimatedAt).toBe(at.settled);
+
+    await settle(repo, aiJudgeThrowing('不应重复计入'), 'attempt-final-graduation');
+    expect(repo.load().state.learners[0].currentVocabulary!.bands[0]).toMatchObject({ sampleCount: 2, knownCount: 1 });
+    expect(validateLearningState(repo.load().state)).toEqual([]);
   });
 
   test('AI 失败时不结算并保留原始作答，重试后从 judging 续评判', async () => {

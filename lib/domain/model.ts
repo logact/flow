@@ -395,6 +395,8 @@ export interface LearnerKnowledgePoint {
   initialFluency: FluencyScores;
   /** 初始分数采用的词汇证据、词频分类和推导策略。 */
   initialization: LearnerKnowledgePointInitialization;
+  /** 该知识点作为已掌握样本计入当前词汇估计的幂等标记。 */
+  vocabularyGraduationCounted?: boolean;
   /** 当前各流利度维度的分数和复习状态；目标达标状态按各目标分数线另行推导。 */
   dimensions: Record<FluencyDimension, DimensionLearningState>;
   /** 开始学习该词汇的时间。 */
