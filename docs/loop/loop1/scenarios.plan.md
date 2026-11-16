@@ -105,6 +105,12 @@
 **UI**
 - 列表展示词族及来源，提供搜索、筛选和排序；详情按时间呈现复习计划、记录与分数变化，并覆盖无记录状态。
 
+#### implementation status
+- 核验结果：已完成。知识点库支持搜索、来源材料多选、熟练度排序，并展示词族/来源；详情读取未来复习安排、作答记录和结算产生的真实分数变化。
+- 核验依据：`app/api/knowledge/route.ts`、`app/knowledge/page.tsx`、`app/api/knowledge/[id]/route.ts`、`app/knowledge/[id]/page.tsx`、`docs/loop/loop1/human-verify-20-22.implementation-decisions.md`。
+- 验证：完整 Jest 套件通过；构建通过，页面/API 类型检查完成。当前没有该查询与页面的专用端到端测试。
+- 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
+
 ### 场景五：ENCODE 中文释义
 
 #### include decision
