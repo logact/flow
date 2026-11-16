@@ -129,6 +129,12 @@ ENCODE 页面依据当前知识点关联的 sense 展示稳定的中文释义；
 **UI**
 - ENCODE 展示当前义项的中文释义；缺失时呈现明确状态，不回退到其他义项的翻译。
 
+#### implementation status
+- 核验结果：已完成。材料分析时翻译并保存 sense 级中文释义；ENCODE 任务读取当前知识点的已保存值，缺失时 UI 显示“暂缺”。
+- 核验依据：`lib/application/material-import.ts`、`lib/application/sense-meaning-translation.ts`、`lib/application/task-generation.ts`、`components/learning/TaskCard.tsx`、`docs/loop/loop1/encode-sense-chinese-meaning.implementation-decision.md`。
+- 验证：完整 Jest 套件通过，项目构建通过。中文释义缺失、翻译失败及历史数据状态按实施决策明确显示为暂缺；当前没有专用翻译集成测试。
+- 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
+
 ### 场景六：首页今日计划与答题反馈
 
 #### include decision
