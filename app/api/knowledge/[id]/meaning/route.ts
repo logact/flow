@@ -24,12 +24,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   runtime.repository.save({
     ...latest.state,
     knowledgePoints: latest.state.knowledgePoints.map((item) => item.id === id ? updatedPoint : item),
-    materialAnalyses: latest.state.materialAnalyses.map((analysis) => ({
+    materialAnalyses: latest.state.materialAnalyses.map((analysis) => analysis.status === 'analyzed' ? ({
       ...analysis,
       items: analysis.items.map((item) => item.knowledgePoint.id === id
         ? { ...item, knowledgePoint: updatedPoint }
         : item),
-    })),
+    }) : analysis),
   }, latest.revision);
   return NextResponse.json({ status: 'completed', chineseMeaning: saved });
 }
