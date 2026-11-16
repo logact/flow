@@ -115,21 +115,29 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
   const content = task.content.content;
   const shownAtRef = useShownAt(active);
   const [audioStatus, setAudioStatus] = useState<'idle'|'playing'|'failed'>('idle');
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [meaningStatus, setMeaningStatus] = useState<'idle'|'working'|'failed'|'unavailable'>('idle');
   const [chineseMeaning, setChineseMeaning] = useState(content.chineseMeaning?.trim() || '');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playPronunciation = async () => {
     if (!content.pronunciationAudioUrl) return;
+    setAudioError(null);
     try {
       const audio = audioRef.current ?? new Audio(content.pronunciationAudioUrl);
       audioRef.current = audio;
       audio.src = content.pronunciationAudioUrl;
       audio.onended = () => setAudioStatus('idle');
-      audio.onerror = () => setAudioStatus('failed');
+      audio.onerror = () => {
+        setAudioStatus('failed');
+        setAudioError('浏览器无法读取这段音频，请检查网络或音频格式后重试。');
+      };
       setAudioStatus('playing');
       await audio.play();
-    } catch {
+    } catch (error) {
       setAudioStatus('failed');
+      setAudioError(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? '浏览器阻止了播放，请再次点击播放。'
+        : '播放未能启动，请检查设备声音后重试。');
     }
   };
   const backfillMeaning = async () => {
@@ -159,8 +167,9 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
             <span>{content.pronunciation || '音标暂缺'}</span>
             {!content.pronunciationAudioUrl && <span role="status">音频暂缺</span>}
             {audioStatus === 'playing' && <span role="status">播放中…</span>}
-            {audioStatus === 'failed' && <span role="status">播放失败</span>}
+            {audioStatus === 'failed' && <span role="status">播放失败，可重试</span>}
           </button>
+          {audioError && <p className="doc-error" role="status">{audioError}{content.pronunciationSource && ` 音频来源：${content.pronunciationSource}。`}</p>}
           {content.pronunciationSource && <a className="pronunciation-source" href={content.pronunciationSourceUrl ?? 'https://dictionaryapi.dev/'} target="_blank" rel="noreferrer">发音来源：{content.pronunciationSource}</a>}
         </div>
         <div className="meaning-block">
