@@ -188,6 +188,40 @@
 - 领域推导统一改为：低于 0.7 时 R/P=0；达到或超过 0.7 时 R=40、P=20。正式初始化与准入预测沿用同一 `deriveInitialFluency`。
 - 验证：边界测试覆盖 0.699、0.7、1.0 与无分类；知识点初始化测试同步更新，新规则相关测试通过。
 
+### scenario6：运行时恢复内存仓储
+
+#### include decision
+
+- `sqlite-runtime-memory.decision.md`：当前应用运行时使用 `InMemoryAppRepository`；SQLite 实现保留但不接入应用。
+
+#### description
+
+应用进程内共享一份内存学习状态，进程重启后重新创建并初始化演示数据。运行时不打开或修改 SQLite 文件；已有数据库文件保持原样。SQLite 仓储、迁移及独立测试保留，后续启用需另行评审。
+
+#### impl plan
+
+**domain**
+
+- 不修改领域模型和业务规则。
+
+**service**
+
+- 将 `FlowRuntime.repository` 和运行时初始化切回 `InMemoryAppRepository(emptyLearningState())`。
+- 移除运行时创建 SQLite 目录、解析数据库路径和打开连接的流程。
+- 种子初始化失败时重置为空内存仓储并继续向调用方抛出错误。
+- 修正仓储注释和历史文档，区分当前运行时与保留的 SQLite 实现。
+
+**UI**
+
+- 不涉及 UI 变更；运行时重启后状态重置是本决策明确的行为。
+
+**实施记录**
+
+- 已在 `lib/server/runtime.ts` 恢复 `InMemoryAppRepository`，移除 SQLite 路径、目录和连接初始化；种子失败时重置内存状态。
+- SQLite 仓储、迁移、测试及已有磁盘数据库文件均保留；应用运行时不再调用 SQLite。
+- `npx tsc --noEmit` 通过；静态检查确认 runtime 无 SQLite 路径、连接和 repository 引用。未运行测试套件。
+- 实施提交：`d5f08c1`；决策及计划文档：`6f4316c`。
+
 ## 实施记录
 
-- 尚未执行实施；每完成一个场景后，在对应章节记录变更与提交信息。
+- scenario1–scenario6 的实施记录见各场景章节；scenario6 已按 `sqlite-runtime-memory.decision.md` 完成。
