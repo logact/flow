@@ -81,6 +81,12 @@
 **UI**
 - 增加搜索、排序方向提示、来源材料多选和清除筛选操作；筛选或分页更新列表时保留已选知识点。
 
+#### implementation status
+- 核验结果：已完成。目标知识点选择页面支持搜索、单词/词族词频排序及升降序、多材料筛选；页面明确筛选采用“任一来源匹配”，筛选时保留已选状态。
+- 核验依据：`app/api/knowledge/selection/route.ts`、`app/goals/page.tsx`。
+- 验证：完整 Jest 套件通过；`test/knowledge-point-selection.jest.test.ts` 覆盖选择状态用例。构建通过，页面/API 类型检查完成；当前没有对应端到端 UI 测试。
+- 实施提交：`31e326f`（该提交一次实现了 loop1 全部场景）。
+
 ### 场景四：知识点库检索与学习详情
 
 #### include decision
