@@ -100,6 +100,8 @@ export interface SampleVocabularyForAssessmentInput {
   families: VocabularyAssessmentWordFamily[];
   sampleCounts: Partial<Record<VocabularyBand, number>>;
   seed: string;
+  /** Already sampled word families in a session; prevents replacement across appended batches. */
+  excludeFamilyIds?: string[];
 }
 
 export interface VocabularyAssessmentSample {
@@ -122,6 +124,7 @@ export function sampleVocabularyForAssessment(
     familiesById.set(family.id, family);
   }
   const random = createRandom(input.seed);
+  const excluded = new Set(input.excludeFamilyIds ?? []);
   const samples: VocabularyAssessmentSample[] = [];
   const bands = Object.keys(input.sampleCounts)
     .sort((a, b) => compareBands(a as VocabularyBand, b as VocabularyBand)) as VocabularyBand[];
@@ -129,7 +132,7 @@ export function sampleVocabularyForAssessment(
     const count = input.sampleCounts[band];
     if (count === undefined) continue;
     assertNonNegativeInteger(count, `sampleCounts.${band}`);
-    const pool = input.families.filter((family) => family.band === band)
+    const pool = input.families.filter((family) => family.band === band && !excluded.has(family.id))
       .sort((a, b) => a.id.localeCompare(b.id));
     if (count > pool.length) {
       throw new RangeError(`Not enough word families in ${band}: requested ${count}, available ${pool.length}`);
@@ -149,6 +152,26 @@ export function sampleVocabularyForAssessment(
     }
   }
   return samples;
+}
+
+export type AdaptiveVocabularyBandDecision = 'stop' | 'continue' | 'append';
+
+/** Decide whether to stop, advance, or append a batch using the assessment decision thresholds. */
+export function decideAdaptiveVocabularyBand(input: { knownCount: number; sampleCount: number }): AdaptiveVocabularyBandDecision {
+  const { knownCount, sampleCount } = input;
+  assertNonNegativeInteger(knownCount, 'knownCount');
+  assertNonNegativeInteger(sampleCount, 'sampleCount');
+  if (knownCount > sampleCount) throw new RangeError('knownCount cannot exceed sampleCount');
+  if (sampleCount === 6) {
+    if (knownCount <= 2) return 'stop';
+    if (knownCount <= 5) return 'append';
+    return 'continue';
+  }
+  if (sampleCount !== 10 && sampleCount !== 12) throw new RangeError('Adaptive decisions require 6, 10, or 12 answers');
+  const { lower, upper } = wilsonInterval(knownCount, sampleCount);
+  if (lower >= 0.5) return 'continue';
+  if (sampleCount === 10 && upper >= 0.5) return 'append';
+  return 'stop';
 }
 
 export interface GenerateVocabularyAssessmentTasksInput {

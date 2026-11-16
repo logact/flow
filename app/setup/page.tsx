@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost, ApiError } from '@/lib/client/api';
 import type {
@@ -19,9 +19,14 @@ export default function SetupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitAssessmentResponse['result'] | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const attemptRef = useRef<{ taskId: string; attemptId: string } | null>(null);
 
   useEffect(() => {
     void apiGet<LearnerResponse>('/api/learner').then((data) => setLearner(data.learner)).catch(() => undefined);
+    void apiGet<{ assessment: StartAssessmentResponse | null }>('/api/assessments').then(({ assessment: current }) => {
+      if (current) { setAssessment(current); setCursor(current.cursor); }
+    }).catch(() => undefined);
   }, []);
 
   const start = useCallback(async () => {
@@ -29,7 +34,7 @@ export default function SetupPage() {
     try {
       const data = await apiPost<StartAssessmentResponse>('/api/assessments');
       setAssessment(data);
-      setCursor(0);
+      setCursor(data.cursor);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '测评创建失败，请重试。');
     }
@@ -39,18 +44,22 @@ export default function SetupPage() {
     if (!assessment || submitting) return;
     const task = assessment.tasks[cursor];
     if (!task) return;
+    if (attemptRef.current?.taskId !== task.id) attemptRef.current = { taskId: task.id, attemptId: crypto.randomUUID() };
     setSubmitting(true);
     setError(null);
     try {
       const data = await apiPost<SubmitAssessmentResponse>(`/api/assessments/${assessment.assessmentId}/attempts`, {
         taskId: task.id,
         known,
+        attemptId: attemptRef.current.attemptId,
       });
+      attemptRef.current = null;
       if (data.status === 'completed' && data.result) {
         setResult(data.result);
         setAssessment(null);
       } else {
-        setCursor((value) => value + 1);
+        if (data.tasks) setAssessment((current) => current ? { ...current, tasks: data.tasks!, cursor: data.cursor ?? cursor + 1, answered: data.answered ?? current.answered + 1, total: data.total ?? data.tasks!.length, currentBand: data.currentBand ?? current.currentBand, bandAnswered: data.bandAnswered ?? 0, bandTotal: data.bandTotal ?? 0 } : current);
+        setCursor(data.cursor ?? cursor + 1);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '提交失败，请重试。');
@@ -59,7 +68,22 @@ export default function SetupPage() {
     }
   }, [assessment, cursor, submitting]);
 
-  const vocabularyDone = result ?? learner?.currentVocabulary ?? null;
+  const finishAssessment = useCallback(async () => {
+    if (!assessment || finishing) return;
+    setFinishing(true);
+    setError(null);
+    try {
+      const data = await apiPost<SubmitAssessmentResponse>(`/api/assessments/${assessment.assessmentId}/finish`, {});
+      if (data.result) setResult(data.result);
+      setAssessment(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '结算失败，请重试。');
+    } finally {
+      setFinishing(false);
+    }
+  }, [assessment, finishing]);
+
+  const vocabularyDone = assessment ? null : result ?? learner?.currentVocabulary ?? null;
 
   const continueAfterAssessment = async () => {
     try {
@@ -87,18 +111,21 @@ export default function SetupPage() {
         <section className="doc-card">
           <h2>词汇水平估计</h2>
           <p className="doc-muted">基于 {vocabularyDone.list.id} v{vocabularyDone.list.version} · {new Date(vocabularyDone.estimatedAt).toLocaleString()}</p>
+          <p className="doc-muted">估计只覆盖已答题目所在的词段；未测频段不代表已确认掌握。Wilson 95% 区间反映样本不确定性。</p>
           <table className="doc-table">
-            <thead><tr><th>词段</th><th>掌握概率</th><th>认识 / 抽样</th></tr></thead>
+            <thead><tr><th>词段</th><th>估计掌握率</th><th>认识 / 抽样</th><th>Wilson 95%</th></tr></thead>
             <tbody>
               {vocabularyDone.bands.map((band) => (
                 <tr key={band.band}>
                   <td>{band.band}</td>
                   <td>{(band.knownProbability * 100).toFixed(0)}%</td>
                   <td>{band.knownCount} / {band.sampleCount}</td>
+                  <td>{band.interval ? `${(band.interval.lower * 100).toFixed(0)}–${(band.interval.upper * 100).toFixed(0)}%` : '暂无样本'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {vocabularyDone.bands.length === 0 && <p className="doc-muted">没有已答题目，本次没有形成频段估计。</p>}
           <div className="doc-actions">
             <button className="primary-button" onClick={() => void continueAfterAssessment()}>{'继续开始学习'}</button>
             <button className="text-button" onClick={() => { setResult(null); void start(); }}>重新测评</button>
@@ -106,20 +133,21 @@ export default function SetupPage() {
         </section>
       ) : assessment ? (
         <section className="doc-card assessment-card">
-          <p className="doc-muted">{cursor + 1} / {assessment.tasks.length} · 当前词段 {assessment.tasks[cursor]?.band}</p>
+          <p className="doc-muted">总进度 {assessment.answered} / {assessment.total} · 当前词段 {assessment.currentBand ?? assessment.tasks[cursor]?.band}：{assessment.bandAnswered} / {assessment.bandTotal}</p>
+          {error && <p className="doc-error">{error}</p>}
           <h2 className="assessment-word">{assessment.tasks[cursor]?.lemma}</h2>
           <p className="doc-muted">只凭第一直觉：认识这个词吗？</p>
           <div className="doc-actions">
             <button className="primary-button" disabled={submitting} onClick={() => void answer(true)}>认识</button>
             <button className="doc-secondary-button" disabled={submitting} onClick={() => void answer(false)}>不认识</button>
           </div>
+          <button className="text-button" disabled={finishing || submitting} onClick={() => void finishAssessment()}>{finishing ? '正在结算…' : '结束测评并结算'}</button>
         </section>
       ) : (
         <section className="doc-card">
           <h2>词汇自评定级</h2>
           <p className="doc-muted">
-            当前从 1k–20k 词段分层抽样 100 个词族（每段 5 个），只需自评“认识 / 不认识”。
-            20k 是 Nation 对受教育成年母语者词汇量的粗略参照，不代表阅读或口语理解所需的最低词汇量。完成后系统会估计各词段掌握概率，用于初始化学习流利度与调整出题难度。
+            测评从低到高逐段抽样，每段最多 12 个词族；只需自评“认识 / 不认识”，可随时结束并结算已答结果。20k 是 Nation 对受教育成年母语者词汇量的粗略参照，不代表阅读或口语理解所需的最低词汇量。完成后系统会估计各词段掌握概率，用于初始化学习流利度与调整出题难度。
           </p>
           {learner?.currentVocabulary && (
             <p className="doc-muted">已完成过测评，重新测评会覆盖当前词汇估计。</p>

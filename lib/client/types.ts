@@ -48,6 +48,7 @@ export interface LearnerResponse {
         knownProbability: number;
         sampleCount: number;
         knownCount: number;
+        interval: { lower: number; upper: number; level: number } | null;
       }>;
       estimatedAt: string;
     } | null;
@@ -131,12 +132,25 @@ export interface AssessmentTask {
 export interface StartAssessmentResponse {
   assessmentId: string;
   tasks: AssessmentTask[];
+  cursor: number;
+  answered: number;
+  total: number;
+  currentBand: string | null;
+  bandAnswered: number;
+  bandTotal: number;
 }
 
 export interface SubmitAssessmentResponse {
   status: 'in_progress' | 'completed';
   answered?: number;
   total?: number;
+  assessmentId?: string;
+  tasks?: AssessmentTask[];
+  cursor?: number;
+  currentBand?: string | null;
+  bandAnswered?: number;
+  bandTotal?: number;
+  early?: boolean;
   result?: LearnerResponse['learner']['currentVocabulary'];
 }
 
