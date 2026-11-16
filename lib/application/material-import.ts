@@ -233,18 +233,7 @@ export async function importMaterialUseCase(
     // Import is deterministic: ambiguous lemmas are persisted as candidates and
     // never sent to the LLM until a user explicitly requests resolution.
     const resolved = await withDeadline(resolveSenseAssignments(terms, { ...deps, senseDisambiguator: undefined, signal: analysisAbort.signal }), remainingMs(), () => analysisAbort.abort());
-    const assignments: typeof resolved.assignments = [];
-    await progress('translating_meanings');
-    const confirmedAssignments = resolved.assignments.filter((assignment) => !assignment.senseId.startsWith('placeholder:'));
-    for (let index = 0; index < confirmedAssignments.length; index += 4) {
-      const batch = await withDeadline(Promise.all(confirmedAssignments.slice(index, index + 4).map(async assignment => ({
-        ...assignment,
-        chineseMeaning: assignment.senseId.startsWith('placeholder:') || !deps.translateSenseMeaning
-          ? null
-          : await deps.translateSenseMeaning(assignment.senseId, assignment.definition),
-      }))), remainingMs());
-      assignments.push(...batch);
-    }
+    const assignments = resolved.assignments.filter((assignment) => !assignment.senseId.startsWith('placeholder:'));
     analysis = analyzeMaterial({
       analysisId: input.analysisId,
       material,

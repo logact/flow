@@ -97,7 +97,7 @@
 ## 实施进度
 
 - 完成：场景一仓储选择已接入 `FLOW_STORAGE` / `FLOW_SQLITE_PATH`。运行时 smoke 验证：默认 memory 与 `FLOW_STORAGE=sqlite FLOW_SQLITE_PATH=/tmp/flow-loop5-runtime.sqlite` 均成功初始化种子；`FLOW_STORAGE=bogus` 清晰报错。
-- 完成：场景二实现本地候选生成、单义词确认、候选持久化和材料详情展示；导入不调用消歧 LLM 或发音词典。
+- 完成：场景二实现本地候选生成、单义词确认、候选持久化和材料详情展示；导入只做本地确定性处理，不调用消歧、释义翻译 LLM 或发音词典。释义可通过既有知识点释义补全 API 单独处理。
 - 完成：场景四发音状态与分析状态分离；知识点详情可独立重试，查询处理中/失败/成功均有持久化状态，材料导入不等待词典查询。
 - 验证记录：`test/material-import.jest.test.ts` 更新为 loop5 语义后 22 项通过；SQLite 仓储 25 项、目标加入材料 16 项通过；`npx tsc --noEmit --pretty false` 通过；`npx next build` 成功（存在 pdfjs-dist externalization 与动态文件访问警告）。
 - 场景二进展：SQLite 原先拒绝已完成分析的候选状态增量更新；仓储现允许分析身份/版本/完成时间不变的候选精化。仓储测试 25 项通过，SQLite 实际写入并重新加载 `processing` 候选成功。

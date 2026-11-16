@@ -153,15 +153,17 @@ describe('S04 导入并分析材料', () => {
       sourceUrl: 'https://api.dictionaryapi.dev/api/v2/entries/en/resilient',
       queriedAt: at.imported,
     };
+    const pronunciationLookup = jest.fn(async (lemma: string) => lemma === 'resilient' ? pronunciation : null);
     const result = await importMaterialUseCase({
       repository,
       logger: silentLogger,
       senseInventory: { lookup: (lemma) => lemma === 'resilient' ? [{ id: 'sense:resilient', pos: 'adjective', gloss: 'able to recover' }] : [] },
-      pronunciationLookup: async (lemma) => lemma === 'resilient' ? pronunciation : null,
+      pronunciationLookup,
     }, baseInput({ extractedText: 'A resilient team stays resilient.' }));
     const imported = expectOk(result);
     const resilient = imported.analysis.items.find((item) => item.knowledgePoint.kind === 'word' && item.knowledgePoint.lemma === 'resilient');
     expect(resilient?.knowledgePoint.pronunciation).toBeUndefined();
+    expect(pronunciationLookup).not.toHaveBeenCalled();
 
     const failed = await importMaterialUseCase({
       repository: setup().repository,
@@ -428,12 +430,14 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
         }));
       },
     };
+    const translateSenseMeaning = jest.fn(async () => '中文释义');
 
     const result = await importMaterialUseCase(
       {
         repository,
         senseInventory: fakeInventory({ deliberate: deliberateSenses }),
         senseDisambiguator: disambiguator,
+        translateSenseMeaning,
         logger: silentLogger,
       },
       baseInput({
@@ -447,6 +451,7 @@ describe('S04 词义消歧（词义库 + AI Provider）', () => {
     expect(analysis.candidates).toEqual([expect.objectContaining({ lemma: 'deliberate', candidates: deliberateSenses, status: 'pending' })]);
     expect(analysis.candidates?.[0].occurrences.map((occurrence) => occurrence.rawForm)).toEqual(['deliberate', 'deliberated']);
     expect(requests).toHaveLength(0);
+    expect(translateSenseMeaning).not.toHaveBeenCalled();
   });
 
   test('词义库未收录的 lemma 不生成知识点', async () => {
