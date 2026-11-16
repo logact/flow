@@ -31,6 +31,7 @@ export async function GET(request: Request) {
             errors: latest.status === 'failed' ? latest.errors : [],
             itemCount: latest.items.length,
             unmatchedCount: latest.unmatchedItems.length,
+            candidates: latest.status === 'analyzed' ? (latest.candidates ?? []).map(candidate => ({ lemma: candidate.lemma, status: candidate.status, occurrenceCount: candidate.occurrences.length })) : [],
             frequencyRank: latest.items.reduce((best, item) => {
               const classification = state.knowledgePointVocabularyClassifications.find(x => x.knowledgePointId === item.knowledgePoint.id && x.list.id === BNC_COCA_L6.id && x.list.version === BNC_COCA_L6.version);
               const family = runtime.vocabularyIndex.lookup(item.knowledgePoint.kind === 'word' || item.knowledgePoint.kind === 'phrase' ? item.knowledgePoint.lemma : '');
