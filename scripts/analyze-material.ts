@@ -24,6 +24,8 @@ const senseDisambiguator = createSenseDisambiguatorFromEnv(process.env, logger);
 
 let saved: { material: Material; analysis: AnalyzedMaterialAnalysis } | null = null;
 const repository = {
+  async saveMaterial() {},
+  async saveMaterialAnalysis() {},
   async saveMaterialWithAnalysis(material: Material, analysis: AnalyzedMaterialAnalysis) {
     saved = { material, analysis };
   },

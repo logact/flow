@@ -76,6 +76,15 @@ class InMemoryMaterialRepository implements MaterialRepository {
 
   constructor(private readonly state: Model.LearningState) {}
 
+  async saveMaterial(material: Model.Material): Promise<void> {
+    this.state.materials.push(material);
+  }
+
+  async saveMaterialAnalysis(materialId: string, analysis: Model.MaterialAnalysis): Promise<void> {
+    if (!this.state.materials.some((item) => item.id === materialId)) throw new Error('Material not found');
+    this.state.materialAnalyses.push(analysis);
+  }
+
   async saveMaterialWithAnalysis(
     material: Model.Material,
     analysis: AnalyzedMaterialAnalysis,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { importMaterialUseCase } from '@/lib/application/material-import';
+import { createHash } from 'node:crypto';
+import { createMaterial } from '@/lib/domain/functions';
+import { extractTextFromFile } from '@/lib/application/text-extraction';
 import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
 import { BNC_COCA_L6 } from '@/lib/server/vocabulary-list-repository';
 
@@ -45,10 +47,7 @@ export async function GET() {
   return NextResponse.json({ materials });
 }
 
-/**
- * 导入材料（S04）：JSON 提交 { filename?, title?, text } 或 { filename, base64 }。
- * 文本提取、术语提取、词义归属都在应用层完成；AI 消歧仅在配置了 LLM_API_KEY 时启用。
- */
+/** 保存材料原文并建立待分析记录；分析由用户后续显式触发。 */
 export async function POST(request: Request) {
   const runtime = getRuntime();
   await runtime.ready;
@@ -63,54 +62,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ reason: 'invalid_input', message: '需要 text 或 base64 内容' }, { status: 400 });
   }
 
-  const result = await importMaterialUseCase(
-    {
-      repository: runtime.repository,
-      senseInventory: runtime.senseInventory,
-      senseDisambiguator: runtime.llmConfigured ? runtime.senseDisambiguator : undefined,
-      vocabularyFilter: runtime.vocabularyFilter,
-    },
-    {
-      materialId: crypto.randomUUID(),
-      analysisId: crypto.randomUUID(),
-      learnerId: learner.id,
-      title: body.title?.trim() || undefined,
-      filename: body.filename?.trim() || 'pasted-material.txt',
-      extractedText: body.text,
-      rawFile: body.base64 ? new Uint8Array(Buffer.from(body.base64, 'base64')) : undefined,
-      analyzerVersion: 'web-v1',
-      now: new Date().toISOString(),
-    },
-  );
-
-  if (!result.ok) {
-    return NextResponse.json({ reason: result.reason }, { status: 400 });
-  }
+  const filename=body.filename?.trim()||'pasted-material.txt'; const format=filename.toLowerCase().endsWith('.pdf')?'pdf':filename.toLowerCase().endsWith('.md')?'markdown':'txt';
+  const rawFile=body.base64?new Uint8Array(Buffer.from(body.base64,'base64')):undefined;
+  let extractedText=body.text??''; let extractionMetadata:Record<string,unknown>={extractor:'provided'}; if(rawFile){try{const extracted=await extractTextFromFile(format,rawFile);extractedText=extracted.text;extractionMetadata=extracted.metadata;}catch{return NextResponse.json({reason:'extraction_failed'}, {status:400});}}
+  if(!extractedText.trim())return NextResponse.json({reason:'invalid_input'}, {status:400});
+  const now=new Date().toISOString(), id=crypto.randomUUID();
+  const material=createMaterial({id,learnerId:learner.id,title:body.title?.trim()||filename.replace(/\.[^.]+$/,''),filename,format,mimeType:format==='pdf'?'application/pdf':format==='markdown'?'text/markdown':'text/plain',checksum:createHash('sha256').update(rawFile??Buffer.from(extractedText)).digest('hex'),storageKey:null,extractedText,extractionMetadata,now});
+  await runtime.repository.saveMaterial(material);
+  await runtime.repository.saveMaterialAnalysis(id,{id:crypto.randomUUID(),materialId:id,analyzerVersion:'web-v1',createdAt:now,status:'pending',items:[],unmatchedItems:[],errors:[],completedAt:null});
   return NextResponse.json({
     material: {
-      id: result.material.id,
-      title: result.material.title,
-      filename: result.material.filename,
-      format: result.material.format,
+      id: material.id,
+      title: material.title,
+      filename: material.filename,
+      format: material.format,
     },
-    analysis: {
-      id: result.analysis.id,
-      itemCount: result.analysis.items.length,
-      unmatchedCount: result.analysis.unmatchedItems.length,
-      items: result.analysis.items.map((item) => ({
-        knowledgePointId: item.knowledgePoint.id,
-        lemma: item.knowledgePoint.kind === 'word' || item.knowledgePoint.kind === 'phrase'
-          ? item.knowledgePoint.lemma
-          : item.knowledgePoint.sense.definition,
-        definition: item.knowledgePoint.sense.definition,
-        partOfSpeech: item.knowledgePoint.sense.partOfSpeech,
-        occurrenceCount: item.occurrences.length,
-      })),
-      unmatched: result.analysis.unmatchedItems.map((item) => ({
-        lemma: item.lemma ?? null,
-        reason: item.reason,
-        occurrenceCount: item.occurrences.length,
-      })),
-    },
+    analysis: {id: null,status:'pending',itemCount:0,unmatchedCount:0},
   });
 }

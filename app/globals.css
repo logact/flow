@@ -71,6 +71,7 @@ button:disabled { cursor: default; }
 .example-block p { margin: 6px 0 0; color: rgba(255,255,255,.9); font-family: Georgia, serif; font-size: 13px; line-height: 1.6; }
 .example-block mark { padding: 0; background: transparent; color: var(--cyan); }
 .example-block .example-translation { margin-top: 5px; color: rgba(255,255,255,.5); font-family: 'Noto Sans SC', sans-serif; font-size: 9px; }
+.sense-chinese-meaning { margin-top: 6px; color: rgba(255,255,255,.68); font-family: 'Noto Sans SC', sans-serif; font-size: 12px; }
 
 .choice-card { background: radial-gradient(circle at 90% 12%, rgba(167,114,255,.27), transparent 37%), radial-gradient(circle at 0 58%, rgba(70,44,114,.4), transparent 43%), linear-gradient(150deg, #21182d, #121019 70%); }
 .question-heading { margin: clamp(35px, 6vh, 53px) 0 25px; text-align: center; }
@@ -229,6 +230,11 @@ select.doc-input { appearance: none; }
 .doc-list li:last-child { border-bottom: 0; }
 .doc-list em { color: rgba(255,255,255,.5); font-size: 10px; }
 .doc-list-link { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 0; border: 0; background: none; color: #fff; text-align: left; }
+.goal-management-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.goal-management-card { min-width: 0; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.025); }
+.goal-management-card .doc-list-link strong { overflow-wrap: anywhere; font-size: 13px; }
+.goal-open-action { margin-top: 8px; }
+@media (min-width: 480px) { .goal-management-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .doc-tag { display: inline-block; margin: 0 5px; padding: 1px 6px; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; color: rgba(255,255,255,.6); font-size: 9px; }
 .doc-table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 11px; }
 .doc-table th, .doc-table td { padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
@@ -252,6 +258,12 @@ select.doc-input { appearance: none; }
 .status-body .primary-button { margin-left: 0; align-self: flex-start; }
 .status-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .status-actions .primary-button { margin-left: 0; }
+
+.correct-celebration { position: fixed; z-index: 100; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: radial-gradient(circle at center, rgba(37,244,238,.25), rgba(10,12,16,.94) 68%); color: #fff; pointer-events: none; animation: correct-celebration-in .24s ease-out both; }
+.correct-celebration > span:first-child { font-size: clamp(64px, 18vw, 120px); animation: celebrate-burst .9s ease-out both; }
+.correct-celebration strong { font-size: clamp(30px, 8vw, 48px); letter-spacing: .08em; text-shadow: 0 0 24px rgba(37,244,238,.65); }
+.celebration-confetti { color: #ffe17a; font-size: clamp(20px, 6vw, 34px); animation: celebrate-burst 1.4s ease-out both; }
+@keyframes correct-celebration-in { from { opacity: 0; } to { opacity: 1; } }
 
 .review-badge.visible { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 9px; }
 

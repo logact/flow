@@ -144,6 +144,8 @@ export class SqliteLearningStateRepository implements LearningStateRepository, M
     const extracted=analysis.items.map(item=>item.knowledgePoint);
     this.save({...state,materials:upsert(state.materials,[material],x=>x.id),knowledgePoints:upsert(state.knowledgePoints,extracted,x=>x.id),materialAnalyses:upsert(state.materialAnalyses,[analysis],x=>x.id)},revision);
   }
+  async saveMaterial(material:LearningState['materials'][number]):Promise<void>{const {state,revision}=this.load();this.save({...state,materials:upsert(state.materials,[material],x=>x.id)},revision);}
+  async saveMaterialAnalysis(materialId:string,analysis:LearningState['materialAnalyses'][number]):Promise<void>{const {state,revision}=this.load();if(!state.materials.some(x=>x.id===materialId))throw new Error('Material not found');this.save({...state,materialAnalyses:upsert(state.materialAnalyses,[analysis],x=>x.id)},revision);}
   async loadLearner(id:string){return this.load().state.learners.find(x=>x.id===id)??null;}
   async loadGoal(id:string){return this.load().state.goals.find(x=>x.id===id)??null;}
   async loadMaterial(id:string){return this.load().state.materials.find(x=>x.id===id)??null;}

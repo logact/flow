@@ -6,6 +6,7 @@ interface FamilyRecord {
   band?: unknown;
   members?: unknown;
   totalFrequency?: unknown;
+  memberFrequencies?: unknown;
 }
 
 /**
@@ -15,18 +16,26 @@ interface FamilyRecord {
 export function loadVocabularyIndexFromFile(path: string): VocabularyIndex {
   const raw: { families?: FamilyRecord[] } = JSON.parse(readFileSync(path, 'utf8'));
   const entries = new Map<string, VocabularyFamily>();
+  const wordFrequencies = new Map<string, number>();
   for (const family of raw.families ?? []) {
     const info: VocabularyFamily = {
       band: String(family.band),
       totalFrequency: Number(family.totalFrequency) || 0,
     };
     entries.set(String(family.headword).toLocaleLowerCase('en'), info);
+    const headwordFrequency = family.memberFrequencies && typeof family.memberFrequencies === 'object'
+      ? Number((family.memberFrequencies as Record<string, unknown>)[String(family.headword)]) : NaN;
+    if (Number.isFinite(headwordFrequency)) wordFrequencies.set(String(family.headword).toLocaleLowerCase('en'), headwordFrequency);
     for (const member of Array.isArray(family.members) ? family.members : []) {
       entries.set(String(member).toLocaleLowerCase('en'), info);
+      const frequency = family.memberFrequencies && typeof family.memberFrequencies === 'object'
+        ? Number((family.memberFrequencies as Record<string, unknown>)[String(member)]) : NaN;
+      if (Number.isFinite(frequency)) wordFrequencies.set(String(member).toLocaleLowerCase('en'), frequency);
     }
   }
   return {
     lookup: (lemma) => entries.get(lemma.toLocaleLowerCase('en')) ?? null,
+    wordFrequency: (lemma) => wordFrequencies.get(lemma.toLocaleLowerCase('en')) ?? null,
   };
 }
 

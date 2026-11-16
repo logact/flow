@@ -55,6 +55,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       const material = state.materials.find((item) => item.id === link.materialId);
       return { materialId: link.materialId, title: material?.title ?? link.materialId, analysisId: link.analysisId };
     });
+  const selected = candidates.filter((item) => item.selection === 'included');
+  const completedCount = selected.filter((item) => item.learning?.graduated.R && item.learning?.graduated.P).length;
+  const initialized = selected.filter((item) => item.learning !== null);
+  const averageFluency = initialized.length ? {
+    R: initialized.reduce((sum, item) => sum + item.learning!.fluency.R, 0) / initialized.length,
+    P: initialized.reduce((sum, item) => sum + item.learning!.fluency.P, 0) / initialized.length,
+  } : null;
   const learner = state.learners.find((item) => item.id === goal.learnerId);
   return NextResponse.json({
     goal: {
@@ -66,5 +73,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     assessmentCompleted: Boolean(learner?.currentVocabulary),
     materials,
     candidates,
+    progress: {
+      selectedCount: selected.length,
+      completedCount,
+      inProgressCount: initialized.filter((item) => !(item.learning!.graduated.R && item.learning!.graduated.P)).length,
+      uninitializedCount: selected.length - initialized.length,
+      completionRate: selected.length ? completedCount / selected.length : null,
+      averageFluency,
+    },
   });
 }

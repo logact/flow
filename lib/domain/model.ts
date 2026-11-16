@@ -109,6 +109,8 @@ export interface KnowledgePointSense {
   id: string;
   /** 当前词义或用法的释义。 */
   definition: string;
+  /** 按义项保存的中文释义；旧数据或翻译不可用时为空。 */
+  chineseMeaning?: string | null;
   /** 当前词义的词性；无法确定或不适用时为空。 */
   partOfSpeech: string | null;
   /** 对用法、语境或词义区别的补充说明；没有时为空。 */
@@ -459,6 +461,8 @@ export interface EncodeTaskContent {
   partOfSpeech?: string;
   /** 目标词义。 */
   definition: string;
+  /** 当前知识点 sense 的已保存中文释义；旧任务或缺失释义时为空。 */
+  chineseMeaning?: string | null;
   /** 帮助建立词形与词义连接的例句。 */
   examples: TaskExample[];
   /** 展示给学习者的操作说明。 */

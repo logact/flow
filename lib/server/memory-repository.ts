@@ -61,6 +61,17 @@ export class InMemoryAppRepository implements
     );
   }
 
+  async saveMaterial(material: Model.Material): Promise<void> {
+    const state = this.snapshot.state;
+    this.save({ ...state, materials: [...state.materials.filter(x => x.id !== material.id), material] }, this.snapshot.revision);
+  }
+
+  async saveMaterialAnalysis(materialId: string, analysis: Model.MaterialAnalysis): Promise<void> {
+    const state = this.snapshot.state;
+    if (!state.materials.some(x => x.id === materialId)) throw new Error('Material not found');
+    this.save({ ...state, materialAnalyses: [...state.materialAnalyses.filter(x => x.id !== analysis.id), analysis] }, this.snapshot.revision);
+  }
+
   async loadLearner(learnerId: string): Promise<Model.Learner | null> {
     return this.snapshot.state.learners.find((item) => item.id === learnerId) ?? null;
   }

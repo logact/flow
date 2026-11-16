@@ -110,6 +110,7 @@ export interface VocabularyFamily {
  */
 export interface VocabularyIndex {
   lookup(lemma: string): VocabularyFamily | null;
+  wordFrequency?(lemma: string): number | null;
 }
 
 /**
@@ -117,6 +118,8 @@ export interface VocabularyIndex {
  * 材料与分析必须在同一次写入中一起保存：要么全部保存，要么全部不保存。
  */
 export interface MaterialRepository {
+  saveMaterial(material: Material): Promise<void>;
+  saveMaterialAnalysis(materialId: string, analysis: MaterialAnalysis): Promise<void>;
   saveMaterialWithAnalysis(
     material: Material,
     analysis: AnalyzedMaterialAnalysis,

@@ -136,6 +136,8 @@ describe('材料解析黄金标准（known-words.pdf）', () => {
   test('完整 S04 链路：lemma 归并与计数和人工核对词表零偏差', async () => {
     const saves: Array<{ material: unknown; analysis: AnalyzedMaterialAnalysis }> = [];
     const repository: MaterialRepository = {
+      async saveMaterial() {},
+      async saveMaterialAnalysis() {},
       async saveMaterialWithAnalysis(material, analysis) {
         saves.push({ material, analysis });
       },

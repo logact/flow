@@ -132,6 +132,22 @@ export default function GoalDetailPage({ params }: { params: Promise<{ id: strin
             )}
           </section>
 
+          <section className="doc-card" aria-labelledby="goal-progress-title">
+            <h2 id="goal-progress-title">学习进度</h2>
+            {detail.progress.selectedCount === 0 ? (
+              <p className="doc-muted">还没有选择学习的知识点。请在下方选择知识点开始学习。</p>
+            ) : (
+              <>
+                <p><strong>{detail.progress.completionRate === null ? '待初始化' : `${Math.round(detail.progress.completionRate * 100)}%`}</strong> · 已完成 {detail.progress.completedCount} / 共 {detail.progress.selectedCount} 个知识点</p>
+                {detail.progress.completionRate !== null && <progress aria-label={`目标知识点掌握进度 ${Math.round(detail.progress.completionRate * 100)}%`} value={detail.progress.completionRate} max={1} />}
+                <p className="doc-muted">已完成 {detail.progress.completedCount} · 进行中 {detail.progress.inProgressCount} · 待学习 {detail.progress.uninitializedCount}</p>
+                <p className="doc-muted">当前平均 R/P：{detail.progress.averageFluency ? `R ${detail.progress.averageFluency.R.toFixed(2)} / P ${detail.progress.averageFluency.P.toFixed(2)}` : '待初始化'} · 目标 R/P：R {detail.goal.targetFluency.R} / P {detail.goal.targetFluency.P}</p>
+                {detail.progress.completedCount === detail.progress.selectedCount ? <p>目标知识点已全部达成。</p> : <p>还有知识点待完成，可开始学习。</p>}
+                <p className="doc-muted">此进度表示知识点掌握情况，不代表每日任务完成率。</p>
+              </>
+            )}
+          </section>
+
           <section className="doc-card">
             <h2>候选知识点</h2>
             <p className="doc-muted">选择要学习的词；保存后新选中的词会初始化 R/P 流利度并进入每日排期。</p>

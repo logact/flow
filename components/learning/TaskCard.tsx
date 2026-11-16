@@ -121,6 +121,7 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
         <div className="meaning-block">
           {content.partOfSpeech && <span className="part-of-speech">{content.partOfSpeech}</span>}
           <p>{content.definition}</p>
+          <p className="sense-chinese-meaning" aria-label="当前词义的中文释义">中文释义：{content.chineseMeaning?.trim() || '暂缺'}</p>
         </div>
         {content.examples.length > 0 && (
           <div className="example-block">

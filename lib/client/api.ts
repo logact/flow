@@ -5,6 +5,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly reason: string | null,
     message: string,
+    readonly payload: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -25,6 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       response.status,
       payload?.reason ?? null,
       payload?.message ?? `请求失败（HTTP ${response.status}）`,
+      payload,
     );
   }
   return payload as T;

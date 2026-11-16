@@ -1,8 +1,10 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { createTaskAIJudgeFromEnv, type TaskAIJudge } from '../application/ai-judge';
 import { addMaterialToGoalUseCase } from '../application/goal-material';
 import { createLearnerUseCase } from '../application/learner-settings';
 import { importMaterialUseCase } from '../application/material-import';
+import { createSenseMeaningTranslator } from '../application/sense-meaning-translation';
 import { createOpenAITaskGenerationProvider } from '../application/openai-task-provider';
 import type {
   SenseDisambiguator,
@@ -15,12 +17,12 @@ import { createSenseDisambiguatorFromEnv } from '../application/sense-disambigua
 import type { VocabularyListRepository } from '../application/vocabulary-assessment';
 import { createVocabularyDecisionFilter, loadVocabularyIndexFromFile } from '../application/vocabulary-index';
 import type { Learner } from '../domain/model';
-import { InMemoryAppRepository, emptyLearningState } from './memory-repository';
+import { SqliteLearningStateRepository } from './sqlite/repository';
+import { openSqliteDatabase } from './sqlite/database';
 import { BNC_COCA_L6, createFileVocabularyListRepository } from './vocabulary-list-repository';
 
 /**
- * 服务端运行时单例：进程内内存仓库 + 基础设施端口 + 幂等演示种子数据。
- * 重启后状态重置；切换 SQLite 持久化时替换 repository 实现即可（见 lib/server/sqlite）。
+ * 服务端运行时单例：SQLite 持久化仓储 + 基础设施端口 + 幂等演示种子数据。
  */
 
 export const DEMO_LEARNER_ID = 'demo-learner';
@@ -36,13 +38,14 @@ const SEED_MATERIAL_TEXT = [
 ].join('\n');
 
 export interface FlowRuntime {
-  repository: InMemoryAppRepository;
+  repository: SqliteLearningStateRepository;
   senseInventory: SenseInventory;
   vocabularyIndex: VocabularyIndex;
   vocabularyListRepository: VocabularyListRepository;
   vocabularyFilter: ReturnType<typeof createVocabularyDecisionFilter>;
   taskGenerationProvider: TaskGenerationAIProvider;
   senseDisambiguator: SenseDisambiguator;
+  translateSenseMeaning: ReturnType<typeof createSenseMeaningTranslator>;
   aiJudge: TaskAIJudge;
   /** 是否配置了 LLM_API_KEY；未配置时任务生成与 AI 评判不可用。 */
   llmConfigured: boolean;
@@ -60,14 +63,18 @@ function createRuntime(): FlowRuntime {
     path.join(process.cwd(), 'data', 'bnc-coca-l6-v2.0.0.json'),
   );
   const llmConfigured = Boolean(process.env.LLM_API_KEY);
+  const databasePath = path.resolve(/*turbopackIgnore: true*/ process.env.FLOW_DATABASE_PATH ?? path.join(process.cwd(), '.flow', 'flow.sqlite'));
+  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+  const { connection } = openSqliteDatabase(databasePath);
   const runtime: FlowRuntime = {
-    repository: new InMemoryAppRepository(emptyLearningState()),
+    repository: new SqliteLearningStateRepository(connection),
     senseInventory,
     vocabularyIndex,
     vocabularyListRepository: createFileVocabularyListRepository(),
     vocabularyFilter: createVocabularyDecisionFilter(vocabularyIndex),
     taskGenerationProvider: createOpenAITaskGenerationProvider(),
     senseDisambiguator: createSenseDisambiguatorFromEnv(),
+    translateSenseMeaning: createSenseMeaningTranslator(),
     aiJudge: createTaskAIJudgeFromEnv(),
     llmConfigured,
     ready: Promise.resolve(),

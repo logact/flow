@@ -5,44 +5,86 @@ import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
 
 export const dynamic = 'force-dynamic';
 
+const recentRequests = new Map<string, { expiresAt: number; promise: Promise<unknown> }>();
+function conflictsFor(runtime: ReturnType<typeof getRuntime>, materialIds: string[]) {
+  const state = runtime.repository.load().state;
+  return materialIds.flatMap(materialId => {
+    const material = state.materials.find(item => item.id === materialId);
+    const goals = state.goalMaterials.filter(link => link.materialId === materialId).map(link => state.goals.find(goal => goal.id === link.goalId)).filter(Boolean);
+    return goals.length ? [{ materialId, materialTitle: material?.title ?? materialId, goals: goals.map(goal => ({ id: goal!.id, title: goal!.title })) }] : [];
+  });
+}
+export async function GET(request: Request) {
+  const runtime = getRuntime(); await runtime.ready;
+  const ids = new URL(request.url).searchParams.getAll('materialId');
+  return NextResponse.json({ conflicts: conflictsFor(runtime, ids) });
+}
+
 /** 创建目标的 S05/S06 编排入口，支持多材料并以稳定 goalId 安全重试。 */
 export async function POST(request: Request) {
   const runtime = getRuntime();
   await runtime.ready;
   const learner = await getDemoLearner();
   const body = (await request.json().catch(() => null)) as {
-    goalId?: string;
+    requestId?: string;
+    confirmedMaterialConflicts?: boolean;
     title?: string;
     targetFluency?: FluencyScores;
     materials?: Array<{ materialId: string; analysisId: string }>;
     selections?: Array<{ knowledgePointId: string; selection: GoalKnowledgePointSelection }>;
   } | null;
-  if (!body || typeof body.goalId !== 'string' || !body.goalId.trim()
+  if (!body || typeof body.requestId !== 'string' || !body.requestId.trim()
     || typeof body.title !== 'string' || !body.title.trim()
     || !body.targetFluency || !Array.isArray(body.materials)
     || !Array.isArray(body.selections)) {
     return NextResponse.json({ reason: 'invalid_input' }, { status: 400 });
   }
 
+  const validBody = body as {
+    requestId: string; confirmedMaterialConflicts?: boolean; title: string;
+    targetFluency: FluencyScores; materials: Array<{materialId:string;analysisId:string}>;
+    selections: Array<{knowledgePointId:string;selection:GoalKnowledgePointSelection}>;
+  };
+
+  for (const [key, value] of recentRequests) if (value.expiresAt < Date.now()) recentRequests.delete(key);
+  const requestKey = `${learner.id}:${validBody.requestId}`;
+  const previous = recentRequests.get(requestKey);
+  if (previous) {
+    const cached = await previous.promise;
+    if (typeof cached === 'object' && cached !== null && 'status' in cached) {
+      const failure = cached as { reason: string; status: number };
+      return NextResponse.json({ reason: failure.reason }, { status: failure.status });
+    }
+    return NextResponse.json(cached);
+  }
+  const conflicts = conflictsFor(runtime, validBody.materials.map(item => item.materialId));
+  if (conflicts.length && validBody.confirmedMaterialConflicts !== true) return NextResponse.json({ reason: 'material_conflicts', conflicts }, { status: 409 });
+
+  const promise = (async () => {
   const result = await createGoalFromMaterialsUseCase(
     { repository: runtime.repository, vocabularyIndex: runtime.vocabularyIndex },
     {
-      goalId: body.goalId.trim(),
+      goalId: crypto.randomUUID(),
       learnerId: learner.id,
-      title: body.title.trim(),
-      targetFluency: body.targetFluency,
-      materials: body.materials,
-      selections: body.selections,
+      title: validBody.title.trim(),
+      targetFluency: validBody.targetFluency,
+      materials: validBody.materials,
+      selections: validBody.selections,
       now: new Date().toISOString(),
     },
   );
   if (!result.ok) {
     const status = result.reason === 'learner_not_found' ? 404 : 400;
-    return NextResponse.json({ reason: result.reason }, { status });
+    return { reason: result.reason, status };
   }
-  return NextResponse.json({
+  return {
     goal: result.goal,
     candidateCount: result.candidateCount,
     initializedCount: result.initializedCount,
-  });
+  };
+  })();
+  recentRequests.set(requestKey, { expiresAt: Date.now() + 10 * 60_000, promise });
+  const result = await promise;
+  if ('status' in result) return NextResponse.json({ reason: result.reason }, { status: result.status });
+  return NextResponse.json(result);
 }

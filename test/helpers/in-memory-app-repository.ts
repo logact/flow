@@ -69,6 +69,17 @@ export class InMemoryAppRepository implements
 
   // ── S04 材料导入 ──────────────────────────────────────────────
 
+  async saveMaterial(material: Model.Material): Promise<void> {
+    const state = this.snapshot.state;
+    this.save({ ...state, materials: [...state.materials, material] }, this.snapshot.revision);
+  }
+
+  async saveMaterialAnalysis(materialId: string, analysis: Model.MaterialAnalysis): Promise<void> {
+    const state = this.snapshot.state;
+    if (!state.materials.some((item) => item.id === materialId)) throw new Error('Material not found');
+    this.save({ ...state, materialAnalyses: [...state.materialAnalyses, analysis] }, this.snapshot.revision);
+  }
+
   async saveMaterialWithAnalysis(
     material: Model.Material,
     analysis: Extract<Model.MaterialAnalysis, { status: 'analyzed' }>,

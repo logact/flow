@@ -132,11 +132,15 @@ export async function generateLearningTaskUseCase(
       continue;
     }
 
+    const generated = parsed as GeneratedTask;
+    if (generated.task === 'ENCODE' && context.knowledgePoint.sense.chineseMeaning) {
+      generated.content.chineseMeaning = context.knowledgePoint.sense.chineseMeaning;
+    }
     const learningTask = createLearningTask({
       id: input.taskId,
       learnerId: input.learnerId,
       specification: input.specification,
-      generated: parsed as GeneratedTask,
+      generated,
       issuedAt: input.issuedAt,
     });
     logger.info({

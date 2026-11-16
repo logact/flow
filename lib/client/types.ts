@@ -104,6 +104,7 @@ export interface GoalDetailResponse {
   goal: { id: string; title: string; status: string; targetFluency: { R: number; P: number } };
   assessmentCompleted: boolean;
   materials: Array<{ materialId: string; title: string; analysisId: string | null }>;
+  progress: { selectedCount: number; completedCount: number; inProgressCount: number; uninitializedCount: number; completionRate: number | null; averageFluency: { R: number; P: number } | null };
   candidates: Array<{
     knowledgePointId: string;
     name: string;

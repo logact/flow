@@ -433,6 +433,7 @@ export interface TermSenseAssignment {
   partOfSpeech: string | null;
   /** 义项释义。 */
   definition: string;
+  chineseMeaning?: string | null;
   /** 归入该义项的原始出现记录。 */
   occurrences: Occurrence[];
 }
@@ -499,6 +500,7 @@ export function analyzeMaterial(
           sense: {
             id: assignment.senseId,
             definition: assignment.definition,
+            ...(assignment.chineseMeaning ? { chineseMeaning: assignment.chineseMeaning } : {}),
             partOfSpeech: assignment.partOfSpeech,
             explanation: null,
           },
@@ -818,6 +820,7 @@ export function generateLearningTask(input: GenerateLearningTaskInput): Generate
           ? { partOfSpeech: input.knowledgePoint.sense.partOfSpeech }
           : {}),
         definition,
+        ...(input.knowledgePoint.sense.chineseMeaning ? { chineseMeaning: input.knowledgePoint.sense.chineseMeaning } : {}),
         examples: (examples.length ? examples : [`Use ${target} in a sentence.`])
           .map((sentence) => ({ sentence })),
         instruction: 'Read the word, meaning, and examples, then confirm when you are ready.',

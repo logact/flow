@@ -26,6 +26,8 @@ export default function LearningFeedPage() {
   const feedRef = useRef<HTMLElement>(null);
   const [tasks, setTasks] = useState<Array<LearningTaskView & {sources?:Array<{id:string;title:string}>}> | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
   const [planDate, setPlanDate] = useState<string | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [results, setResults] = useState<Record<string, AttemptResponse>>({});
@@ -43,6 +45,7 @@ export default function LearningFeedPage() {
   }, []);
 
   const loadPlan = useCallback(async () => {
+    setPlanLoading(true);
     setTasks(null);
     setPlanError(null);
     try {
@@ -55,6 +58,8 @@ export default function LearningFeedPage() {
         (reason && PLAN_REASON_TEXT[reason])
         ?? (error instanceof ApiError ? error.message : '计划加载失败，请重试。'),
       );
+    } finally {
+      setPlanLoading(false);
     }
   }, []);
 
@@ -115,9 +120,14 @@ export default function LearningFeedPage() {
         return [...marked, ...merged.filter((item) => !known.has(item.id))];
       });
       const index = visibleTasks.findIndex((item) => item.id === task.id);
-      const dimension = task.content.task === 'RETRIEVE' ? result.judgement?.dimensions?.[task.content.content.axis] : undefined;
+      const axis = task.content.task === 'RETRIEVE' || task.content.task === 'FLUENCY' ? task.content.content.axis : null;
+      const dimension = axis ? result.judgement?.dimensions?.[axis] : undefined;
       const celebrated = dimension?.outcome === 'correct';
-      if (index >= 0) window.setTimeout(() => goToSlide(index + 1), celebrated ? 2600 : 250);
+      if (celebrated) {
+        setCelebrating(true);
+        window.setTimeout(() => setCelebrating(false), 2400);
+      }
+      if (index >= 0) window.setTimeout(() => goToSlide(index + 1), celebrated ? 2500 : 250);
     } catch (error) {
       notify(error instanceof ApiError ? `提交失败：${error.message}` : '提交失败，请重试。');
     } finally {
@@ -170,7 +180,7 @@ export default function LearningFeedPage() {
                   <span className="word-kicker">PLAN UNAVAILABLE</span>
                   <h1>计划加载失败</h1>
                   <p>{planError}</p>
-                  <button className="primary-button" onClick={() => void loadPlan()}>重试</button>
+                  <button className="primary-button" disabled={planLoading} onClick={() => void loadPlan()}>{planLoading ? '正在重试…' : '重试加载'}</button>
                 </div>
               </article>
             </div>
@@ -195,7 +205,7 @@ export default function LearningFeedPage() {
           </section>
         ))}
 
-        <section className="feed-slide">
+        {tasks !== null && !planError && <section className="feed-slide">
           <div className="slide-inner">
             <article className="learning-card status-card">
               <div className="card-body status-body">
@@ -213,11 +223,10 @@ export default function LearningFeedPage() {
                 ) : (
                   <>
                     <h1>今日还没有<br />学习任务</h1>
-                    <p>{!assessmentDone ? '先完成词汇测评，Flow 会据此安排适合你的学习内容。' : goals.filter(g=>g.status==='active').length === 0 ? '创建一个学习目标，再加入材料和知识点。' : (()=>{const goal=selectedGoal?goals.find(g=>g.id===selectedGoal&&g.status==='active'):goals.find(g=>g.status==='active');const state=goal?goalState[goal.id]:null;if(!goal)return '创建一个正在学习的目标，开始你的学习计划。';if(!state)return '正在检查目标的学习内容…';if(state.candidates===0)return '为目标补充材料，导入后即可选择学习内容。';if(state.ready===0)return state.included===0?'选择要学习的知识点，开始今日学习。':'先完成词汇测评，再初始化知识点学习状态。';return '当前目标暂时没有到期任务，可以刷新计划或查看目标学习进度。';})()}</p>
+                    <p>{!assessmentDone ? '先完成词汇测评，Flow 会据此安排适合你的学习内容。' : goals.filter(g=>g.status==='active').length === 0 ? '创建一个学习目标，再加入材料和知识点。' : (()=>{const goal=selectedGoal?goals.find(g=>g.id===selectedGoal&&g.status==='active'):goals.find(g=>g.status==='active');const state=goal?goalState[goal.id]:null;if(!goal)return '创建一个正在学习的目标，开始你的学习计划。';if(!state)return '正在检查目标的学习内容…';if(state.candidates===0)return '为目标补充材料，导入后即可选择学习内容。';if(state.ready===0)return state.included===0?'选择要学习的知识点，开始今日学习。':'先完成词汇测评，再初始化知识点学习状态。';return '当前目标暂时没有到期任务，可以查看目标学习进度。';})()}</p>
                   </>
                 )}
                 <div className="status-actions">
-                  <button className="primary-button" onClick={() => void loadPlan()}>刷新计划</button>
                   {pendingCount > 0 && <button className="text-button" onClick={() => goToSlide(firstPendingIndex)}>继续学习</button>}
                   {pendingCount === 0 && !assessmentDone && <button className="text-button" onClick={() => router.push('/setup')}>开始词汇测评</button>}
                   {pendingCount === 0 && assessmentDone && (selectedGoal && goalState[selectedGoal]?.ready ? <button className="text-button" onClick={()=>router.push(`/?goal=${selectedGoal}`)}>开始学习</button> : <button className="text-button" onClick={() => selectedGoal ? router.push(`/goals/${selectedGoal}`) : router.push('/goals')}>{goals.some(g=>g.status==='active') ? '目标与材料' : '创建目标'}</button>)}
@@ -225,12 +234,14 @@ export default function LearningFeedPage() {
               </div>
             </article>
           </div>
-        </section>
+        </section>}
       </main>
 
       <div className="video-progress" aria-hidden="true">
         <i style={{ width: `${((activeSlide + 1) / slideCount) * 100}%` }} />
       </div>
+
+      {celebrating && <div className="correct-celebration" role="status" aria-live="assertive"><span aria-hidden="true">🎉</span><strong>答对了！</strong><span className="celebration-confetti" aria-hidden="true">✦　✨　🎊　✦　✨</span></div>}
 
       <nav className="bottom-nav" aria-label="主导航">
         <button className="nav-item active">首页</button>

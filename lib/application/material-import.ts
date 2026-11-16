@@ -99,6 +99,8 @@ export async function importMaterialUseCase(
     repository: MaterialRepository;
     senseInventory?: SenseInventory;
     senseDisambiguator?: SenseDisambiguator;
+    /** Optional sense-specific translation provider; absent/failure leaves explicit null. */
+    translateSenseMeaning?: (senseId: string, definition: string) => Promise<string | null>;
     logger?: AppLogger;
     /**
      * 词表过滤谓词：false/{keep:false} 表示不值得学习，不生成知识点（但记入 unmatchedItems）；
@@ -196,14 +198,24 @@ export async function importMaterialUseCase(
   let analysis: AnalyzedMaterialAnalysis;
   try {
     const terms = extractMaterialTerms(material);
-    const { assignments, excluded } = await resolveSenseAssignments(terms, deps);
+    const resolved = await resolveSenseAssignments(terms, deps);
+    const assignments: typeof resolved.assignments = [];
+    for (let index = 0; index < resolved.assignments.length; index += 4) {
+      const batch = await Promise.all(resolved.assignments.slice(index, index + 4).map(async assignment => ({
+        ...assignment,
+        chineseMeaning: assignment.senseId.startsWith('placeholder:') || !deps.translateSenseMeaning
+          ? null
+          : await deps.translateSenseMeaning(assignment.senseId, assignment.definition),
+      })));
+      assignments.push(...batch);
+    }
     analysis = analyzeMaterial({
       analysisId: input.analysisId,
       material,
       analyzerVersion: input.analyzerVersion,
       now: input.now,
       assignments,
-      excludedTerms: excluded,
+      excludedTerms: resolved.excluded,
     });
   } catch (error) {
     logger.warn(
