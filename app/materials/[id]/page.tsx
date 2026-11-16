@@ -1,9 +1,91 @@
 'use client';
+
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiGet, apiPost, ApiError } from '@/lib/client/api';
 import { PageShell } from '@/components/PageShell';
-import { isMaterialAnalysisStale, materialAnalysisStatusLabel } from '@/lib/domain/material-analysis-status';
-type Item={knowledgePointId:string;lemma:string;definition:string;partOfSpeech:string|null;occurrenceCount:number};
-type Detail={material:{id:string;title:string;filename:string;format:string;createdAt:string};analysis:{id:string;status:'pending'|'analyzed'|'failed';createdAt:string;errors:string[];items:Item[]}|null};
-export default function MaterialDetailPage(){const {id}=useParams<{id:string}>();const [data,setData]=useState<Detail|null>(null);const [error,setError]=useState('');const [loading,setLoading]=useState(true);const [working,setWorking]=useState(false);const [query,setQuery]=useState('');const [sort,setSort]=useState<'frequency'|'name'>('frequency');const load=useCallback(async()=>{try{setData(await apiGet<Detail>(`/api/materials/${id}`));setError('')}catch(e){setError(e instanceof ApiError?e.message:'材料详情加载失败')}finally{setLoading(false)}},[id]);useEffect(()=>{setLoading(true);void load()},[load]);useEffect(()=>{if(data?.analysis?.status!=='pending')return;const timer=window.setInterval(()=>void load(),5000);return()=>window.clearInterval(timer)},[data?.analysis?.status,load]);const stale=isMaterialAnalysisStale(data?.analysis?.status ?? null,data?.analysis?.createdAt);const analyze=async()=>{setWorking(true);setError('');try{await apiPost(`/api/materials/${id}/analysis`,{});await load()}catch(e){setError(e instanceof ApiError?e.message:'分析启动失败，请稍后重试');await load()}finally{setWorking(false)}};const items=(data?.analysis?.items??[]).filter(x=>!query||`${x.lemma} ${x.definition} ${x.partOfSpeech??''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a,b)=>sort==='frequency'?b.occurrenceCount-a.occurrenceCount||a.lemma.localeCompare(b.lemma):a.lemma.localeCompare(b.lemma));return <PageShell title={data?.material.title??'材料详情'}>{loading&&!data&&<section className="doc-card"><p className="doc-muted">正在加载材料…</p></section>}{error&&!data&&<section className="doc-card"><p className="doc-error">{error}</p><button className="primary-button" onClick={()=>void load()}>重试加载</button></section>}{data&&<><section className="doc-card"><h2>{data.material.title}</h2><p className="doc-muted">{data.material.filename} · {data.material.format} · 添加于 {new Date(data.material.createdAt).toLocaleDateString()}</p><p>分析状态：{materialAnalysisStatusLabel(data.analysis?.status ?? null, 'detail')}</p>{!data.analysis&&<p className="doc-muted">材料已保存。选择“开始分析”后才会提取并整理知识点。</p>}{data.analysis?.status==='pending'&&!stale&&<p className="doc-muted">分析仍在处理中，页面会自动更新。</p>}{data.analysis?.status==='pending'&&stale&&<p className="doc-error">分析中 · 已超时，可恢复并重试。原材料会复用。</p>}{data.analysis?.status==='failed'&&<p className="doc-error">{data.analysis.errors.join('；')||'分析失败，可以重试。'}</p>}{(data.analysis?.status!=='analyzed')&&<button className="primary-button" disabled={working||(data.analysis?.status==='pending'&&!stale)} onClick={()=>void analyze()}>{working?'正在分析…':data.analysis?.status==='pending'?'恢复并重试分析':data.analysis?.status==='failed'?'重试分析':'开始分析'}</button>}{error&&<p className="doc-error">{error}</p>}</section><section className="doc-card"><h2>分析知识点</h2>{data.analysis?.status==='pending'&&<p className="doc-muted">分析完成后会在这里显示该材料识别的知识点。</p>}{data.analysis?.status==='failed'&&<p className="doc-muted">本次分析没有可展示的知识点，可单独重试分析。</p>}{data.analysis?.status==='analyzed'&&<><div className="doc-form-row"><input className="doc-input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索知识点" aria-label="搜索知识点"/><label>排序<select className="doc-input" value={sort} onChange={e=>setSort(e.target.value as 'frequency'|'name')}><option value="frequency">材料出现次数</option><option value="name">词条名称</option></select></label></div>{!items.length?<p className="doc-muted">{data.analysis.items.length?'没有匹配的知识点。':'此材料没有分析出知识点。'}</p>:<ul className="doc-list">{items.map(item=><li key={item.knowledgePointId}><strong>{item.lemma}</strong>{item.partOfSpeech&&<span className="doc-muted"> · {item.partOfSpeech}</span>}<p className="doc-muted">{item.definition} · 在材料中出现 {item.occurrenceCount} 次</p></li>)}</ul>}</>}</section></>}</PageShell>}
+import { isMaterialAnalysisStale, materialAnalysisProgressLabel, materialAnalysisStatusLabel } from '@/lib/domain/material-analysis-status';
+
+type Item = { knowledgePointId: string; lemma: string; definition: string; partOfSpeech: string | null; occurrenceCount: number };
+type Detail = {
+  material: { id: string; title: string; filename: string; format: string; createdAt: string };
+  analysis: { id: string; status: 'pending' | 'analyzed' | 'failed'; createdAt: string; progress?: { stage: string; updatedAt: string }; errors: string[]; items: Item[] } | null;
+};
+
+export default function MaterialDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [data, setData] = useState<Detail | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'frequency' | 'name'>('frequency');
+
+  const load = useCallback(async () => {
+    try {
+      setData(await apiGet<Detail>(`/api/materials/${id}`));
+      setError('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '材料详情加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { setLoading(true); void load(); }, [load]);
+  useEffect(() => {
+    if (data?.analysis?.status !== 'pending') return;
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
+  }, [data?.analysis?.status, load]);
+
+  const stale = isMaterialAnalysisStale(data?.analysis?.status ?? null, data?.analysis?.createdAt);
+  const analyze = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      await apiPost(`/api/materials/${id}/analysis`, {});
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '分析启动失败，请稍后重试');
+      await load();
+    } finally {
+      setWorking(false);
+    }
+  };
+  const items = (data?.analysis?.items ?? [])
+    .filter(item => !query || `${item.lemma} ${item.definition} ${item.partOfSpeech ?? ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+    .sort((a, b) => sort === 'frequency' ? b.occurrenceCount - a.occurrenceCount || a.lemma.localeCompare(b.lemma) : a.lemma.localeCompare(b.lemma));
+
+  return <PageShell title={data?.material.title ?? '材料详情'}>
+    {loading && !data && <section className="doc-card"><p className="doc-muted">正在加载材料…</p></section>}
+    {error && !data && <section className="doc-card"><p className="doc-error">{error}</p><button className="primary-button" onClick={() => void load()}>重试加载</button></section>}
+    {data && <>
+      <section className="doc-card">
+        <h2>{data.material.title}</h2>
+        <p className="doc-muted">{data.material.filename} · {data.material.format} · 添加于 {new Date(data.material.createdAt).toLocaleDateString()}</p>
+        <p>分析状态：{materialAnalysisStatusLabel(data.analysis?.status ?? null, 'detail')}</p>
+        {!data.analysis && <p className="doc-muted">材料已保存。选择“开始分析”后才会提取并整理知识点。</p>}
+        {data.analysis?.status === 'pending' && !stale && <p className="doc-muted">{materialAnalysisProgressLabel(data.analysis.progress?.stage) ?? '分析仍在处理中'}，页面会自动更新。{data.analysis.progress?.updatedAt && ` 最近更新：${new Date(data.analysis.progress.updatedAt).toLocaleTimeString()}`}</p>}
+        {data.analysis?.status === 'pending' && stale && <p className="doc-error">分析进度已超过 6 分钟，可恢复并重试。原材料会复用。</p>}
+        {data.analysis?.status === 'failed' && <p className="doc-error">{data.analysis.errors.join('；') || '分析失败，可以重试。'}{data.analysis.progress && ` 最后进展：${materialAnalysisProgressLabel(data.analysis.progress.stage) ?? data.analysis.progress.stage}（${new Date(data.analysis.progress.updatedAt).toLocaleTimeString()}）`}</p>}
+        {data.analysis?.status !== 'analyzed' && <button className="primary-button" disabled={working || (data.analysis?.status === 'pending' && !stale)} onClick={() => void analyze()}>
+          {working ? <><span className="submit-spinner" aria-hidden="true" />正在分析…</> : data.analysis?.status === 'pending' ? '恢复并重试分析' : data.analysis?.status === 'failed' ? '重试分析' : '开始分析'}
+        </button>}
+        {error && <p className="doc-error" role="alert">{error}</p>}
+      </section>
+      <section className="doc-card">
+        <h2>分析知识点</h2>
+        {data.analysis?.status === 'pending' && <p className="doc-muted">分析完成后会在这里显示该材料识别的知识点。</p>}
+        {data.analysis?.status === 'failed' && <p className="doc-muted">本次分析没有可展示的知识点，可单独重试分析。</p>}
+        {data.analysis?.status === 'analyzed' && <>
+          <div className="doc-form-row">
+            <input className="doc-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索知识点" aria-label="搜索知识点" />
+            <label>排序<select className="doc-input" value={sort} onChange={event => setSort(event.target.value as 'frequency' | 'name')}><option value="frequency">材料出现次数</option><option value="name">词条名称</option></select></label>
+          </div>
+          {!items.length ? <p className="doc-muted">{data.analysis.items.length ? '没有匹配的知识点。' : '此材料没有分析出知识点。'}</p> : <ul className="doc-list">{items.map(item => <li key={item.knowledgePointId}><strong>{item.lemma}</strong>{item.partOfSpeech && <span className="doc-muted"> · {item.partOfSpeech}</span>}<p className="doc-muted">{item.definition} · 在材料中出现 {item.occurrenceCount} 次</p></li>)}</ul>}
+        </>}
+      </section>
+    </>}
+  </PageShell>;
+}

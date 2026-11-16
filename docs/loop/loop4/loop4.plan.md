@@ -83,25 +83,29 @@
 
 **Domain**
 
-- 补充 pending 阶段和最后进展时间语义；失败状态继续携带原因。
+- 补充 pending/failed 阶段和最后进展时间语义；失败状态继续携带原因。
 
 **Service**
 
-- 对文本准备、候选/词义处理、释义补全、发音增强、结果保存记录可观察进展；对主分析链设置端到端时间界限，超时落盘为 failed。发音增强失败继续非阻断。
+- 对文本准备、候选/词义处理、释义补全、发音增强、结果保存记录可观察进展；主分析链 5 分钟超时后落盘为 failed。词典发音增强单独限时 30 秒，超时保留已有结果并继续保存 analyzed。
 - 过期 pending 可以显式恢复；同进程正在执行的任务仍返回冲突并说明稍后重试。
 
 **UI**
 
 - 在列表和详情呈现当前阶段、最近进展时间；失败显示原因和明确重试入口。
-- pending 超过合理时间显示可恢复提示；处理中轮询且只在真实处理中反馈加载状态。
+- pending 超过 6 分钟显示可恢复提示；处理中轮询且只在真实处理中反馈加载状态。
 
 ### 验收
 
-- 服务异常或分析超时后，记录最终为 failed 并保留可读原因；刷新页面可看到结果。
+- 服务异常或主分析超时后，记录最终为 failed 并保留可读原因；刷新页面可看到结果。
 - 分析进展可从持久化记录及日志追踪；词典服务异常不阻断分析完成。
 - 超时 pending 可由用户立即恢复，活跃请求不会被并发重复执行。
 
 ### 实施记录
 
-- 待实施。
+- 已完成：`MaterialAnalysis` 记录阶段和最近更新时间，SQLite 允许同一 pending 记录仅更新进度；分析用例为词义消歧、释义翻译及结果保存设 5 分钟硬时限，超时通过 AbortSignal 中止词义消歧请求。失败时持久化原因与最后阶段，日志记录阶段时间。
+- 发音查询仍作为非阻断增强：总补充时间最多 30 秒，达到上限后保留已有发音结果并继续保存分析结果；独立词典请求失败不会使分析失败。
+- 列表和详情展示阶段、更新时间、失败原因与恢复入口；进度超 6 分钟后允许恢复。修正过期 pending 的失败文案。
+- 变更：`lib/domain/model.ts`、`lib/domain/material-analysis-status.ts`、`lib/application/material-import.ts`、`lib/application/material-sense-resolution.ts`、`lib/application/ports.ts`、`lib/application/sense-disambiguator.ts`、`lib/server/sqlite/repository.ts`、`lib/client/types.ts`、`app/api/materials/route.ts`、`app/api/materials/[id]/route.ts`、`app/api/materials/[id]/analysis/route.ts`、`app/materials/[id]/page.tsx`、`app/materials/page.tsx`。
+- 验证：应用与库源文件的 TypeScript 检查通过；`git diff --check` 通过。全仓库 `tsc` 被工作区现有未提交的 `test/sqlite-repository.jest.test.ts` 类型错误阻断，未修改该文件。
 

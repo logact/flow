@@ -92,7 +92,7 @@ export function createHttpSenseDisambiguator(options: HttpSenseDisambiguatorOpti
   const logger = options.logger ?? defaultLogger;
   const audit = options.auditLogger ?? aiLogger;
   return {
-    async disambiguate(items) {
+    async disambiguate(items, signal) {
       if (items.length === 0) return [];
       const prompt = buildDisambiguationPrompt(items);
       logger.debug(
@@ -116,6 +116,7 @@ export function createHttpSenseDisambiguator(options: HttpSenseDisambiguatorOpti
       try {
         const response = await fetchImpl(`${baseURL}/chat/completions`, {
           method: 'POST',
+          signal,
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${options.apiKey}`,

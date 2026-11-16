@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { analyzeMaterial, createMaterial, extractMaterialTerms } from '../domain/functions';
-import type { ISODateTime, Material } from '../domain/model';
+import type { ISODateTime, Material, MaterialAnalysisProgressStage } from '../domain/model';
 import { logger as defaultLogger, type AppLogger } from './logger';
 import type {
   AnalyzedMaterialAnalysis,
@@ -38,12 +38,16 @@ export interface ImportMaterialUseCaseInput {
   analyzerVersion: string;
   /** 当前时间。 */
   now: ISODateTime;
+  /** 端到端分析时限；缺省 5 分钟。 */
+  timeoutMs?: number;
+  onProgress?: (stage: MaterialAnalysisProgressStage) => Promise<void> | void;
 }
 
 export type ImportMaterialFailure =
   | 'unsupported_format'
   | 'invalid_input'
   | 'extraction_failed'
+  | 'analysis_timeout'
   | 'analysis_failed';
 
 export type ImportMaterialResult =
@@ -62,6 +66,19 @@ const DEFAULT_MIME_TYPE: Record<Material['format'], string> = {
   markdown: 'text/markdown',
   pdf: 'application/pdf',
 };
+
+class AnalysisTimeoutError extends Error {
+  constructor() { super('analysis_timeout'); }
+}
+
+function withDeadline<T>(operation: Promise<T>, remainingMs: number, onTimeout?: () => void): Promise<T> {
+  if (remainingMs <= 0) return Promise.reject(new AnalysisTimeoutError());
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    operation,
+    new Promise<T>((_, reject) => { timer = setTimeout(() => { onTimeout?.(); reject(new AnalysisTimeoutError()); }, remainingMs); }),
+  ]).finally(() => clearTimeout(timer!));
+}
 
 function basename(filename: string): string {
   const base = filename.slice(filename.lastIndexOf('/') + 1).slice(filename.lastIndexOf('\\') + 1);
@@ -118,6 +135,11 @@ export async function importMaterialUseCase(
   },
   input: ImportMaterialUseCaseInput,
 ): Promise<ImportMaterialResult> {
+  const deadlineAt = Date.now() + (input.timeoutMs ?? 5 * 60 * 1000);
+  const pronunciationDeadlineAt = deadlineAt + 30_000;
+  const analysisAbort = new AbortController();
+  const remainingMs = () => deadlineAt - Date.now();
+  const progress = async (stage: MaterialAnalysisProgressStage) => { await input.onProgress?.(stage); };
   const logger = deps.logger ?? defaultLogger;
   logger.info(
     {
@@ -199,16 +221,19 @@ export async function importMaterialUseCase(
 
   let analysis: AnalyzedMaterialAnalysis;
   try {
+    await progress('extracting_terms');
     const terms = extractMaterialTerms(material);
-    const resolved = await resolveSenseAssignments(terms, deps);
+    await progress('resolving_senses');
+    const resolved = await withDeadline(resolveSenseAssignments(terms, { ...deps, signal: analysisAbort.signal }), remainingMs(), () => analysisAbort.abort());
     const assignments: typeof resolved.assignments = [];
+    await progress('translating_meanings');
     for (let index = 0; index < resolved.assignments.length; index += 4) {
-      const batch = await Promise.all(resolved.assignments.slice(index, index + 4).map(async assignment => ({
+      const batch = await withDeadline(Promise.all(resolved.assignments.slice(index, index + 4).map(async assignment => ({
         ...assignment,
         chineseMeaning: assignment.senseId.startsWith('placeholder:') || !deps.translateSenseMeaning
           ? null
           : await deps.translateSenseMeaning(assignment.senseId, assignment.definition),
-      })));
+      }))), remainingMs());
       assignments.push(...batch);
     }
     analysis = analyzeMaterial({
@@ -220,16 +245,20 @@ export async function importMaterialUseCase(
       excludedTerms: resolved.excluded,
     });
   } catch (error) {
+    const reason = error instanceof AnalysisTimeoutError ? 'analysis_timeout' : 'analysis_failed';
     logger.warn(
-      { materialId: input.materialId, error: error instanceof Error ? error.message : String(error) },
+      { materialId: input.materialId, error: error instanceof Error ? error.message : String(error), reason },
       '材料导入：失败（分析未完成）',
     );
-    return { ok: false, reason: 'analysis_failed' };
+    return { ok: false, reason };
   }
 
   const pronunciationLookup = deps.pronunciationLookup;
+  if (remainingMs() <= 0) return { ok: false, reason: 'analysis_timeout' };
+  await progress('looking_up_pronunciation');
+  let pronunciationTimedOut = false;
   for (let index = 0; pronunciationLookup && index < analysis.items.length; index += 4) {
-    const batch = await Promise.all(analysis.items.slice(index, index + 4).map(async (item) => {
+    const batch = await withDeadline(Promise.all(analysis.items.slice(index, index + 4).map(async (item) => {
       const point = item.knowledgePoint;
       if (point.kind !== 'word' && point.kind !== 'phrase') return item;
       let pronunciation = null;
@@ -239,11 +268,22 @@ export async function importMaterialUseCase(
         // Dictionary availability must never fail material analysis.
       }
       return { ...item, knowledgePoint: { ...point, pronunciation } };
-    }));
+    })), pronunciationDeadlineAt - Date.now()).catch((error) => {
+      if (error instanceof AnalysisTimeoutError) pronunciationTimedOut = true;
+      return null;
+    });
+    if (!batch) break;
     analysis.items.splice(index, batch.length, ...batch);
   }
+  if (pronunciationTimedOut) logger.warn({ materialId: input.materialId, analysisId: input.analysisId }, '材料分析：发音补充达到 30 秒上限，保留已查询结果并继续保存');
 
-  await deps.repository.saveMaterialWithAnalysis(material, analysis);
+  await progress('saving_results');
+  try {
+    await withDeadline(deps.repository.saveMaterialWithAnalysis(material, analysis), 15_000);
+  } catch (error) {
+    if (error instanceof AnalysisTimeoutError) return { ok: false, reason: 'analysis_timeout' };
+    throw error;
+  }
   logger.info(
     {
       materialId: material.id,

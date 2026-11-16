@@ -114,8 +114,9 @@ export class SqliteLearningStateRepository implements LearningStateRepository, M
           const old=find.get(...values.slice(0,descriptor.primary.length)) as {data:string;position?:number}|undefined;
           if(descriptor.table==='material_analyses' && old && old.data!==data) {
             const previous=JSON.parse(old.data) as LearningState['materialAnalyses'][number];
-            const transition=previous.status==='pending' && previous.materialId===item.materialId && item.status!=='pending';
-            if(!transition) throw new Error(`Material analysis id is immutable: ${item.id}`);
+            const pendingProgressUpdate=previous.status==='pending' && item.status==='pending' && previous.materialId===item.materialId && previous.createdAt===item.createdAt && item.completedAt===null && item.items.length===0 && item.unmatchedItems.length===0 && item.errors.length===0;
+            const completionTransition=previous.status==='pending' && previous.materialId===item.materialId && item.status!=='pending';
+            if(!pendingProgressUpdate && !completionTransition) throw new Error(`Material analysis id is immutable: ${item.id}`);
           }
           if (old?.data===data && (descriptor.table!=='vocabulary_assessment_tasks' || old.position===values[2])) return;
           statement.run(...values,data);

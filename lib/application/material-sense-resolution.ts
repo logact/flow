@@ -37,6 +37,7 @@ export interface SenseResolutionDeps {
    * 返回 VocabularyDecision 时把拦截原因记录进 excluded。
    */
   vocabularyFilter?: (lemma: string) => boolean | VocabularyDecision;
+  signal?: AbortSignal;
   /** 每个多义词发给 AI 的最多出现记录数（首现 + 均匀采样）；默认 3。 */
   maxSamplesPerTerm?: number;
   /** 单次 AI 请求的最多出现记录数；默认 64。 */
@@ -279,9 +280,10 @@ export async function resolveSenseAssignments(
   let failedChunkCount = 0;
   for (const [chunkIndex, chunk] of chunks.entries()) {
     try {
-      const picks = await deps.senseDisambiguator.disambiguate(chunk);
+      const picks = await deps.senseDisambiguator.disambiguate(chunk, deps.signal);
       for (const pick of picks) pickByKey.set(pick.key, pick.senseId);
     } catch (error) {
+      if (deps.signal?.aborted) throw error;
       failedChunkCount += 1;
       for (const item of chunk) failedKeys.add(item.key);
       logger.warn(

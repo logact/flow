@@ -274,10 +274,19 @@ interface MaterialAnalysisBase {
   createdAt: ISODateTime;
 }
 
+export type MaterialAnalysisProgressStage = 'starting' | 'extracting_terms' | 'resolving_senses' | 'translating_meanings' | 'looking_up_pronunciation' | 'saving_results';
+
+export interface MaterialAnalysisProgress {
+  stage: MaterialAnalysisProgressStage;
+  updatedAt: ISODateTime;
+}
+
 /** 对一份材料执行的一次版本化词汇分析。 */
 export type MaterialAnalysis = MaterialAnalysisBase & (
   | {
       status: 'pending';
+      /** 最近一次持久化的分析阶段；旧记录可能尚无此字段。 */
+      progress?: MaterialAnalysisProgress;
       items: [];
       unmatchedItems: [];
       errors: [];
@@ -294,6 +303,8 @@ export type MaterialAnalysis = MaterialAnalysisBase & (
     }
   | {
       status: 'failed';
+      /** 失败前最后一次持久化的阶段，旧记录可能没有。 */
+      progress?: MaterialAnalysisProgress;
       items: [];
       unmatchedItems: [];
       /** 失败分析必须至少记录一个错误。 */

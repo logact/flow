@@ -27,6 +27,8 @@ export async function GET(request: Request) {
         ? {
             id: latest.id,
             status: latest.status,
+            progress: latest.status === 'analyzed' ? null : latest.progress ?? null,
+            errors: latest.status === 'failed' ? latest.errors : [],
             itemCount: latest.items.length,
             unmatchedCount: latest.unmatchedItems.length,
             frequencyRank: latest.items.reduce((best, item) => {

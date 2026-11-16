@@ -92,7 +92,7 @@ export interface SenseDisambiguationItem {
  * 应用层校验 senseId 必须属于该条目的候选集；校验不过的词整体回退占位义项。
  */
 export interface SenseDisambiguator {
-  disambiguate(items: SenseDisambiguationItem[]): Promise<Array<{ key: string; senseId: string }>>;
+  disambiguate(items: SenseDisambiguationItem[], signal?: AbortSignal): Promise<Array<{ key: string; senseId: string }>>;
 }
 
 /** 词频词表中的一条词族记录（BNC/COCA 词族数据）。 */
