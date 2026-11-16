@@ -28,6 +28,15 @@ const OUTCOME_TEXT: Record<string, { title: string; retry: boolean }> = {
   incorrect: { title: '这次没答对，已记录复习。', retry: true },
 };
 
+function shuffled<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [result[index], result[other]] = [result[other], result[index]];
+  }
+  return result;
+}
+
 export function Icon({ name, size = 22 }: { name: 'arrow' | 'check' | 'clock' | 'spark' | 'volume'; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
     arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
@@ -85,7 +94,7 @@ function ResultFeedback({ result, axis }: { result: AttemptResponse; axis: 'R' |
       </span>
       <p>
         <strong>{text?.title ?? (result.statusReason ? `作答未结算：${result.statusReason}` : '已记录')}</strong>
-        {result.feedback && <span>{result.feedback}</span>}
+        {outcome === 'incorrect' && result.feedback && <span>{result.feedback}</span>}
         {changes && <span>流利度 {changes}</span>}
         {dimension?.speedWpm !== undefined && <span>速度 {Math.round(dimension.speedWpm)} 词/分钟</span>}
       </p>
@@ -144,7 +153,7 @@ export function EncodeCard({ task, index, active, result, submitting, onSubmit, 
             disabled={submitting}
             onClick={() => onSubmit({ task: 'ENCODE' }, Date.now() - (shownAtRef.current || Date.now()))}
           >
-            {submitting ? '提交中…' : '认识了，继续'} <Icon name="arrow" size={19} />
+            {submitting ? <><span className="submit-spinner" aria-hidden="true" />提交中…</> : <>认识了，继续 <Icon name="arrow" size={19} /></>}
           </button>
         )}
       </div>
@@ -159,6 +168,7 @@ export function ChoiceCard({ task, index, active, result, submitting, onSubmit, 
   const content = task.content.content;
   const shownAtRef = useShownAt(active);
   const [selected, setSelected] = useState<string | null>(null);
+  const [options] = useState(() => shuffled(content.options));
   const submitted = Boolean(result);
 
   const choose = (optionId: string) => {
@@ -175,7 +185,7 @@ export function ChoiceCard({ task, index, active, result, submitting, onSubmit, 
           <span className="question-label">{content.prompt}</span>
         </div>
         <div className="choice-grid">
-          {content.options.map((option) => (
+          {options.map((option) => (
             <button
               key={option.id}
               className={`choice-option ${selected === option.id ? 'correct' : ''}`}
@@ -187,6 +197,7 @@ export function ChoiceCard({ task, index, active, result, submitting, onSubmit, 
             </button>
           ))}
         </div>
+        {submitting && !result && <p className="submission-status" role="status"><span className="submit-spinner" aria-hidden="true" />正在判题，请稍候…</p>}
         {result && <ResultFeedback result={result} axis={content.axis} />}
       </div>
       <div className="card-footer">
@@ -235,7 +246,7 @@ export function RecallCard({ task, index, active, result, submitting, onSubmit, 
               />
             </div>
             <button className="primary-button recall-submit" type="submit" disabled={!answer.trim() || submitting}>
-              {submitting ? '评判中…' : '确认答案'} <Icon name="arrow" size={19} />
+              {submitting ? <><span className="submit-spinner" aria-hidden="true" />评判中…</> : <>确认答案 <Icon name="arrow" size={19} /></>}
             </button>
           </form>
         ) : (
@@ -338,7 +349,7 @@ export function ReadingCard({ task, index, active, result, submitting, onSubmit,
           <NextButton onNext={onNext} result={result} />
         ) : (
           <button className="primary-button" disabled={!allAnswered || submitting} onClick={submit}>
-            {submitting ? '评判中…' : '提交答案'} <Icon name="arrow" size={19} />
+            {submitting ? <><span className="submit-spinner" aria-hidden="true" />评判中…</> : <>提交答案 <Icon name="arrow" size={19} /></>}
           </button>
         )}
       </div>
@@ -388,7 +399,7 @@ export function WritingCard({ task, index, active, result, submitting, onSubmit,
         {!result && <button className="text-button" onClick={() => setResponse('')}>清空</button>}
         {result ? <NextButton onNext={onNext} result={result} /> : (
           <button className="primary-button" disabled={!response.trim() || submitting} onClick={submit}>
-            {submitting ? '评判中…' : '完成表达'} <Icon name="arrow" size={19} />
+            {submitting ? <><span className="submit-spinner" aria-hidden="true" />评判中…</> : <>完成表达 <Icon name="arrow" size={19} /></>}
           </button>
         )}
       </div>

@@ -84,6 +84,9 @@ button:disabled { cursor: default; }
 .choice-option { min-height: 49px; display: flex; align-items: center; gap: 11px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.15); border-radius: 7px; background: rgba(255,255,255,.075); color: #fff; text-align: left; font-size: 12px; backdrop-filter: blur(7px); transition: background .16s, border .16s; }
 .choice-option:active:not(:disabled) { background: rgba(255,255,255,.15); }
 .choice-option:disabled { opacity: .48; }
+.submit-spinner { display: inline-block; width: 14px; height: 14px; margin-right: 7px; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--cyan); border-radius: 50%; vertical-align: -2px; animation: submit-spin .7s linear infinite; }
+.submission-status { display: flex; align-items: center; gap: 5px; color: rgba(255,255,255,.75); font-size: 11px; }
+@keyframes submit-spin { to { transform: rotate(360deg); } }
 .choice-option.correct { border-color: rgba(37,244,238,.7); background: rgba(37,244,238,.12); opacity: 1; }
 .choice-option.wrong { border-color: rgba(254,44,85,.8); background: rgba(254,44,85,.14); opacity: 1; }
 .choice-option > svg { margin-left: auto; color: var(--cyan); }

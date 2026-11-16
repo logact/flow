@@ -38,6 +38,7 @@ export default function LearningFeedPage() {
   const [goals, setGoals] = useState<Array<{id:string;title:string;status:string}>>([]);
   const [goalState,setGoalState]=useState<Record<string,{candidates:number;included:number;ready:number}>>({});
   const [assessmentDone, setAssessmentDone] = useState(false);
+  const [planPositionRestored, setPlanPositionRestored] = useState(false);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -46,6 +47,7 @@ export default function LearningFeedPage() {
 
   const loadPlan = useCallback(async () => {
     setPlanLoading(true);
+    setPlanPositionRestored(false);
     setTasks(null);
     setPlanError(null);
     try {
@@ -137,6 +139,16 @@ export default function LearningFeedPage() {
   const slideCount = visibleTasks.length + 1; // 当前视图末尾追加状态卡
   const pendingCount = visibleTasks.filter((task) => task.status !== 'completed').length;
   const firstPendingIndex = visibleTasks.findIndex((task) => task.status !== 'completed');
+
+  useEffect(() => {
+    if (tasks === null || planPositionRestored || activeGoalIds.size === 0) return;
+    const firstPending = visibleTasks.findIndex((task) => task.status !== 'completed');
+    setPlanPositionRestored(true);
+    if (firstPending >= 0) {
+      setActiveSlide(firstPending);
+      requestAnimationFrame(() => feedRef.current?.scrollTo({ top: firstPending * (feedRef.current?.clientHeight ?? 0) }));
+    }
+  }, [tasks, visibleTasks, activeGoalIds.size, planPositionRestored]);
 
   return (
     <div className="app-shell">

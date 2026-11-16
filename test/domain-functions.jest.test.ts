@@ -157,6 +157,14 @@ function buildInitializedState() {
 }
 
 describe('真实领域函数', () => {
+  test('回忆提示不得泄露目标词', () => {
+    const { state, knowledgePoint } = buildInitializedState();
+    const specification = { goalId: 'goal-1', wordId: knowledgePoint.id, task: 'RETRIEVE' as const, axis: 'R' as const, stage: 'cued' as const };
+    const recall = Domain.generateLearningTask({ specification, knowledgePoint, sourceMaterials: [] });
+    expect(Domain.inspectGeneratedTask(specification, recall, Domain.knowledgePointName(knowledgePoint)).reasons)
+      .toContain('RETRIEVE 回忆题的题干或提示不能直接包含目标词');
+  });
+
   describe('分散候选排序器', () => {
     const candidate = (wordId: string, priority = 2, dueAt = 0, isNew = false, goalId = 'goal-1') => ({
       priority,

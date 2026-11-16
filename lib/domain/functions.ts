@@ -969,6 +969,14 @@ export function inspectGeneratedTask(
       return { malformed, reasons };
     }
     if (typeof content.prompt !== 'string' || !content.prompt.trim()) fail('RETRIEVE prompt 不能为空');
+    if (content.stage !== 'choice' && typeof targetLemma === 'string' && targetLemma.trim()) {
+      const escapedTarget = targetLemma.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const targetPattern = new RegExp(`(^|[^\\p{L}\\p{N}])${escapedTarget}($|[^\\p{L}\\p{N}])`, 'iu');
+      const recallClues = [content.prompt, content.stage === 'cued' ? content.cue : ''];
+      if (recallClues.some((clue) => typeof clue === 'string' && targetPattern.test(clue))) {
+        fail('RETRIEVE 回忆题的题干或提示不能直接包含目标词');
+      }
+    }
     if (content.stage === 'choice') {
       if (!Array.isArray(content.options)) fail('RETRIEVE-choice 缺少 options 数组', true);
       else if (content.options.length < 2) fail('RETRIEVE-choice 至少需要 2 个选项');
