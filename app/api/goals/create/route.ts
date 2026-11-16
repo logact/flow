@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import type { FluencyScores, GoalKnowledgePointSelection } from '@/lib/domain/model';
 import { createGoalFromMaterialsUseCase } from '@/lib/application/create-goal-from-materials';
 import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
@@ -107,7 +108,9 @@ export async function POST(request: Request) {
   const result = await createGoalFromMaterialsUseCase(
     { repository: runtime.repository, vocabularyIndex: runtime.vocabularyIndex },
     {
-      goalId: crypto.randomUUID(),
+      // Stable across process restarts: retrying the same learner/requestId
+      // reuses the same goal instead of relying only on recentRequests memory.
+      goalId: `goal:${createHash('sha256').update(`${learner.id}:${validBody.requestId}`).digest('hex').slice(0, 32)}`,
       learnerId: learner.id,
       title: validBody.title.trim(),
       targetFluency: validBody.targetFluency,
