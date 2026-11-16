@@ -29,6 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       definition: point.sense.definition,
       wordFamily: point.kind === 'word' || point.kind === 'phrase' ? point.wordFamily : null,
       pronunciation: point.pronunciation ?? null,
+      pronunciationStatus: point.pronunciationStatus ?? (point.pronunciation ? 'complete' : 'pending'),
       pronunciationSupported: point.kind === 'word' || point.kind === 'phrase',
     },
     learning: learning ? { R: learning.dimensions.R, P: learning.dimensions.P } : null,

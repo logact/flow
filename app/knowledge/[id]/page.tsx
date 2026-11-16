@@ -7,7 +7,7 @@ import { PageShell } from '@/components/PageShell';
 
 type Pronunciation = { ipa: string | null; audioUrl: string | null; source: string; sourceUrl: string; queriedAt: string } | null;
 type Detail = {
-  item: { id: string; name: string; definition: string; wordFamily: string | null; pronunciation: Pronunciation; pronunciationSupported: boolean };
+  item: { id: string; name: string; definition: string; wordFamily: string | null; pronunciation: Pronunciation; pronunciationStatus: 'pending' | 'processing' | 'complete' | 'failed'; pronunciationSupported: boolean };
   learning: { R: { fluency: number; review: { dueAt: string; graduated: boolean } }; P: { fluency: number; review: { dueAt: string; graduated: boolean } } } | null;
   future: Array<{ axis: string; dueAt: string; intervalDays: number }>;
   history: Array<{ id: string; date: string; status: string; taskType?: string; hasSettlement: boolean; judgement: unknown }>;
@@ -49,6 +49,9 @@ export default function KnowledgeDetailPage() {
       <p className="doc-muted">词族：{data.item.wordFamily ?? '暂无'} · 来源材料：{data.materials.length ? data.materials.map((m, i) => <span key={m.id}>{i > 0 ? '、' : ''}<a href={`/materials/${m.id}`}>{m.title}</a></span>) : '暂无来源材料'}</p>
       {data.item.pronunciationSupported && <section className="knowledge-pronunciation">
         <h2>发音</h2>
+        {data.item.pronunciationStatus === 'pending' && <p className="doc-muted">尚未查询发音。</p>}
+        {data.item.pronunciationStatus === 'processing' && <p className="doc-muted">正在补充发音。</p>}
+        {data.item.pronunciationStatus === 'failed' && <p className="doc-error">发音查询失败；知识点分析结果仍可正常使用。</p>}
         {data.item.pronunciation?.ipa ? <p>音标：{data.item.pronunciation.ipa}</p> : <p className="doc-muted">音标暂缺</p>}
         {data.item.pronunciation?.audioUrl && <audio controls src={data.item.pronunciation.audioUrl}>当前浏览器不支持音频播放。</audio>}
         {data.item.pronunciation?.source && <p className="doc-muted">来源：<a href={data.item.pronunciation.sourceUrl} target="_blank" rel="noreferrer">{data.item.pronunciation.source}</a></p>}

@@ -124,6 +124,8 @@ interface KnowledgePointBase {
   sense: KnowledgePointSense;
   /** 可选的词条级词典发音数据；词典暂缺时保持 null。 */
   pronunciation?: PronunciationMetadata | null;
+  /** Pronunciation enrichment lifecycle, independent from material analysis. */
+  pronunciationStatus?: 'pending' | 'processing' | 'complete' | 'failed';
 }
 
 export interface PronunciationMetadata {
