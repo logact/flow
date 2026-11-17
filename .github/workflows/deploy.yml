@@ -66,12 +66,12 @@ jobs:
           script: |
             set -eu
             cd "$DEPLOY_PATH"
-            find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name node_modules -exec rm -rf {} +
+            find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name node_modules ! -name flow-deploy.tar.gz -exec rm -rf {} +
             tar -xzf flow-deploy.tar.gz
             npm ci
             mkdir -p .data
             if command -v pm2 >/dev/null 2>&1; then
-              pm2 reload flow --update-env || pm2 start npm --name flow -- start
+              PORT=3004 pm2 reload flow --update-env || PORT=3004 pm2 start npm --name flow -- start
               pm2 save
             elif command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files flow.service >/dev/null 2>&1; then
               sudo systemctl restart flow
