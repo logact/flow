@@ -23,12 +23,31 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Package production build
+        run: tar -czf flow-deploy.tar.gz .next node_modules public package.json package-lock.json next.config.mjs lib/server/sqlite/migrations
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flow-deploy
+          path: flow-deploy.tar.gz
+          retention-days: 1
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
+      - uses: actions/download-artifact@v4
+        with:
+          name: flow-deploy
+      - name: Copy build to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          source: flow-deploy.tar.gz
+          target: ${{ secrets.DEPLOY_PATH }}
+      - name: Activate build over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
@@ -38,7 +57,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          command_timeout: 30m
+          command_timeout: 5m
           envs: DEPLOY_PATH,DEPLOY_REF
           script: |
             set -eu
@@ -46,8 +65,7 @@ jobs:
             git fetch origin main
             git checkout main
             git reset --hard "$DEPLOY_REF"
-            npm ci
-            npm run build
+            tar -xzf flow-deploy.tar.gz
             mkdir -p .data
             if command -v pm2 >/dev/null 2>&1; then
               pm2 reload flow --update-env || pm2 start npm --name flow -- start
@@ -58,3 +76,4 @@ jobs:
               echo 'Neither PM2 process "flow" nor systemd service "flow" is configured.' >&2
               exit 1
             fi
+            rm -f flow-deploy.tar.gz
