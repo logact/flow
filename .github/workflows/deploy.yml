@@ -24,7 +24,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Package production build
-        run: tar -czf flow-deploy.tar.gz --exclude=.next/cache .next
+        run: |
+          mkdir -p deploy-package
+          git archive HEAD | tar -x -C deploy-package
+          cp -a .next deploy-package/.next
+          tar -czf flow-deploy.tar.gz --exclude=.next/cache -C deploy-package .
       - uses: actions/upload-artifact@v4
         with:
           name: flow-deploy
@@ -62,11 +66,9 @@ jobs:
           script: |
             set -eu
             cd "$DEPLOY_PATH"
-            git fetch origin main
-            git checkout main
-            git reset --hard "$DEPLOY_REF"
-            npm ci
+            find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name node_modules -exec rm -rf {} +
             tar -xzf flow-deploy.tar.gz
+            npm ci
             mkdir -p .data
             if command -v pm2 >/dev/null 2>&1; then
               pm2 reload flow --update-env || pm2 start npm --name flow -- start

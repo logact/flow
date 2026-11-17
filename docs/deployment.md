@@ -1,6 +1,6 @@
 # GitHub Actions 自动部署
 
-每次向 `main` 推送提交会触发 `.github/workflows/deploy.yml`。GitHub Actions 通过 SSH 登录服务器，在应用目录更新到 `origin/main`，执行 `npm ci` 和 `npm run build`，然后使用 PM2 重载名为 `flow` 的进程；服务器没有 PM2 时则重启 `flow` systemd 服务。
+每次向 `main` 推送提交会触发 `.github/workflows/deploy.yml`。GitHub Actions 在 runner 上执行 `npm ci` 和 `npm run build`，将源码与 `.next` 构建产物打包，再通过 SSH/SCP 上传服务器。服务器保留 `.env`、`.data` 和 `node_modules` 目录以外的文件会被替换，安装依赖并使用 PM2 重载名为 `flow` 的进程；服务器没有 PM2 时则重启 `flow` systemd 服务。部署不依赖服务器访问 GitHub。
 
 ## 一次性服务器准备
 
@@ -23,4 +23,4 @@
 | `DEPLOY_PATH` | 服务器上的仓库绝对路径 |
 | `DEPLOY_PORT` | SSH 端口；省略时使用 22 |
 
-服务器部署用户还需有权访问 GitHub 仓库，以便执行 `git fetch origin main`。Workflow 可在 Actions 页面手动触发，或通过推送 `main` 自动触发。
+Workflow 可在 Actions 页面手动触发，或通过推送 `main` 自动触发。
