@@ -7,3 +7,4 @@ logs/
 .flow/
 *.traineddata
 tsconfig.tsbuildinfo
+.env

@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Material } from '../domain/model';
 
@@ -65,8 +65,9 @@ function extractMarkdownText(data: Uint8Array): ExtractedText {
 
 async function extractPdfText(data: Uint8Array): Promise<ExtractedText> {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const pdfModulePath = require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
-  const standardFontDataUrl = pathToFileURL(join(dirname(pdfModulePath), '..', '..', 'standard_fonts')).href + '/';
+  // 不能对 ESM 子路径使用 require.resolve：dev(webpack) 会拒绝编译，
+  // build(turbopack) 又会把解析调用静态改写成不可用的形式。统一按 cwd 下的 node_modules 定位。
+  const standardFontDataUrl = pathToFileURL(join(process.cwd(), 'node_modules', 'pdfjs-dist', 'standard_fonts')).href + '/';
   // pdfjs 严格要求纯 Uint8Array，不接受 Buffer 子类。
   const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   const loadingTask = getDocument({
