@@ -27,14 +27,19 @@ export default function KnowledgeDetailPage() {
     return detail;
   }, [id]);
   useEffect(() => { void load().catch((e) => setError(e instanceof ApiError ? e.message : '知识点详情加载失败')); }, [load]);
+  useEffect(() => {
+    if (data?.item.pronunciationStatus !== 'processing' && !(data?.item.pronunciationStatus === 'pending' && data.item.pronunciationSupported)) return;
+    const timer = window.setInterval(() => { void load(); }, 3000);
+    return () => window.clearInterval(timer);
+  }, [data?.item.pronunciationStatus, load]);
 
   const retryPronunciation = async () => {
     setPronunciationWorking(true);
     setPronunciationMessage('');
     try {
-      const result = await apiPost<{ available: boolean }>(`/api/knowledge/${id}/pronunciation`, {});
+      const result = await apiPost<{ available: boolean; status: string }>(`/api/knowledge/${id}/pronunciation`, {});
       await load();
-      setPronunciationMessage(result.available ? '发音信息已更新。' : '词典暂未提供匹配发音，可以稍后再试。');
+      setPronunciationMessage(result.status === 'processing' ? '发音正在查询中，页面会自动更新。' : result.available ? '发音信息已更新。' : '词典暂未提供匹配发音，可以稍后再试。');
     } catch (e) {
       setPronunciationMessage(e instanceof ApiError ? e.message : '查询失败，请稍后重试。');
     } finally {
@@ -55,7 +60,7 @@ export default function KnowledgeDetailPage() {
         {data.item.pronunciation?.ipa ? <p>音标：{data.item.pronunciation.ipa}</p> : <p className="doc-muted">音标暂缺</p>}
         {data.item.pronunciation?.audioUrl && <audio controls src={data.item.pronunciation.audioUrl}>当前浏览器不支持音频播放。</audio>}
         {data.item.pronunciation?.source && <p className="doc-muted">来源：<a href={data.item.pronunciation.sourceUrl} target="_blank" rel="noreferrer">{data.item.pronunciation.source}</a></p>}
-        <button className="text-button" disabled={pronunciationWorking} onClick={() => void retryPronunciation()}>{pronunciationWorking ? '正在查询…' : '重新查询发音'}</button>
+        <button className="text-button" disabled={pronunciationWorking || data.item.pronunciationStatus === 'complete' || data.item.pronunciationStatus === 'processing'} onClick={() => void retryPronunciation()}>{pronunciationWorking || data.item.pronunciationStatus === 'processing' ? '正在查询…' : data.item.pronunciationStatus === 'complete' ? '发音已补全' : '查询/重试发音'}</button>
         {pronunciationMessage && <p className="doc-muted" role="status">{pronunciationMessage}</p>}
       </section>}
       <h2>当前学习状态</h2>{data.learning ? <p>R {data.learning.R.fluency} · P {data.learning.P.fluency}</p> : <p className="doc-muted">尚无学习状态。</p>}

@@ -28,7 +28,6 @@ export default function GoalsPage() {
   const [candidateSort, setCandidateSort] = useState<'name'|'wordFrequency'|'wordFamilyFrequency'>('wordFrequency');
   const [candidateSortDirection, setCandidateSortDirection] = useState<'desc'|'asc'>('desc');
   const [selectedKnowledge, setSelectedKnowledge] = useState<string[]>([]);
-  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<string[]>([]);
   const [selectionOverrides,setSelectionOverrides]=useState<Record<string,boolean>>({});
   const [candidatesLoading,setCandidatesLoading]=useState(false);
   const [candidateError,setCandidateError]=useState<string|null>(null);
@@ -38,11 +37,10 @@ export default function GoalsPage() {
     try {
       const saved = localStorage.getItem('flow.goal-draft');
       if (saved) {
-        const draft = JSON.parse(saved) as { goalId?:string; title?: string; materialIds?: string[]; targetR?: number; targetP?: number; selectedKnowledge?:string[]; selectedCandidateKeys?:string[]; selectionOverrides?:Record<string,boolean> };
+        const draft = JSON.parse(saved) as { goalId?:string; title?: string; materialIds?: string[]; targetR?: number; targetP?: number; selectedKnowledge?:string[]; selectionOverrides?:Record<string,boolean> };
         // Ignore goalId from drafts created by older versions.
         setTitle(draft.title ?? ''); setMaterialIds(draft.materialIds ?? []);
         setSelectedKnowledge(draft.selectedKnowledge??[]);setSelectionOverrides(draft.selectionOverrides??{});
-        setSelectedCandidateKeys(draft.selectedCandidateKeys??[]);
         if(draft.selectedKnowledge) setSelectionOverrides(draft.selectionOverrides??Object.fromEntries(draft.selectedKnowledge.map(id=>[id,true])));
         setTargetR(draft.targetR ?? 80); setTargetP(draft.targetP ?? 80);
       }
@@ -56,8 +54,8 @@ export default function GoalsPage() {
 
   useEffect(() => {
     if (!draftReady || !draftTouched) return;
-    localStorage.setItem('flow.goal-draft', JSON.stringify({ title, materialIds, targetR, targetP, selectedKnowledge, selectedCandidateKeys, selectionOverrides }));
-  }, [draftReady, draftTouched, title, materialIds, targetR, targetP, selectedKnowledge, selectedCandidateKeys, selectionOverrides]);
+    localStorage.setItem('flow.goal-draft', JSON.stringify({ title, materialIds, targetR, targetP, selectedKnowledge, selectionOverrides }));
+  }, [draftReady, draftTouched, title, materialIds, targetR, targetP, selectedKnowledge, selectionOverrides]);
 
   useEffect(() => {
     const selected=materials.filter(m=>materialIds.includes(m.id)&&m.analysis);
@@ -114,7 +112,6 @@ export default function GoalsPage() {
         targetFluency:{R:targetR,P:targetP},
         materials:selected.map(material=>({materialId:material.id,analysisId:material.analysis!.id})),
         selections:candidates.map(candidate=>({knowledgePointId:candidate.id,selection:selectedKnowledge.includes(candidate.id)?'included':'excluded'})),
-        selectedCandidates:selectedCandidateKeys.map(key=>{const [materialId,lemma]=key.split('::');return {materialId,lemma};}).filter(candidate=>materialIds.includes(candidate.materialId)),
       });
       localStorage.removeItem('flow.goal-draft');
       setRequestId(''); setConflicts([]);
@@ -137,7 +134,7 @@ export default function GoalsPage() {
     } finally {
       setCreating(false);
     }
-  }, [title, targetR, targetP, materialIds, materials, requestId, candidates, selectedKnowledge, selectedCandidateKeys, selectionOverrides, router, load]);
+  }, [title, targetR, targetP, materialIds, materials, requestId, candidates, selectedKnowledge, router, load]);
 
   const candidateSources = [...new Map(candidates.flatMap(candidate => candidate.sources).map(source => [source.id, source])).values()];
   const visibleCandidates = candidates.filter(candidate =>
@@ -160,9 +157,9 @@ export default function GoalsPage() {
         <button className="doc-secondary-button" onClick={()=>setAdding(false)}>返回目标管理</button>
         {draftRestored && <p className="doc-notice">已恢复未完成的目标草稿。</p>}
         <p className="doc-muted">目标是学习范围与流利度目标的载体；同一材料可加入多个目标。</p>
-        <div className="doc-actions"><button className="doc-secondary-button" onClick={()=>{localStorage.setItem('flow.goal-draft',JSON.stringify({title,materialIds,targetR,targetP,selectedKnowledge,selectedCandidateKeys,selectionOverrides}));router.push('/materials')}}>导入新材料</button></div>
+        <div className="doc-actions"><button className="doc-secondary-button" onClick={()=>{localStorage.setItem('flow.goal-draft',JSON.stringify({title,materialIds,targetR,targetP,selectedKnowledge,selectionOverrides}));router.push('/materials')}}>导入新材料</button></div>
         <input className="doc-input" placeholder="目标名称" value={title} onChange={(event) => {setTitle(event.target.value);setRequestId('');setConflicts([]);setDraftTouched(true)}} />
-        <fieldset className="doc-list"><legend>选择材料（可多选）</legend>{materials.filter(item=>item.analysis?.status==='analyzed').map(material=><div key={material.id}><label className="candidate-item"><input type="checkbox" checked={materialIds.includes(material.id)} onChange={e=>{setDraftTouched(true);setConflicts([]);setRequestId('');setMaterialIds(v=>e.target.checked?[...v,material.id]:v.filter(id=>id!==material.id))}}/>{material.title}（{material.analysis?.itemCount} 个已解析知识点）</label>{materialIds.includes(material.id)&&!!material.analysis?.candidates?.length&&<fieldset className="doc-list"><legend>待解析候选（只处理勾选项）</legend>{material.analysis.candidates.filter(candidate=>candidate.status!=='resolved').map(candidate=>{const key=`${material.id}::${candidate.lemma}`;return <label className="candidate-item" key={key}><input type="checkbox" checked={selectedCandidateKeys.includes(key)} onChange={event=>setSelectedCandidateKeys(keys=>event.target.checked?[...new Set([...keys,key])]:keys.filter(item=>item!==key))}/>{candidate.lemma}（{candidate.status==='failed'?'解析失败':candidate.status==='processing'?'待恢复':'待解析'}，{candidate.occurrenceCount} 处）</label>})}</fieldset>}</div>)}</fieldset>
+        <fieldset className="doc-list"><legend>选择材料（可多选）</legend>{materials.filter(item=>item.analysis?.status==='analyzed').map(material=><label className="candidate-item" key={material.id}><input type="checkbox" checked={materialIds.includes(material.id)} onChange={e=>{setDraftTouched(true);setConflicts([]);setRequestId('');setMaterialIds(v=>e.target.checked?[...v,material.id]:v.filter(id=>id!==material.id))}}/>{material.title}（{material.analysis?.itemCount} 个已解析知识点）</label>)}</fieldset>
         {candidateError&&<p className="doc-error">{candidateError}</p>}
         {conflicts.length>0&&<div className="modal-backdrop" role="presentation" onClick={()=>{if(!creating)setConflicts([])}}><section className="doc-card source-popup" role="dialog" aria-modal="true" aria-labelledby="material-conflict-title" onClick={event=>event.stopPropagation()}><h2 id="material-conflict-title">所选材料已关联到其他目标</h2><ul className="doc-list">{conflicts.map(item=><li key={item.materialId}>{item.materialTitle}：{item.goals.map(goal=>goal.title).join('、')}</li>)}</ul><p className="doc-muted">同一材料可以加入多个目标。确认后会创建一个独立目标。</p><div className="doc-actions"><button className="doc-secondary-button" disabled={creating} onClick={()=>setConflicts([])}>返回修改</button><button className="primary-button" disabled={creating} onClick={()=>void create(true)}>{creating?'创建中…':'确认并继续'}</button></div></section></div>}
         {candidates.length>0&&<div className="doc-card">

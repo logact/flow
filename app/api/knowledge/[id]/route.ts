@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildKnowledgePointLearningHistory } from '@/lib/application/knowledge-history';
 import { knowledgePointName } from '@/lib/domain/functions';
 import { getRuntime } from '@/lib/server/runtime';
+import { queuePronunciationEnrichment } from '@/lib/server/pronunciation-enrichment';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const state = runtime.repository.load().state;
   const point = state.knowledgePoints.find((item) => item.id === id);
   if (!point) return NextResponse.json({ reason: 'knowledge_point_not_found' }, { status: 404 });
+  if (point.pronunciationStatus === 'pending' || point.pronunciationStatus === 'processing' || point.pronunciationStatus === undefined) queuePronunciationEnrichment(runtime, [id]);
   const learner = state.learners[0];
   const learning = state.learnerKnowledgePoints.find((item) => item.knowledgePointId === id && item.learnerId === learner?.id);
   const { history, timeline } = buildKnowledgePointLearningHistory(state.tasks, state.attempts, id);

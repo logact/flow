@@ -4,6 +4,7 @@ import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
 import type { MaterialAnalysis, MaterialAnalysisProgress, MaterialAnalysisProgressStage } from '@/lib/domain/model';
 import { logger } from '@/lib/application/logger';
 import { materialAnalysisProgressLabel } from '@/lib/domain/material-analysis-status';
+import { queuePronunciationEnrichment } from '@/lib/server/pronunciation-enrichment';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 360;
@@ -75,6 +76,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       await runtime.repository.saveMaterialAnalysis(id, { id: analysisId, materialId: id, analyzerVersion: 'web-v1', createdAt: now, status: 'failed', progress: lastProgress, items: [], unmatchedItems: [], errors: [errorMessage], completedAt: new Date().toISOString() });
       return NextResponse.json({ status: 'failed', reason: message }, { status: 502 });
     }
+    queuePronunciationEnrichment(runtime, result.analysis.items.map((item) => item.knowledgePoint.id));
     return NextResponse.json({ status: 'analyzed', analysisId, itemCount: result.analysis.items.length, unmatchedCount: result.analysis.unmatchedItems.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'analysis_failed';

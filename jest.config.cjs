@@ -1,6 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/test/**/*.jest.test.ts'],
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
   transform: {
     '^.+\\.m?[tj]sx?$': ['@swc/jest', { jsc: { parser: { syntax: 'typescript' }, target: 'es2022' }, module: { type: 'commonjs' } }],
   },

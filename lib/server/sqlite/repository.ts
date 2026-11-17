@@ -37,6 +37,61 @@ function decode<T>(value:string):T {
 export class SqliteLearningStateRepository implements LearningStateRepository, MaterialRepository, GoalMaterialRepository, KnowledgePointSelectionRepository, LearningTaskRepository {
   constructor(private readonly connection: Database.Database) {}
 
+  async claimAnalysisCandidate(materialId:string,analysisId:string,lemma:string,operationId:string,now:string,leaseMs:number):Promise<boolean>{
+    return this.connection.transaction(()=>{
+      const leaseUntil=new Date(Date.parse(now)+leaseMs).toISOString();
+      const result=this.connection.prepare(`INSERT INTO material_analysis_candidate_claims(analysis_id,material_id,lemma,operation_id,status,lease_until,updated_at) VALUES(?,?,?,?,'processing',?,?) ON CONFLICT(analysis_id,lemma) DO UPDATE SET material_id=excluded.material_id,operation_id=excluded.operation_id,status='processing',lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE (material_analysis_candidate_claims.status='failed' AND material_analysis_candidate_claims.operation_id<>excluded.operation_id) OR (material_analysis_candidate_claims.status='processing' AND material_analysis_candidate_claims.lease_until<=excluded.updated_at)`).run(analysisId,materialId,lemma,operationId,leaseUntil,now);
+      return result.changes===1;
+    }).immediate();
+  }
+  async finishAnalysisCandidate(materialId:string,analysisId:string,lemma:string,operationId:string,status:'resolved'|'failed',now:string):Promise<void>{
+    this.connection.prepare("UPDATE material_analysis_candidate_claims SET status=?,lease_until=?,updated_at=? WHERE analysis_id=? AND material_id=? AND lemma=? AND operation_id=? AND status='processing'").run(status,now,now,analysisId,materialId,lemma,operationId);
+  }
+  async startAnalysisResolution(materialId:string,analysisId:string,operationId:string,lemmas:string[],now:string,leaseMs:number):Promise<'started'|'processing'|'complete'|'failed'|'conflict'>{
+    return this.connection.transaction(()=>{
+      const leaseUntil=new Date(Date.parse(now)+leaseMs).toISOString();
+      const lemmasJson=JSON.stringify([...new Set(lemmas)].sort());
+      const existing=this.connection.prepare('SELECT status,lemmas_json FROM material_analysis_resolution_operations WHERE analysis_id=? AND operation_id=?').get(analysisId,operationId) as {status:'processing'|'complete'|'failed';lemmas_json:string}|undefined;
+      if(existing&&existing.lemmas_json!==lemmasJson)return 'conflict';
+      if(existing?.status==='complete'||existing?.status==='failed')return existing.status;
+      const active=this.connection.prepare('SELECT operation_id,lease_until FROM material_analysis_resolution_locks WHERE analysis_id=?').get(analysisId) as {operation_id:string;lease_until:string}|undefined;
+      if(active&&active.lease_until>now)return 'processing';
+      if(active){
+        this.connection.prepare("UPDATE material_analysis_resolution_operations SET status='failed',completed_at=? WHERE analysis_id=? AND operation_id=? AND status='processing'").run(now,analysisId,active.operation_id);
+      }
+      if(!existing)this.connection.prepare("INSERT INTO material_analysis_resolution_operations(analysis_id,material_id,operation_id,lemmas_json,status,started_at) VALUES(?,?,?,?,'processing',?)").run(analysisId,materialId,operationId,lemmasJson,now);
+      else this.connection.prepare("UPDATE material_analysis_resolution_operations SET status='processing',completed_at=NULL WHERE analysis_id=? AND operation_id=?").run(analysisId,operationId);
+      this.connection.prepare('INSERT INTO material_analysis_resolution_locks(analysis_id,material_id,operation_id,lease_until) VALUES(?,?,?,?) ON CONFLICT(analysis_id) DO UPDATE SET material_id=excluded.material_id,operation_id=excluded.operation_id,lease_until=excluded.lease_until').run(analysisId,materialId,operationId,leaseUntil);
+      return 'started';
+    }).immediate();
+  }
+  async finishAnalysisResolution(analysisId:string,operationId:string,status:'complete'|'failed',now:string):Promise<void>{
+    this.connection.transaction(()=>{
+      this.connection.prepare('UPDATE material_analysis_resolution_operations SET status=?,completed_at=? WHERE analysis_id=? AND operation_id=?').run(status,now,analysisId,operationId);
+      this.connection.prepare('DELETE FROM material_analysis_resolution_locks WHERE analysis_id=? AND operation_id=?').run(analysisId,operationId);
+    }).immediate();
+  }
+  claimPronunciation(knowledgePointId:string,operationId:string,now:string,leaseMs:number):boolean{
+    return this.connection.transaction(()=>{
+      const leaseUntil=new Date(Date.parse(now)+leaseMs).toISOString();
+      const result=this.connection.prepare(`INSERT INTO pronunciation_claims(knowledge_point_id,operation_id,status,lease_until,updated_at) VALUES(?,?,'processing',?,?) ON CONFLICT(knowledge_point_id) DO UPDATE SET operation_id=excluded.operation_id,status='processing',lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE pronunciation_claims.status='failed' OR (pronunciation_claims.status='processing' AND pronunciation_claims.lease_until<=excluded.updated_at)`).run(knowledgePointId,operationId,leaseUntil,now);
+      return result.changes===1;
+    }).immediate();
+  }
+  async finishPronunciation(knowledgePointId:string,operationId:string,status:'complete'|'failed',now:string):Promise<void>{
+    this.connection.prepare("UPDATE pronunciation_claims SET status=?,lease_until=?,updated_at=? WHERE knowledge_point_id=? AND operation_id=? AND status='processing'").run(status,now,now,knowledgePointId,operationId);
+  }
+  claimChineseMeaning(knowledgePointId:string,operationId:string,now:string,leaseMs:number):boolean{
+    return this.connection.transaction(()=>{
+      const leaseUntil=new Date(Date.parse(now)+leaseMs).toISOString();
+      const result=this.connection.prepare(`INSERT INTO chinese_meaning_claims(knowledge_point_id,operation_id,status,lease_until,updated_at) VALUES(?,?,'processing',?,?) ON CONFLICT(knowledge_point_id) DO UPDATE SET operation_id=excluded.operation_id,status='processing',lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE chinese_meaning_claims.status='failed' OR (chinese_meaning_claims.status='processing' AND chinese_meaning_claims.lease_until<=excluded.updated_at)`).run(knowledgePointId,operationId,leaseUntil,now);
+      return result.changes===1;
+    }).immediate();
+  }
+  async finishChineseMeaning(knowledgePointId:string,operationId:string,status:'complete'|'failed',now:string):Promise<void>{
+    this.connection.prepare("UPDATE chinese_meaning_claims SET status=?,lease_until=?,updated_at=? WHERE knowledge_point_id=? AND operation_id=? AND status='processing'").run(status,now,now,knowledgePointId,operationId);
+  }
+
   load(): LearningStateSnapshot {
     const state: any = {};
     for (const descriptor of descriptors) {

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import type { FluencyScores, GoalKnowledgePointSelection } from '@/lib/domain/model';
 import { createGoalFromMaterialsUseCase } from '@/lib/application/create-goal-from-materials';
 import { getDemoLearner, getRuntime } from '@/lib/server/runtime';
-import { POST as resolveMaterialCandidates } from '@/app/api/materials/[id]/analysis/resolve/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +33,6 @@ export async function POST(request: Request) {
     targetFluency?: FluencyScores;
     materials?: Array<{ materialId: string; analysisId: string }>;
     selections?: Array<{ knowledgePointId: string; selection: GoalKnowledgePointSelection }>;
-    selectedCandidates?: Array<{ materialId: string; lemma: string }>;
   } | null;
   if (!body || typeof body.requestId !== 'string' || !body.requestId.trim()
     || typeof body.title !== 'string' || !body.title.trim()
@@ -42,12 +40,12 @@ export async function POST(request: Request) {
     || !Array.isArray(body.selections)) {
     return NextResponse.json({ reason: 'invalid_input' }, { status: 400 });
   }
+  if ('selectedCandidates' in body) return NextResponse.json({ reason: 'unresolved_candidates_not_selectable' }, { status: 400 });
 
   const validBody = body as {
     requestId: string; confirmedMaterialConflicts?: boolean; title: string;
     targetFluency: FluencyScores; materials: Array<{materialId:string;analysisId:string}>;
     selections: Array<{knowledgePointId:string;selection:GoalKnowledgePointSelection}>;
-    selectedCandidates?: Array<{materialId:string;lemma:string}>;
   };
 
   for (const [key, value] of recentRequests) if (value.expiresAt < Date.now()) recentRequests.delete(key);
@@ -65,46 +63,6 @@ export async function POST(request: Request) {
   if (conflicts.length && validBody.confirmedMaterialConflicts !== true) return NextResponse.json({ reason: 'material_conflicts', conflicts }, { status: 409 });
 
   const promise = (async () => {
-  const selectedMaterialIds = new Set(validBody.materials.map((item) => item.materialId));
-  const selectedCandidates = validBody.selectedCandidates ?? [];
-  if (selectedCandidates.some((candidate) => !selectedMaterialIds.has(candidate.materialId) || !candidate.lemma.trim())) {
-    return { reason: 'candidate_not_in_selected_materials', status: 400 };
-  }
-  const grouped = new Map<string, string[]>();
-  for (const candidate of selectedCandidates) {
-    const lemmas = grouped.get(candidate.materialId) ?? [];
-    if (!lemmas.includes(candidate.lemma)) lemmas.push(candidate.lemma);
-    grouped.set(candidate.materialId, lemmas);
-  }
-  for (const [materialId, lemmas] of grouped) {
-    const currentState = runtime.repository.load().state;
-    const ownedMaterial = currentState.materials.find((item) => item.id === materialId && item.learnerId === learner.id);
-    const currentAnalysis = currentState.materialAnalyses.filter((item) => item.materialId === materialId).at(-1);
-    const requestedAnalysisId = validBody.materials.find((item) => item.materialId === materialId)?.analysisId;
-    if (!ownedMaterial || !currentAnalysis || currentAnalysis.id !== requestedAnalysisId) {
-      return { reason: 'candidate_not_in_selected_analysis', status: 409 };
-    }
-    const response = await resolveMaterialCandidates(new Request(new URL(`/api/materials/${materialId}/analysis/resolve`, request.url), {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lemmas }),
-    }), { params: Promise.resolve({ id: materialId }) });
-    if (!response.ok) {
-      const failure = await response.json().catch(() => ({})) as { reason?: string };
-      return { reason: failure.reason ?? 'candidate_resolution_failed', status: response.status };
-    }
-    const state = runtime.repository.load().state;
-    const analysis = state.materialAnalyses.filter((item) => item.materialId === materialId).at(-1);
-    if (!analysis || analysis.status !== 'analyzed') return { reason: 'analysis_not_ready', status: 409 };
-    for (const lemma of lemmas) {
-      if (analysis.candidates?.find((candidate) => candidate.lemma === lemma)?.status === 'failed') {
-        return { reason: 'candidate_resolution_failed', status: 502 };
-      }
-      for (const item of analysis.items) {
-        if ('lemma' in item.knowledgePoint && item.knowledgePoint.lemma === lemma) {
-          validBody.selections.push({ knowledgePointId: item.knowledgePoint.id, selection: 'included' });
-        }
-      }
-    }
-  }
   const result = await createGoalFromMaterialsUseCase(
     { repository: runtime.repository, vocabularyIndex: runtime.vocabularyIndex },
     {
@@ -131,6 +89,12 @@ export async function POST(request: Request) {
   })();
   recentRequests.set(requestKey, { expiresAt: Date.now() + 10 * 60_000, promise });
   const result = await promise;
-  if ('status' in result) return NextResponse.json({ reason: result.reason }, { status: result.status });
+  if ('status' in result) {
+    // Keep concurrent retries coalesced, but allow a later retry with the same
+    // stable requestId after a recoverable failure (for example, completing the
+    // vocabulary assessment) instead of replaying a stale failure for 10 min.
+    recentRequests.delete(requestKey);
+    return NextResponse.json({ reason: result.reason }, { status: result.status });
+  }
   return NextResponse.json(result);
 }

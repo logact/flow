@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { emptyLearningState } from '../lib/server/memory-repository';
@@ -8,6 +9,60 @@ import { SqliteLearningStateRepository } from '../lib/server/sqlite/repository';
 import { analyzeMaterial, createMaterial } from '../lib/domain/functions';
 
 describe('SQLite learning state repository', () => {
+  test('two OS processes cannot start the same candidate resolution operation concurrently', async () => {
+    const directory=mkdtempSync(path.join(tmpdir(),'flow-process-claims-'));const filename=path.join(directory,'claims.sqlite');
+    const opened=openSqliteDatabase(filename);const repository=new SqliteLearningStateRepository(opened.connection);
+    try {
+      const initial=repository.load();
+      repository.save({...initial.state,learners:[{id:'learner',currentVocabulary:null,timezone:'UTC',dailyTaskCapacity:1,createdAt:'now',updatedAt:'now'}],materials:[{id:'material',learnerId:'learner',title:'t',filename:'t',format:'txt',mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'x',extractionMetadata:{},createdAt:'now'}] as any,knowledgePoints:[{id:'kp',kind:'word',lemma:'run',wordFamily:'run',sense:{id:'s',definition:'run',partOfSpeech:'verb',explanation:null}}] as any},initial.revision);
+      await repository.saveMaterialAnalysis('material',{id:'analysis',materialId:'material',analyzerVersion:'test',createdAt:'now',status:'analyzed',items:[],unmatchedItems:[],errors:[],completedAt:'now',candidates:[{lemma:'run',candidates:[],occurrences:[],status:'pending'}]} as any);
+    } finally { opened.connection.close(); }
+    const worker=`const {openSqliteDatabase}=require('./lib/server/sqlite/database.ts');const {SqliteLearningStateRepository}=require('./lib/server/sqlite/repository.ts');(async()=>{const {connection}=openSqliteDatabase(process.env.FLOW_CLAIM_DB);try{const repo=new SqliteLearningStateRepository(connection);const now=new Date().toISOString();const result=process.env.FLOW_CLAIM_MODE==='pronunciation'?(await repo.claimPronunciation('kp','same-operation',now,60000)?'started':'processing'):await repo.startAnalysisResolution('material','analysis','same-operation',['run'],now,60000);process.stdout.write(result)}finally{connection.close()}})().catch(e=>{console.error(e);process.exit(1)})`;
+    const runWorker=(mode:'resolution'|'pronunciation')=>new Promise<string>((resolve,reject)=>{
+      const child=spawn(process.execPath,['--import','tsx','-e',worker],{cwd:process.cwd(),env:{...process.env,FLOW_CLAIM_DB:filename,FLOW_CLAIM_MODE:mode}});
+      let output='';let error='';child.stdout.setEncoding('utf8').on('data',chunk=>output+=chunk);child.stderr.setEncoding('utf8').on('data',chunk=>error+=chunk);
+      child.on('error',reject);child.on('close',code=>code===0?resolve(output):reject(new Error(`worker exited ${code}: ${error}`)));
+    });
+    try {
+      const results=await Promise.all([runWorker('resolution'),runWorker('resolution')]);
+      expect(results.sort()).toEqual(['processing','started']);
+      const pronunciationResults=await Promise.all([runWorker('pronunciation'),runWorker('pronunciation')]);
+      expect(pronunciationResults.sort()).toEqual(['processing','started']);
+    } finally { rmSync(directory,{recursive:true,force:true}); }
+  });
+
+  test('atomically claims a candidate across independent SQLite connections and permits failed retry', async () => {
+    const directory=mkdtempSync(path.join(tmpdir(),'flow-claims-'));const filename=path.join(directory,'claims.sqlite');
+    const first=openSqliteDatabase(filename);const second=openSqliteDatabase(filename);
+    try {
+      const a=new SqliteLearningStateRepository(first.connection);const b=new SqliteLearningStateRepository(second.connection);
+      const snapshot=a.load();
+      a.save({...snapshot.state,learners:[{id:'learner',currentVocabulary:null,timezone:'UTC',dailyTaskCapacity:1,createdAt:'now',updatedAt:'now'}],materials:[{id:'material',learnerId:'learner',title:'t',filename:'t',format:'txt',mimeType:'text/plain',checksum:'x',storageKey:null,extractedText:'x',extractionMetadata:{},createdAt:'now'}] as any,knowledgePoints:[{id:'kp',kind:'word',lemma:'word',wordFamily:'word',sense:{id:'sense',definition:'word',chineseMeaning:null,partOfSpeech:'noun',explanation:null}}] as any},snapshot.revision);
+      await a.saveMaterialAnalysis('material',{id:'analysis',materialId:'material',analyzerVersion:'test',createdAt:'now',status:'analyzed',items:[],unmatchedItems:[],errors:[],completedAt:'now',candidates:[{lemma:'run',candidates:[],occurrences:[],status:'pending'}]} as any);
+      expect(await a.claimAnalysisCandidate('material','analysis','run','op-a','2026-01-01T00:00:00.000Z',60_000)).toBe(true);
+      expect(await b.claimAnalysisCandidate('material','analysis','run','op-b','2026-01-01T00:00:01.000Z',60_000)).toBe(false);
+      await a.finishAnalysisCandidate('material','analysis','run','op-a','failed','2026-01-01T00:00:02.000Z');
+      expect(await b.claimAnalysisCandidate('material','analysis','run','op-b','2026-01-01T00:00:03.000Z',60_000)).toBe(true);
+      await b.finishAnalysisCandidate('material','analysis','run','op-b','resolved','2026-01-01T00:00:04.000Z');
+      expect(await a.claimAnalysisCandidate('material','analysis','run','op-c','2026-01-01T00:00:05.000Z',60_000)).toBe(false);
+      expect(await a.claimAnalysisCandidate('material','analysis','jump','resume-op','2026-01-01T00:00:00.000Z',1_000)).toBe(true);
+      expect(await b.claimAnalysisCandidate('material','analysis','jump','resume-op','2026-01-01T00:00:02.000Z',1_000)).toBe(true);
+      expect(await a.claimPronunciation('kp','pron-a','2026-01-01T00:00:00.000Z',60_000)).toBe(true);
+      expect(await b.claimPronunciation('kp','pron-b','2026-01-01T00:00:01.000Z',60_000)).toBe(false);
+      await a.finishPronunciation('kp','pron-a','failed','2026-01-01T00:00:02.000Z');
+      expect(await b.claimPronunciation('kp','pron-b','2026-01-01T00:00:03.000Z',60_000)).toBe(true);
+      await b.finishPronunciation('kp','pron-b','complete','2026-01-01T00:00:04.000Z');
+      expect(await a.claimPronunciation('kp','pron-c','2026-01-01T00:00:05.000Z',60_000)).toBe(false);
+      expect(await a.startAnalysisResolution('material','analysis','resolution-a',['run'],'2026-01-01T00:00:00.000Z',60_000)).toBe('started');
+      expect(await b.startAnalysisResolution('material','analysis','resolution-b',['run'],'2026-01-01T00:00:01.000Z',60_000)).toBe('processing');
+      await a.finishAnalysisResolution('analysis','resolution-a','complete','2026-01-01T00:00:02.000Z');
+      expect(await b.startAnalysisResolution('material','analysis','resolution-a',['run'],'2026-01-01T00:00:03.000Z',60_000)).toBe('complete');
+      expect(await b.startAnalysisResolution('material','analysis','resolution-a',['other'],'2026-01-01T00:00:03.000Z',60_000)).toBe('conflict');
+      expect(await b.startAnalysisResolution('material','analysis','resolution-c',['other'],'2026-01-01T00:00:03.000Z',60_000)).toBe('started');
+      expect(await a.startAnalysisResolution('material','analysis','resolution-d',['else'],'2026-01-01T00:01:04.000Z',60_000)).toBe('started');
+    } finally { first.connection.close();second.connection.close();rmSync(directory,{recursive:true,force:true}); }
+  });
+
   test('starts with a complete empty state and revision zero, and initializes idempotently', () => {
     const { connection } = openSqliteDatabase(':memory:');
     try {

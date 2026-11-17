@@ -120,6 +120,14 @@ export interface VocabularyIndex {
 export interface MaterialRepository {
   saveMaterial(material: Material): Promise<void>;
   saveMaterialAnalysis(materialId: string, analysis: MaterialAnalysis): Promise<void>;
+  claimAnalysisCandidate?(materialId: string, analysisId: string, lemma: string, operationId: string, now: string, leaseMs: number): Promise<boolean>;
+  finishAnalysisCandidate?(materialId: string, analysisId: string, lemma: string, operationId: string, status: 'resolved' | 'failed', now: string): Promise<void>;
+  startAnalysisResolution?(materialId: string, analysisId: string, operationId: string, lemmas: string[], now: string, leaseMs: number): Promise<'started' | 'processing' | 'complete' | 'failed' | 'conflict'>;
+  finishAnalysisResolution?(analysisId: string, operationId: string, status: 'complete' | 'failed', now: string): Promise<void>;
+  claimPronunciation?(knowledgePointId: string, operationId: string, now: string, leaseMs: number): boolean | Promise<boolean>;
+  finishPronunciation?(knowledgePointId: string, operationId: string, status: 'complete' | 'failed', now: string): Promise<void>;
+  claimChineseMeaning?(knowledgePointId: string, operationId: string, now: string, leaseMs: number): boolean | Promise<boolean>;
+  finishChineseMeaning?(knowledgePointId: string, operationId: string, status: 'complete' | 'failed', now: string): Promise<void>;
   saveMaterialWithAnalysis(
     material: Material,
     analysis: AnalyzedMaterialAnalysis,

@@ -111,6 +111,9 @@ export interface KnowledgePointSense {
   definition: string;
   /** 按义项保存的中文释义；旧数据或翻译不可用时为空。 */
   chineseMeaning?: string | null;
+  /** 中文释义补全状态，与 sense 解析状态独立。 */
+  chineseMeaningStatus?: 'pending' | 'processing' | 'complete' | 'failed';
+  chineseMeaningError?: string | null;
   /** 当前词义的词性；无法确定或不适用时为空。 */
   partOfSpeech: string | null;
   /** 对用法、语境或词义区别的补充说明；没有时为空。 */

@@ -29,6 +29,11 @@ export class InMemoryAppRepository implements
   KnowledgePointSelectionRepository,
   LearningTaskRepository {
   private snapshot: LearningStateSnapshot;
+  private readonly candidateClaims = new Map<string, { operationId: string; status: 'processing' | 'resolved' | 'failed'; leaseUntil: string }>();
+  private readonly pronunciationClaims = new Map<string, { operationId: string; status: 'processing' | 'complete' | 'failed'; leaseUntil: string }>();
+  private readonly chineseMeaningClaims = new Map<string, { operationId: string; status: 'processing' | 'complete' | 'failed'; leaseUntil: string }>();
+  private readonly resolutionOperations = new Map<string, { status: 'processing' | 'complete' | 'failed'; lemmasJson: string }>();
+  private readonly resolutionLocks = new Map<string, { operationId: string; leaseUntil: string }>();
 
   constructor(initial: Model.LearningState) {
     this.snapshot = { state: initial, revision: 0 };
@@ -46,16 +51,63 @@ export class InMemoryAppRepository implements
     return this.snapshot;
   }
 
+  async claimAnalysisCandidate(materialId:string,analysisId:string,lemma:string,operationId:string,now:string,leaseMs:number):Promise<boolean>{
+    const key=`${analysisId}\0${lemma}`;const existing=this.candidateClaims.get(key);
+    if(existing&&((existing.status==='failed'&&existing.operationId===operationId)||(existing.status==='resolved')||(existing.status==='processing'&&Date.parse(existing.leaseUntil)>Date.parse(now)))) return false;
+    this.candidateClaims.set(key,{operationId,status:'processing',leaseUntil:new Date(Date.parse(now)+leaseMs).toISOString()});
+    return true;
+  }
+  async finishAnalysisCandidate(_materialId:string,analysisId:string,lemma:string,operationId:string,status:'resolved'|'failed',now:string):Promise<void>{
+    const key=`${analysisId}\0${lemma}`;const claim=this.candidateClaims.get(key);
+    if(claim?.operationId===operationId&&claim.status==='processing') this.candidateClaims.set(key,{...claim,status,leaseUntil:now});
+  }
+  async startAnalysisResolution(_materialId:string,analysisId:string,operationId:string,lemmas:string[],now:string,leaseMs:number):Promise<'started'|'processing'|'complete'|'failed'|'conflict'>{
+    const key=`${analysisId}\0${operationId}`;const existing=this.resolutionOperations.get(key);const lemmasJson=JSON.stringify([...new Set(lemmas)].sort());
+    if(existing&&existing.lemmasJson!==lemmasJson)return 'conflict';
+    if(existing?.status==='complete'||existing?.status==='failed')return existing.status;
+    const lock=this.resolutionLocks.get(analysisId);
+    if(lock&&Date.parse(lock.leaseUntil)>Date.parse(now))return 'processing';
+    if(lock){const oldKey=`${analysisId}\0${lock.operationId}`;const old=this.resolutionOperations.get(oldKey);if(old)this.resolutionOperations.set(oldKey,{...old,status:'failed'});}
+    this.resolutionOperations.set(key,{status:'processing',lemmasJson});this.resolutionLocks.set(analysisId,{operationId,leaseUntil:new Date(Date.parse(now)+leaseMs).toISOString()});return 'started';
+  }
+  async finishAnalysisResolution(analysisId:string,operationId:string,status:'complete'|'failed',_now:string):Promise<void>{
+    const key=`${analysisId}\0${operationId}`;const current=this.resolutionOperations.get(key);if(current)this.resolutionOperations.set(key,{...current,status});
+    if(this.resolutionLocks.get(analysisId)?.operationId===operationId)this.resolutionLocks.delete(analysisId);
+  }
+  claimPronunciation(id:string,operationId:string,now:string,leaseMs:number):boolean{
+    const existing=this.pronunciationClaims.get(id);
+    if(existing&&existing.status!=='failed'&&(existing.status!=='processing'||Date.parse(existing.leaseUntil)>Date.parse(now)))return false;
+    this.pronunciationClaims.set(id,{operationId,status:'processing',leaseUntil:new Date(Date.parse(now)+leaseMs).toISOString()});return true;
+  }
+  async finishPronunciation(id:string,operationId:string,status:'complete'|'failed',now:string):Promise<void>{
+    const claim=this.pronunciationClaims.get(id);if(claim?.operationId===operationId&&claim.status==='processing')this.pronunciationClaims.set(id,{...claim,status,leaseUntil:now});
+  }
+  claimChineseMeaning(id:string,operationId:string,now:string,leaseMs:number):boolean{
+    const existing=this.chineseMeaningClaims.get(id);
+    if(existing&&existing.status!=='failed'&&(existing.status!=='processing'||Date.parse(existing.leaseUntil)>Date.parse(now)))return false;
+    this.chineseMeaningClaims.set(id,{operationId,status:'processing',leaseUntil:new Date(Date.parse(now)+leaseMs).toISOString()});return true;
+  }
+  async finishChineseMeaning(id:string,operationId:string,status:'complete'|'failed',now:string):Promise<void>{
+    const claim=this.chineseMeaningClaims.get(id);if(claim?.operationId===operationId&&claim.status==='processing')this.chineseMeaningClaims.set(id,{...claim,status,leaseUntil:now});
+  }
+
   async saveMaterialWithAnalysis(
     material: Model.Material,
     analysis: Extract<Model.MaterialAnalysis, { status: 'analyzed' }>,
   ): Promise<void> {
     const state = this.snapshot.state;
+    const knowledgePoints = [...state.knowledgePoints];
+    for (const item of analysis.items) {
+      const index = knowledgePoints.findIndex((point) => point.id === item.knowledgePoint.id);
+      if (index >= 0) knowledgePoints[index] = item.knowledgePoint;
+      else knowledgePoints.push(item.knowledgePoint);
+    }
     this.save(
       {
         ...state,
-        materials: [...state.materials, material],
-        materialAnalyses: [...state.materialAnalyses, analysis],
+        materials: [...state.materials.filter((item) => item.id !== material.id), material],
+        knowledgePoints,
+        materialAnalyses: [...state.materialAnalyses.filter((item) => item.id !== analysis.id), analysis],
       },
       this.snapshot.revision,
     );
