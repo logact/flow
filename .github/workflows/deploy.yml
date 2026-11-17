@@ -66,7 +66,7 @@ jobs:
           script: |
             set -eu
             cd "$DEPLOY_PATH"
-            find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name node_modules ! -name flow-deploy.tar.gz -exec rm -rf {} +
+            find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name logs ! -name node_modules ! -name flow-deploy.tar.gz -exec rm -rf {} +
             tar -xzf flow-deploy.tar.gz
             npm ci
             mkdir -p .data
