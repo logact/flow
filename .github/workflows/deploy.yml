@@ -24,7 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Package production build
-        run: tar -czf flow-deploy.tar.gz .next node_modules public package.json package-lock.json next.config.mjs lib/server/sqlite/migrations
+        run: tar -czf flow-deploy.tar.gz .next node_modules package.json package-lock.json next.config.mjs lib/server/sqlite/migrations
       - uses: actions/upload-artifact@v4
         with:
           name: flow-deploy
