@@ -68,7 +68,7 @@ jobs:
             cd "$DEPLOY_PATH"
             find . -mindepth 1 -maxdepth 1 ! -name .data ! -name .env ! -name logs ! -name node_modules ! -name flow-deploy.tar.gz -exec rm -rf {} +
             tar -xzf flow-deploy.tar.gz
-            npm ci
+            npm ci --omit=dev --no-audit --no-fund
             mkdir -p .data
             if command -v pm2 >/dev/null 2>&1; then
               PORT=3004 pm2 reload flow --update-env || PORT=3004 pm2 start npm --name flow -- start
