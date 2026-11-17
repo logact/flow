@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AuthControl } from '@/components/AuthControl';
 
 export const metadata: Metadata = {
   title: 'Flow — 刷着学，自然记住',
@@ -15,7 +16,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>{children}<AuthControl /></body>
     </html>
   );
 }

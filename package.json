@@ -32,6 +32,7 @@
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.4",
+    "nodemailer": "^10.6.0",
     "pdfjs-dist": "^6.5.438",
     "pino": "^10.4.0",
     "react": "^19.3.1",
