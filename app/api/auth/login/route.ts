@@ -15,8 +15,10 @@ export async function POST(request: Request) {
       createLearnerUseCase(runtime.repository, { id: result.user.learnerId, timezone: 'Asia/Shanghai', dailyTaskCapacity: 12, now: new Date().toISOString() });
     }
     const response = NextResponse.json({ user: result.user });
+    // 生产当前以裸 HTTP 提供服务：按 NODE_ENV 加 Secure 会导致浏览器拒收 cookie，登录态丢失。
+    const secure = new URL(request.url).protocol === 'https:';
     response.cookies.set(AUTH_COOKIE, result.token, {
-      httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
+      httpOnly: true, secure, sameSite: 'lax',
       path: '/', expires: new Date(result.expiresAt),
     });
     return response;
